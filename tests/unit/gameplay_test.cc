@@ -1158,7 +1158,7 @@ TEST_CASE("the pad browses consecutive save slots through the inline name editor
     for (int step : { 1, 2, 1 }) {
         int index = list->indexOf(dx::script::integer(screen, "editRowId"));
         REQUIRE(dx::gamepadmenu::adjust(index < start + step ? dx::IK_Down : dx::IK_Up));
-        CHECK(dx::script::integer(screen, "editRowId") == list->rows[start + step].id);
+        CHECK(dx::script::integer(screen, "editRowId") == list->rows[static_cast<size_t>(start + step)].id);
     }
     REQUIRE(dx::gamepadmenu::press(dx::gamepad::A));
     CHECK(dx::extension::topModal() != screen);

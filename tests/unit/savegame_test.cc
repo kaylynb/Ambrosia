@@ -391,7 +391,7 @@ TEST_CASE("a save referring to an uninstalled actor class skips its instances", 
         size_t at = bytes.find(name + '\0');
         REQUIRE(at != std::string::npos);
         bytes[at] = 'X';
-        std::ofstream(file, std::ios::binary | std::ios::trunc).write(bytes.data(), bytes.size());
+        std::ofstream(file, std::ios::binary | std::ios::trunc).write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
     }
     auto url = map + "?loadgame=1";
     REQUIRE(dx::savegame::selectLevel(url));
