@@ -27,19 +27,21 @@ jobs:
             platform: windows
             container: false
             dir: package
+            archive: zip
           # The Linux build happens in container/Containerfile (Debian 13), the same image as local
           # container builds. The host only verifies the package, so it needs a glibc at least as new.
           - os: ubuntu-26.04
             platform: linux
             container: true
             dir: container-package
+            archive: tar.gz
     runs-on: ${{ matrix.os }}
     env:
       MISE_ENABLE_TOOLS: cmake,ninja,nushell,github:rhysd/actionlint
       PACKAGE_CONTAINER: ${{ matrix.container }}
       CONTAINER_RUNTIME: docker
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5
         with:
           cache: false
@@ -48,9 +50,18 @@ jobs:
         run: |
           let version = if $env.GITHUB_REF_TYPE == "tag" { $env.GITHUB_REF_NAME | str replace --regex '^v' '' } else { "dev" }
           nu x.nu package --version $version --commit (^git rev-parse HEAD | str trim) --container=($env.PACKAGE_CONTAINER == "true")
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      # Each archive is its own artifact, uploaded as it is (not zipped again) and named after the
+      # file. Actions keeps a digest of each, which download-artifact checks.
+      - name: Upload the distribution
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: desktop-${{ matrix.platform }}
-          path: build/${{ matrix.dir }}/artifacts/*
+          path: build/${{ matrix.dir }}/artifacts/ambrosia-*-${{ matrix.platform }}-x64.${{ matrix.archive }}
+          archive: false
           if-no-files-found: error
-          compression-level: 0
+      - name: Upload the symbols
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: build/${{ matrix.dir }}/artifacts/ambrosia-*-windows-x64-symbols.zip
+          archive: false
+          if-no-files-found: error

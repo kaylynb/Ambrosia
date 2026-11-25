@@ -72,32 +72,24 @@ def "main package" [
             for step in $steps { exec-checked $step }
         }
     }
+    # Only this package's archives, so CI uploads exactly them.
+    rm -rf $out
     mkdir $out
     cd $bin
     let programs = [ambrosia dented ucc]
     let files = $programs | each {|p| if $win { $"($p).exe" } else { $p } }
     let runtime = if $win { "phonon.dll" } else { "libphonon.so" }
     exec-checked (["cmake" "-E" "tar" (if $win { "cf" } else { "czf" }) $archive] ++ (if $win { ["--format=zip"] } else { ["--format=gnutar"] }) ++ ["--" ...$files $runtime "LICENSES.txt"])
-    checksum $archive
     if $win {
         let symbols = $out | path join $"($name)-symbols.zip"
         exec-checked (["cmake" "-E" "tar" "cf" $symbols "--format=zip" "--"] ++ ($programs | each {|p| $"($p).pdb" }))
-        checksum $symbols
     }
     main verify-package $archive --version $version --commit $revision
-}
-
-def checksum [file: path] {
-    let hash = open --raw $file | hash sha256
-    $"($hash)  ($file | path basename)\n" | save -f $"($file).sha256"
 }
 
 # Smoke-test the files a player actually downloads, outside the checkout and without game data.
 def "main verify-package" [archive: path, --version: string, --commit: string] {
     let file = $archive | path expand
-    let expected = open --raw $"($file).sha256" | str trim
-    let actual = open --raw $file | hash sha256
-    if $expected != $"($actual)  ($file | path basename)" { fail "archive checksum mismatch" }
     let win = $nu.os-info.name == "windows"
     let programs = [ambrosia dented ucc] | each {|p| if $win { $"($p).exe" } else { $p } }
     let runtime = if $win { "phonon.dll" } else { "libphonon.so" }

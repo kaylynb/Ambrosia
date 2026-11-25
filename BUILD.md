@@ -697,10 +697,9 @@ glibc (2.41) is the oldest the release runs on. The host's glibc must be at leas
 the check. `--runtime` picks Docker or Podman as for `build`.
 
 `build/package/artifacts` (or `build/container-package/artifacts`) holds the game, DentEd, `ucc`, Steam Audio runtime and
-licenses in a Windows ZIP or Linux tarball, alongside a SHA-256 checksum. Windows
-also produces a separate symbols ZIP. Crash dumps require the PDBs from the matching build.
-Game data isn't included. To recheck a downloaded archive, put its `.sha256`
-file beside it and run, for example:
+licenses in a Windows ZIP or Linux tarball. Each package run empties the folder first.
+Windows also produces a separate symbols ZIP. Crash dumps require the PDBs from the matching
+build. Game data isn't included. To recheck a downloaded archive, run, for example:
 
 ```sh
 nu x.nu verify-package ambrosia-0.1.0-rc.1-windows-x64.zip --version 0.1.0-rc.1 --commit <full-commit-sha>
@@ -716,8 +715,10 @@ at the bottom right. The startup line in `Ambrosia.log` includes the commit too.
 **Package desktop builds** runs on every push to `main`, on every pull request (a newer push to
 the pull request cancels its running build), on pushes of `v*` tags, and manually. A tag
 `vX.Y.Z` or `vX.Y.Z-suffix` builds version `X.Y.Z[-suffix]`. A tag of any other form fails
-the build. Everything else is a dev build. The run's **Artifacts** section contains
-`desktop-linux` and `desktop-windows`. These builds do not create GitHub Releases.
+the build. Everything else is a dev build. The run's **Artifacts** section lists each archive
+as its own artifact, uploaded as it is rather than zipped again: the Linux `.tar.gz`, the
+Windows `.zip` and the Windows symbols `.zip`. Actions keeps a SHA-256 digest of each. These
+builds do not create GitHub Releases.
 The jobs use `jdx/mise-action`
 for the tools pinned in `mise.toml`. Windows builds with the runner's Visual Studio. Linux runs
 `package --container` on an Ubuntu 26.04 runner, building in the same Debian 13 image as local
@@ -729,13 +730,15 @@ To publish a release:
 1. Tag a commit on the default branch with the version prefixed by `v` (for example,
    `v0.1.0-rc.1`) and push the tag. That push packages the version. The tag alone does
    not publish a release.
-2. Download both artifacts from that run, extract the distribution archives from the
-   Actions ZIPs, and test them.
+2. Download the Linux and Windows archives from that run's artifacts and test them.
 3. Run **Publish verified desktop builds** on the default branch with the tag. The
    workflow checks that the tag is on the default branch, finds the tag's successful
-   package build at the commit it points to, checks the versioned filenames and
-   checksums, then publishes those archives without rebuilding. Versions with a suffix
-   are marked as prereleases. If you move the tag, wait for its new build before
+   package build at the commit it points to, and downloads its two archives by their
+   versioned names, failing if either's digest does not match. It then publishes just
+   those two, without rebuilding. The symbols ZIP stays in the run's artifacts, which
+   Actions deletes after the repository's retention period (90 days by default), so keep
+   a copy of a release's symbols if you want them for crash dumps later. Versions with
+   a suffix are marked as prereleases. If you move the tag, wait for its new build before
    publishing.
 
 ## Generated files
