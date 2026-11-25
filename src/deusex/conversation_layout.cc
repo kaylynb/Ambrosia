@@ -81,8 +81,8 @@ namespace dx::deusex {
                 gc->drawRect(x, thumbY, width, thumb, Color { 255, 255, 255, 190 }, BlendStyle::Normal);
                 auto arrow = [&](float y, bool up) {
                     for (int i = 0; i < 3; i++) {
-                        float w = 2.0f + i;
-                        gc->drawRect(x + (width - w) * 0.5f, up ? y + i * 2 : y + (2 - i) * 2, w, 2, Color { 255, 255, 255, 180 }, BlendStyle::Normal);
+                        float w = 2.0f + static_cast<float>(i);
+                        gc->drawRect(x + (width - w) * 0.5f, up ? y + static_cast<float>(i) * 2.0f : y + (2.0f - static_cast<float>(i)) * 2.0f, w, 2, Color { 255, 255, 255, 180 }, BlendStyle::Normal);
                     }
                 };
                 if (offset > 0.5f) {
