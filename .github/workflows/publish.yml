@@ -48,7 +48,6 @@ jobs:
           echo "Publishing the archives of run $RUN_ID"
           { echo "run_id=$RUN_ID"; echo "version=${TAG#v}"; } >> "$GITHUB_OUTPUT"
       # Each archive is an artifact named after its file; a digest mismatch fails the download.
-      # The symbols stay in the run's artifacts and are not released.
       - name: Download the Linux archive
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -63,14 +62,27 @@ jobs:
           run-id: ${{ steps.find.outputs.run_id }}
           github-token: ${{ github.token }}
           path: assets
+      - name: Download the Windows symbols
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ambrosia-${{ steps.find.outputs.version }}-windows-x64-symbols.zip
+          run-id: ${{ steps.find.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: assets
+      # The release lists each asset by its label (file#label) instead of its file name, so the
+      # symbols cannot be mistaken for the game; each still downloads under its file name.
       - name: Publish without rebuilding
         shell: bash
         env:
           VERSION: ${{ steps.find.outputs.version }}
         run: |
           set -euo pipefail
-          assets=("assets/ambrosia-$VERSION-linux-x64.tar.gz" "assets/ambrosia-$VERSION-windows-x64.zip")
-          ls -l "${assets[@]}"
+          files=("assets/ambrosia-$VERSION-windows-x64.zip" "assets/ambrosia-$VERSION-linux-x64.tar.gz"
+            "assets/ambrosia-$VERSION-windows-x64-symbols.zip")
+          ls -l "${files[@]}"
+          assets=("${files[0]}#Ambrosia $VERSION for Windows (x64)"
+            "${files[1]}#Ambrosia $VERSION for Linux (x64)"
+            "${files[2]}#Windows debug symbols (for crash reports, not needed to play)")
           flags=()
           if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "$TAG" --verify-tag --title "Ambrosia $VERSION" \

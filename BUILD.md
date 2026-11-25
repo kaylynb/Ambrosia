@@ -733,13 +733,12 @@ To publish a release:
 2. Download the Linux and Windows archives from that run's artifacts and test them.
 3. Run **Publish verified desktop builds** on the default branch with the tag. The
    workflow checks that the tag is on the default branch, finds the tag's successful
-   package build at the commit it points to, and downloads its two archives by their
-   versioned names, failing if either's digest does not match. It then publishes just
-   those two, without rebuilding. The symbols ZIP stays in the run's artifacts, which
-   Actions deletes after the repository's retention period (90 days by default), so keep
-   a copy of a release's symbols if you want them for crash dumps later. Versions with
-   a suffix are marked as prereleases. If you move the tag, wait for its new build before
-   publishing.
+   package build at the commit it points to, and downloads its three archives by their
+   versioned names, failing if any digest does not match. It then publishes them without
+   rebuilding, each under a label instead of its file name: "Ambrosia X.Y.Z for Windows
+   (x64)", "Ambrosia X.Y.Z for Linux (x64)", and "Windows debug symbols (for crash
+   reports, not needed to play)". Versions with a suffix are marked as prereleases. If you
+   move the tag, wait for its new build before publishing.
 
 ## Generated files
 
