@@ -16,7 +16,7 @@ namespace dx::extension {
             if (heightSpecified || (minLines < 0 && maxLines < 0)) {
                 return;
             }
-            float lineHeight = fontHeight(window::normalFont(window)) + window::textVSpacing(window);
+            float lineHeight = lineFontHeight(window::normalFont(window), window::boldFont(window)) + window::textVSpacing(window);
             float extent = textHeight;
             if (minLines >= 0 && static_cast<float>(minLines) * lineHeight > extent) {
                 textHeight = static_cast<float>(minLines) * lineHeight;
@@ -97,11 +97,6 @@ namespace dx::extension {
                 }
             }
         }
-
-        bool isWordChar(char c)
-        {
-            return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
-        }
     }
 
     std::string& UTextWindow::text()
@@ -127,6 +122,15 @@ namespace dx::extension {
     {
     }
 
+    std::string UTextWindow::displayedText()
+    {
+        const auto& caption = text();
+        if (hideReplyMarker && caption.starts_with("~ ")) {
+            return caption.substr(std::min(caption.size(), caption.find_first_not_of(' ', 1)));
+        }
+        return caption;
+    }
+
     void UTextWindow::textExtent(float maxWidth, float& outWidth, float& outHeight)
     {
         outWidth = 0;
@@ -141,7 +145,7 @@ namespace dx::extension {
             }
             return;
         }
-        measureText(textContextOf(this), maxWidth, text(), outWidth, outHeight);
+        measureText(textContextOf(this), maxWidth, displayedText(), outWidth, outHeight);
     }
 
     void UTextWindow::parentRequestedPreferredSize(bool widthSpecified, float& preferredWidth, bool heightSpecified, float& preferredHeight)
@@ -156,7 +160,7 @@ namespace dx::extension {
             preferredWidth = w + hMargin * 2.0f;
             preferredHeight = h + vMargin * 2.0f;
         } else if (UObject* background = window::Background(this)) {
-            float lineHeight = fontHeight(window::normalFont(this)) + window::textVSpacing(this);
+            float lineHeight = lineFontHeight(window::normalFont(this), window::boldFont(this)) + window::textVSpacing(this);
             preferredHeight = textureHeight(background);
             if (!heightSpecified) {
                 if (textwindow::minLines(this) >= 0) {
@@ -206,7 +210,7 @@ namespace dx::extension {
             } else if (valign != VALIGN_Top) {
                 y = std::trunc((height() - total) * 0.5f);
             }
-            gc->pushClip(gc->offsetX + hMargin, gc->offsetY + vMargin, width() - hMargin * 2.0f, height() - vMargin * 2.0f);
+            UGC::ClipScope clip(gc, gc->offsetX + hMargin, gc->offsetY + vMargin, width() - hMargin * 2.0f, height() - vMargin * 2.0f);
             uint8_t halign = textwindow::HAlign(this);
             for (const TextRow& row : rows) {
                 float x = hMargin;
@@ -218,7 +222,6 @@ namespace dx::extension {
                 gc->drawTextRow(x, y, text(), row);
                 y += lineHeight + space;
             }
-            gc->popClip();
         }
         scriptDrawWindow(gc);
     }
@@ -274,7 +277,7 @@ namespace dx::extension {
             gc::HAlign(gc) = textwindow::HAlign(this);
             gc::VAlign(gc) = textwindow::VAlign(this);
             gc::bWordWrap(gc) = textwindow::bWordWrap(this);
-            gc->drawText(hMargin, vMargin, w, h, text());
+            gc->drawText(hMargin, vMargin, w, h, displayedText());
             gc->resetState(this, gc->offsetX, gc->offsetY);
         }
         buttonwindow::curTexture(this) = texture;
@@ -315,9 +318,8 @@ namespace dx::extension {
         if (button != IK_LeftMouse && button != IK_RightMouse) {
             return handled;
         }
-        if (selectable()) {
-            setFocusWindow(this);
-        }
+        // XButtonWindow::MouseButtonPressed leaves the
+        // focus to the root window, which moves it by the modal's focus mode.
         buttonwindow::bMousePressed(this) = 1;
         buttonwindow::bButtonPressed(this) = 1;
         buttonwindow::lastInputKey(this) = button;
@@ -452,6 +454,8 @@ namespace dx::extension {
                 gc::tileColor(gc) = (color.r || color.g || color.b) ? color : Color { 255, 255, 255, 255 };
                 float boxX = right ? hMargin + w - boxWidth : hMargin;
                 float boxY = vMargin + std::floor((h - boxHeight) * 0.5f);
+                // The box is the texture's top-left corner at its own size: the menus give 13x13
+                // and 12x12 for art padded out to a larger texture, which stretching would squash.
                 gc->drawStretched(boxX, boxY, boxWidth, boxHeight, 0, 0, boxWidth, boxHeight, texture);
                 gc->resetState(this, gc->offsetX, gc->offsetY);
             }
@@ -484,7 +488,7 @@ namespace dx::extension {
     void UTextWindow::parentRequestedGranularity(float& hGranularity, float& vGranularity)
     {
         hGranularity = 1.0f;
-        vGranularity = fontHeight(window::normalFont(this)) + window::textVSpacing(this);
+        vGranularity = lineFontHeight(window::normalFont(this), window::boldFont(this)) + window::textVSpacing(this);
         UWindow::parentRequestedGranularity(hGranularity, vGranularity);
     }
 
@@ -524,17 +528,27 @@ namespace dx::extension {
         editwindow::blinkPeriod(this) = 1.0f;
         window::bIsSelectable(this) = 1;
         UWindow::initWindow();
-        undoStack.clear();
-        undoStack.push_back(text());
-        undoPosition = 0;
+        undoEntries.clear();
+        currentUndo = 0;
+        unchangedUndo = 0;
+        editwindow::selectStart(this) = 0;
+        editwindow::selectEnd(this) = 0;
+    }
+
+    // Moving the cursor changes insertPos; insertHookPos stays where the selection began.
+    // Together they determine selectStart and selectEnd. Both are -1 when nothing is selected.
+    int32_t UEditWindow::textLength()
+    {
+        return static_cast<int32_t>(text().size());
     }
 
     void UEditWindow::clampPositions()
     {
-        int32_t length = static_cast<int32_t>(text().size());
+        int32_t length = textLength();
         editwindow::insertPos(this) = std::clamp(editwindow::insertPos(this), 0, length);
-        editwindow::selectStart(this) = std::clamp(editwindow::selectStart(this), 0, length);
-        editwindow::selectEnd(this) = std::clamp(editwindow::selectEnd(this), 0, length);
+        editwindow::insertHookPos(this) = std::clamp(editwindow::insertHookPos(this), 0, length);
+        editwindow::selectStart(this) = std::min(editwindow::selectStart(this), length);
+        editwindow::selectEnd(this) = std::min(editwindow::selectEnd(this), length);
     }
 
     void UEditWindow::textModified()
@@ -542,155 +556,420 @@ namespace dx::extension {
         clampPositions();
     }
 
-    void UEditWindow::pushUndo()
-    {
-        if (undoPosition + 1 < undoStack.size()) {
-            undoStack.resize(undoPosition + 1);
-        }
-        undoStack.push_back(text());
-        int32_t maxUndos = editwindow::maxUndos(this);
-        size_t limit = maxUndos > 0 ? static_cast<size_t>(maxUndos) + 1 : 64;
-        while (undoStack.size() > limit) {
-            undoStack.erase(undoStack.begin());
-            unchangedUndo = unchangedUndo > 0 ? unchangedUndo - 1 : -1;
-        }
-        undoPosition = undoStack.size() - 1;
-    }
-
     bool UEditWindow::hasTextChanged()
     {
-        return static_cast<int32_t>(undoPosition) != unchangedUndo;
+        return currentUndo != unchangedUndo;
     }
 
     void UEditWindow::setTextChangedFlag(bool value)
     {
-        unchangedUndo = value ? -1 : static_cast<int32_t>(undoPosition);
+        unchangedUndo = value ? -1 : currentUndo;
     }
 
+    // XEditWindow::ClearUndo.
     void UEditWindow::clearUndo()
     {
-        unchangedUndo = hasTextChanged() ? -1 : 0;
-        undoStack.assign(1, text());
-        undoPosition = 0;
+        unchangedUndo = currentUndo != unchangedUndo ? -1 : 0;
+        currentUndo = 0;
+        undoEntries.clear();
     }
 
-    void UEditWindow::notifyChanged()
+    // XEditWindow::ClampUndo: a negative maxUndos keeps every step.
+    void UEditWindow::clampUndo()
     {
-        askParentForReconfigure();
-        bubbleText(this, hasTextChanged());
+        int32_t maxUndos = editwindow::maxUndos(this);
+        int32_t count = static_cast<int32_t>(undoEntries.size());
+        if (maxUndos < 0 || maxUndos >= count) {
+            return;
+        }
+        int32_t removed = count - maxUndos;
+        undoEntries.erase(undoEntries.begin(), undoEntries.begin() + removed);
+        currentUndo = std::max(currentUndo - removed, 0);
+        unchangedUndo -= removed;
+        if (unchangedUndo < 0) {
+            unchangedUndo = -1;
+        }
     }
 
-    void UEditWindow::deleteSelection()
+    // XEditWindow::AddUndo. Typing that carries on from the last
+    // insertion joins it, unless the text was marked unchanged in between.
+    void UEditWindow::addUndo(int32_t position, const std::string& removed, const std::string& inserted)
     {
-        int32_t start = std::min(editwindow::selectStart(this), editwindow::selectEnd(this));
-        int32_t end = std::max(editwindow::selectStart(this), editwindow::selectEnd(this));
-        if (end > start) {
-            text().erase(static_cast<size_t>(start), static_cast<size_t>(end - start));
+        if (removed.empty() && inserted.empty()) {
+            return;
+        }
+        bool add = true;
+        if ((removed.empty() || inserted.empty()) && currentUndo > 0 && currentUndo != unchangedUndo) {
+            UndoEntry& last = undoEntries[static_cast<size_t>(currentUndo - 1)];
+            if (last.removed.empty() && removed.empty() && position == last.position + static_cast<int32_t>(last.inserted.size())) {
+                last.inserted += inserted;
+                add = false;
+            }
+        }
+        if (currentUndo < static_cast<int32_t>(undoEntries.size())) {
+            undoEntries.resize(static_cast<size_t>(currentUndo));
+            if (currentUndo < unchangedUndo) {
+                unchangedUndo = -1;
+            }
+        }
+        if (add) {
+            undoEntries.push_back({ position, removed, inserted });
+            currentUndo++;
+        }
+        clampUndo();
+    }
+
+    void UEditWindow::undo()
+    {
+        if (currentUndo <= 0) {
+            return;
+        }
+        currentUndo--;
+        UndoEntry entry = undoEntries[static_cast<size_t>(currentUndo)];
+        editwindow::selectStart(this) = entry.position;
+        editwindow::selectEnd(this) = entry.position + static_cast<int32_t>(entry.inserted.size());
+        editwindow::insertPos(this) = entry.position;
+        replaceText(entry.removed, false, true);
+    }
+
+    void UEditWindow::redo()
+    {
+        if (currentUndo >= static_cast<int32_t>(undoEntries.size())) {
+            return;
+        }
+        UndoEntry entry = undoEntries[static_cast<size_t>(currentUndo)];
+        currentUndo++;
+        editwindow::selectStart(this) = entry.position;
+        editwindow::selectEnd(this) = entry.position + static_cast<int32_t>(entry.removed.size());
+        editwindow::insertPos(this) = entry.position;
+        replaceText(entry.inserted, false, true);
+    }
+
+    // XEditWindow::ReplaceText: the selection is replaced, TextChanged
+    // goes out, and the insertion point ends after the new text (selecting it
+    // when drag is set).
+    void UEditWindow::replaceText(const std::string& value, bool undo, bool drag)
+    {
+        clampPositions();
+        std::string& current = text();
+        int32_t length = textLength();
+        int32_t start = editwindow::selectStart(this);
+        int32_t end = editwindow::selectEnd(this);
+        int32_t removed = start >= 0 && start < end ? end - start : 0;
+        std::string inserted = value;
+        int32_t maxSize = editwindow::maxSize(this);
+        if (maxSize > 0) {
+            if (maxSize < length) {
+                // Text already over the limit is cut back and the edit dropped.
+                current.resize(static_cast<size_t>(maxSize));
+                clearUndo();
+                setTextChangedFlag(true);
+                askParentForReconfigure();
+                setCursorPoint(0, false);
+                return;
+            }
+            int32_t count = static_cast<int32_t>(inserted.size());
+            if (removed < count) {
+                int32_t over = length - removed + count - maxSize;
+                if (over > 0) {
+                    if (count - over < 0) {
+                        return;
+                    }
+                    inserted.resize(static_cast<size_t>(count - over));
+                }
+            }
+        }
+        int32_t count = static_cast<int32_t>(inserted.size());
+        if (removed < 1 && count < 1) {
+            return;
+        }
+        if (removed > 0) {
             editwindow::insertPos(this) = start;
         }
-        editwindow::selectStart(this) = editwindow::insertPos(this);
-        editwindow::selectEnd(this) = editwindow::insertPos(this);
+        int32_t position = editwindow::insertPos(this);
+        if (undo) {
+            addUndo(position, current.substr(static_cast<size_t>(position), static_cast<size_t>(removed)), inserted);
+        }
+        current.replace(static_cast<size_t>(position), static_cast<size_t>(removed), inserted);
+        bubbleText(this, hasTextChanged());
+        if (destroyed) {
+            return;
+        }
+        askParentForReconfigure();
+        editwindow::insertHookPos(this) = position;
+        setCursorPoint(position + count, drag);
     }
 
-    bool UEditWindow::insertText(const std::string& value, bool undo, bool select)
+    // XEditWindow::FilterString: fails only when every character of
+    // a non-empty string was refused.
+    bool UEditWindow::filterString(const std::string& value, std::string& filtered)
     {
-        std::string source = value;
-        for (size_t at = source.find("|n"); at != std::string::npos; at = source.find("|n", at)) {
-            source.replace(at, 2, "\n");
-        }
-        std::string insert;
-        for (char c : source) {
+        filtered.clear();
+        for (char c : value) {
             if (editwindow::bSingleLine(this) && c == '\n') {
                 continue;
             }
             if (filterChar(c) && c != '\0') {
-                insert.push_back(c);
+                filtered.push_back(c);
             }
         }
-        if (!source.empty() && insert.empty()) {
+        return value.empty() || !filtered.empty();
+    }
+
+    // XEditWindow::InsertText. Without undo, the undo steps are
+    // dropped and the text counts as changed.
+    bool UEditWindow::insertText(const std::string& value, bool undo, bool select)
+    {
+        std::string filtered;
+        if (!filterString(value, filtered)) {
             return false;
         }
-        clampPositions();
-        size_t lengthBefore = text().size();
-        deleteSelection();
-        int32_t maxSize = editwindow::maxSize(this);
-        if (maxSize > 0) {
-            int32_t room = std::max(maxSize - static_cast<int32_t>(text().size()), 0);
-            if (static_cast<int32_t>(insert.size()) > room) {
-                insert.resize(static_cast<size_t>(room));
-            }
-        }
-        if (insert.empty() && text().size() == lengthBefore) {
-            return true;
-        }
-        int32_t position = editwindow::insertPos(this);
-        text().insert(static_cast<size_t>(position), insert);
-        editwindow::insertPos(this) = position + static_cast<int32_t>(insert.size());
-        if (select) {
-            editwindow::selectStart(this) = position;
-            editwindow::selectEnd(this) = editwindow::insertPos(this);
-        } else {
-            editwindow::selectStart(this) = editwindow::insertPos(this);
-            editwindow::selectEnd(this) = editwindow::insertPos(this);
-        }
-        if (undo) {
-            pushUndo();
-        } else {
+        if (!undo) {
             clearUndo();
             setTextChangedFlag(true);
         }
-        blinkTime = state().time;
-        notifyChanged();
+        replaceText(filtered, undo, select);
         return true;
     }
 
+    // XEditWindow::DeleteChar and DeleteText.
     void UEditWindow::deleteChar(bool before, bool undo)
     {
-        if (!editwindow::bEditable(this)) {
-            return;
+        if (!undo) {
+            clearUndo();
+            setTextChangedFlag(true);
         }
         clampPositions();
-        if (editwindow::selectStart(this) != editwindow::selectEnd(this)) {
-            deleteSelection();
-        } else {
+        if (editwindow::selectEnd(this) <= editwindow::selectStart(this)) {
             int32_t position = editwindow::insertPos(this);
-            if (before) {
-                if (position <= 0) {
-                    return;
+            bool valid = before ? position >= 1 : position < textLength();
+            if (valid) {
+                if (before) {
+                    position--;
                 }
-                text().erase(static_cast<size_t>(position - 1), 1);
-                editwindow::insertPos(this) = position - 1;
-            } else {
-                if (position >= static_cast<int32_t>(text().size())) {
-                    return;
-                }
-                text().erase(static_cast<size_t>(position), 1);
+                editwindow::selectStart(this) = position;
+                editwindow::selectEnd(this) = position + 1;
             }
-            editwindow::selectStart(this) = editwindow::insertPos(this);
-            editwindow::selectEnd(this) = editwindow::insertPos(this);
         }
-        if (undo) {
-            pushUndo();
+        replaceText(std::string(), undo, false);
+    }
+
+    void UEditWindow::setText(const std::string& value)
+    {
+        editwindow::selectStart(this) = 0;
+        editwindow::selectEnd(this) = textLength();
+        editwindow::insertPos(this) = textLength();
+        insertText(value, false, false);
+        setCursorPoint(0, false);
+    }
+
+    void UEditWindow::appendText(const std::string& value)
+    {
+        editwindow::selectStart(this) = textLength();
+        editwindow::selectEnd(this) = textLength();
+        editwindow::insertPos(this) = textLength();
+        insertText(value, false, false);
+        setCursorPoint(0, false);
+    }
+
+    // XEditWindow::SetMaxSize cuts longer text down at once.
+    void UEditWindow::setMaxSize(int32_t value)
+    {
+        if (editwindow::maxSize(this) == value) {
+            return;
         }
+        editwindow::maxSize(this) = value;
+        if (value > 0 && value < textLength()) {
+            editwindow::selectStart(this) = value;
+            editwindow::selectEnd(this) = textLength();
+            editwindow::insertPos(this) = textLength();
+            insertText(std::string(), false, false);
+            setCursorPoint(0, false);
+        }
+    }
+
+    void UEditWindow::setMaxUndos(int32_t value)
+    {
+        value = std::max(value, -1);
+        if (editwindow::maxUndos(this) != value) {
+            editwindow::maxUndos(this) = value;
+            clampUndo();
+        }
+    }
+
+    namespace {
+        // XEditWindow keeps one text buffer for every edit window.
+        std::string& editClipboard()
+        {
+            static std::string buffer;
+            return buffer;
+        }
+    }
+
+    // XEditWindow::CopyToTextBuffer; Cut then deletes forward.
+    void UEditWindow::copy(bool cut)
+    {
+        clampPositions();
+        int32_t start = editwindow::selectStart(this);
+        int32_t end = editwindow::selectEnd(this);
+        if (start < 0 || start >= end) {
+            return;
+        }
+        editClipboard() = text().substr(static_cast<size_t>(start), static_cast<size_t>(end - start));
+        if (cut) {
+            deleteChar(false, true);
+        }
+    }
+
+    void UEditWindow::paste()
+    {
+        insertText(editClipboard(), true, false);
+    }
+
+    void UEditWindow::computeSelectArea()
+    {
+        int32_t insert = editwindow::insertPos(this);
+        int32_t hook = editwindow::insertHookPos(this);
+        bool words = editwindow::bSelectWords(this) != 0;
+        if (insert == hook && !words) {
+            editwindow::selectStart(this) = -1;
+            editwindow::selectEnd(this) = -1;
+            return;
+        }
+        int32_t start = std::min(insert, hook);
+        int32_t end = std::max(insert, hook);
+        if (words) {
+            start = startOfWord(start);
+            end = endOfWord(end);
+            editwindow::insertPos(this) = insert < hook ? start : end;
+        }
+        editwindow::selectStart(this) = start;
+        editwindow::selectEnd(this) = end;
+    }
+
+    // XEditWindow::SetCursorPoint.
+    void UEditWindow::setCursorPoint(int32_t position, bool drag)
+    {
+        position = std::clamp(position, 0, textLength());
+        editwindow::insertPos(this) = position;
+        if (!drag) {
+            editwindow::insertHookPos(this) = position;
+        }
+        computeSelectArea();
+        editwindow::insertPreferredCol(this) = columnX(editRows(), editwindow::insertPos(this));
         blinkTime = state().time;
-        notifyChanged();
+    }
+
+    // XEditWindow::SetCursorRow keeps the preferred column.
+    void UEditWindow::setCursorRow(int32_t row, bool drag)
+    {
+        std::vector<TextRow> rows = editRows();
+        int32_t position = 0;
+        if (!rows.empty()) {
+            row = std::clamp(row, 0, static_cast<int32_t>(rows.size()) - 1);
+            position = positionAtX(rows, row, editwindow::insertPreferredCol(this));
+        }
+        position = std::clamp(position, 0, textLength());
+        editwindow::insertPos(this) = position;
+        if (!drag) {
+            editwindow::insertHookPos(this) = position;
+        }
+        computeSelectArea();
+        blinkTime = state().time;
     }
 
     void UEditWindow::setInsertion(int32_t position, bool drag)
     {
-        int32_t length = static_cast<int32_t>(text().size());
-        position = std::clamp(position, 0, length);
-        int32_t anchor = editwindow::selectStart(this) == editwindow::insertPos(this) ? editwindow::selectEnd(this) : editwindow::selectStart(this);
-        editwindow::insertPos(this) = position;
-        editwindow::insertPreferredCol(this) = columnX(editRows(), position);
-        if (drag) {
-            editwindow::selectStart(this) = anchor;
-            editwindow::selectEnd(this) = position;
-        } else {
-            editwindow::selectStart(this) = position;
-            editwindow::selectEnd(this) = position;
+        setCursorPoint(position, drag);
+    }
+
+    void UEditWindow::setSelectedArea(int32_t start, int32_t count)
+    {
+        editwindow::bSelectWords(this) = 0;
+        setCursorPoint(start, false);
+        // XEditWindow::SetSelectedArea adds start and
+        // count with a plain wrapping 32-bit add, so (5, MaxInt) wraps negative
+        // and selects 0..5. This is the original's behaviour.
+        setCursorPoint(static_cast<int32_t>(static_cast<uint32_t>(start) + static_cast<uint32_t>(count)), true);
+    }
+
+    namespace {
+        bool isEditSpace(char c)
+        {
+            unsigned char u = static_cast<unsigned char>(c);
+            return (u >= 9 && u <= 13) || u == ' ';
         }
-        blinkTime = state().time;
+    }
+
+    // XEditWindow::StartOfWord and EndOfWord: a word
+    // is anything between whitespace.
+    int32_t UEditWindow::startOfWord(int32_t position)
+    {
+        const std::string& value = text();
+        while (position > 0 && !isEditSpace(value[static_cast<size_t>(position - 1)])) {
+            position--;
+        }
+        return position;
+    }
+
+    int32_t UEditWindow::endOfWord(int32_t position)
+    {
+        const std::string& value = text();
+        int32_t length = textLength();
+        while (position < length && !isEditSpace(value[static_cast<size_t>(position)])) {
+            position++;
+        }
+        return position;
+    }
+
+    // XEditWindow::NextWord: the start of the next word on the same
+    // row, or the row's end; from the end of a row, the next row.
+    int32_t UEditWindow::nextWord(const std::vector<TextRow>& rows, int32_t position)
+    {
+        if (rows.empty()) {
+            return 0;
+        }
+        int32_t row = rowOf(rows, position);
+        int32_t visibleEnd = static_cast<int32_t>(rows[static_cast<size_t>(row)].end);
+        if (position >= visibleEnd) {
+            return rowEnd(rows, row) + 1;
+        }
+        const std::string& value = text();
+        bool seenSpace = false;
+        for (; position < visibleEnd; position++) {
+            if (isEditSpace(value[static_cast<size_t>(position)])) {
+                seenSpace = true;
+            } else if (seenSpace) {
+                return position;
+            }
+        }
+        return rowEnd(rows, row);
+    }
+
+    // XEditWindow::PrevWord: the start of the word before, stopping
+    // at the row's start; from the start of a row, the end of the row above.
+    int32_t UEditWindow::prevWord(const std::vector<TextRow>& rows, int32_t position)
+    {
+        if (rows.empty()) {
+            return 0;
+        }
+        int32_t rowStart = static_cast<int32_t>(rows[static_cast<size_t>(rowOf(rows, position))].start);
+        if (position == rowStart) {
+            return std::max(position - 1, 0);
+        }
+        const std::string& value = text();
+        bool seenWord = false;
+        while (position - 1 >= rowStart) {
+            if (isEditSpace(value[static_cast<size_t>(position - 1)])) {
+                if (seenWord) {
+                    break;
+                }
+            } else {
+                seenWord = true;
+            }
+            position--;
+        }
+        return position;
     }
 
     std::vector<TextRow> UEditWindow::editRows()
@@ -716,7 +995,7 @@ namespace dx::extension {
         if (static_cast<size_t>(row) + 1 < rows.size()) {
             return static_cast<int32_t>(rows[static_cast<size_t>(row) + 1].start) - 1;
         }
-        return static_cast<int32_t>(text().size());
+        return textLength();
     }
 
     float UEditWindow::columnX(const std::vector<TextRow>& rows, int32_t position)
@@ -759,81 +1038,74 @@ namespace dx::extension {
         return position;
     }
 
+    int32_t UEditWindow::positionAt(float pointX, float pointY)
+    {
+        std::vector<TextRow> rows = editRows();
+        if (rows.empty()) {
+            return 0;
+        }
+        float step = largeLineHeight(this) + largetextwindow::vSpace(this);
+        int32_t row = static_cast<int32_t>(std::floor((pointY - textwindow::vMargin(this)) / step));
+        row = std::clamp(row, 0, static_cast<int32_t>(rows.size()) - 1);
+        return positionAtX(rows, row, pointX - textwindow::hMargin(this));
+    }
+
+    // XEditWindow::MoveInsertionPoint.
     void UEditWindow::moveInsertion(uint8_t move, bool drag)
     {
-        const std::string& value = text();
-        int32_t position = editwindow::insertPos(this);
-        int32_t length = static_cast<int32_t>(value.size());
         std::vector<TextRow> rows = editRows();
-        int32_t row = rowOf(rows, position);
+        bool hasRows = !rows.empty();
+        int32_t position = editwindow::insertPos(this);
+        int32_t row = hasRows ? rowOf(rows, position) : 0;
         float lineHeight = largeLineHeight(this) + largetextwindow::vSpace(this);
         int32_t page = std::max(static_cast<int32_t>(height() / lineHeight), 1);
-        int32_t targetRow = row;
         switch (move) {
         case 0:
-            targetRow = row - 1;
-            break;
         case 1:
-            targetRow = row + 1;
-            break;
         case 8:
-            targetRow = row - page;
-            break;
         case 9:
-            targetRow = row + page;
-            break;
+            if (hasRows) {
+                int32_t offset = move == 0 ? -1 : move == 1 ? 1
+                    : move == 8                             ? -page
+                                                            : page;
+                setCursorRow(row + offset, drag);
+            }
+            return;
         case 2:
-            position--;
-            break;
+            setCursorPoint(position - 1, drag);
+            return;
         case 3:
-            position++;
-            break;
+            setCursorPoint(position + 1, drag);
+            return;
         case 4:
-            while (position > 0 && !isWordChar(value[static_cast<size_t>(position - 1)])) {
-                position--;
+            if (hasRows) {
+                setCursorPoint(prevWord(rows, position), drag);
             }
-            while (position > 0 && isWordChar(value[static_cast<size_t>(position - 1)])) {
-                position--;
-            }
-            break;
+            return;
         case 5:
-            while (position < length && isWordChar(value[static_cast<size_t>(position)])) {
-                position++;
+            if (hasRows) {
+                setCursorPoint(nextWord(rows, position), drag);
             }
-            while (position < length && !isWordChar(value[static_cast<size_t>(position)])) {
-                position++;
-            }
-            break;
+            return;
         case 6:
-            if (!rows.empty()) {
-                position = static_cast<int32_t>(rows[static_cast<size_t>(row)].start);
+            if (hasRows) {
+                setCursorPoint(static_cast<int32_t>(rows[static_cast<size_t>(row)].start), drag);
             }
-            break;
+            return;
         case 7:
-            if (!rows.empty()) {
-                position = rowEnd(rows, row);
+            if (hasRows) {
+                setCursorPoint(rowEnd(rows, row), drag);
             }
-            break;
+            return;
         case 10:
-            position = 0;
-            break;
+            setCursorPoint(0, drag);
+            return;
         case 11:
-            position = length;
-            break;
+            setCursorPoint(textLength(), drag);
+            return;
         default:
-            break;
-        }
-        if (move == 0 || move == 1 || move == 8 || move == 9) {
-            if (rows.empty()) {
-                return;
-            }
-            float column = editwindow::insertPreferredCol(this);
-            targetRow = std::clamp(targetRow, 0, static_cast<int32_t>(rows.size()) - 1);
-            setInsertion(positionAtX(rows, targetRow, column), drag);
-            editwindow::insertPreferredCol(this) = column;
             return;
         }
-        setInsertion(position, drag);
     }
 
     bool UEditWindow::filterChar(char& c)
@@ -887,18 +1159,84 @@ namespace dx::extension {
         return UTextWindow::virtualKeyPressed(key, repeat);
     }
 
+    namespace {
+        bool editKeyDown(uint8_t a, uint8_t b, uint8_t c)
+        {
+            const State& s = state();
+            return s.keys[a] || s.keys[b] || s.keys[c];
+        }
+    }
+
+    // XEditWindow::MouseButtonPressed: the script hears of the
+    // click first, and its result counts. A left click in an editable box places
+    // the insertion point (Shift extends the selection) and starts a drag; a
+    // second click, or Ctrl, selects whole words.
     bool UEditWindow::mouseButtonPressed(float pointX, float pointY, uint8_t button, int32_t numClicks)
     {
-        if (UTextWindow::mouseButtonPressed(pointX, pointY, button, numClicks)) {
-            return true;
+        bool handled = UTextWindow::mouseButtonPressed(pointX, pointY, button, numClicks);
+        if (destroyed || button != IK_LeftMouse || !editwindow::bEditable(this)) {
+            return handled;
         }
-        setFocusWindow(this);
-        std::vector<TextRow> rows = editRows();
-        float step = largeLineHeight(this) + largetextwindow::vSpace(this);
-        int32_t row = static_cast<int32_t>(std::floor((pointY - textwindow::vMargin(this)) / step));
-        row = std::clamp(row, 0, std::max(static_cast<int32_t>(rows.size()) - 1, 0));
-        setInsertion(positionAtX(rows, row, pointX - textwindow::hMargin(this)), false);
+        bool ctrl = editKeyDown(IK_Ctrl, IK_LControl, IK_RControl);
+        bool shift = editKeyDown(IK_Shift, IK_LShift, IK_RShift);
+        editwindow::bSelectWords(this) = ctrl || (numClicks - 1) % 2 == 1 ? 1 : 0;
+        editwindow::bDragging(this) = 1;
+        editwindow::dragDelay(this) = 0.1f;
+        grabMouse();
+        setCursorPoint(positionAt(pointX, pointY), shift);
         return true;
+    }
+
+    void UEditWindow::mouseMoved(float newX, float newY)
+    {
+        UTextWindow::mouseMoved(newX, newY);
+        if (!destroyed && editwindow::bDragging(this)) {
+            setCursorPoint(positionAt(newX, newY), true);
+        }
+    }
+
+    bool UEditWindow::mouseButtonReleased(float pointX, float pointY, uint8_t button, int32_t numClicks)
+    {
+        bool handled = UTextWindow::mouseButtonReleased(pointX, pointY, button, numClicks);
+        if (destroyed || button != IK_LeftMouse) {
+            return handled;
+        }
+        if (editwindow::bDragging(this)) {
+            ungrabMouse();
+        }
+        editwindow::bDragging(this) = 0;
+        editwindow::bSelectWords(this) = 0;
+        return handled || editwindow::bEditable(this);
+    }
+
+    // XEditWindow::Tick: while dragging, the cursor position is
+    // fed back through MouseMoved every 0.1 seconds.
+    void UEditWindow::tick(float deltaSeconds)
+    {
+        UTextWindow::tick(deltaSeconds);
+        if (destroyed || !editwindow::bDragging(this)) {
+            return;
+        }
+        float& delay = editwindow::dragDelay(this);
+        delay -= deltaSeconds;
+        if (delay >= 0) {
+            return;
+        }
+        delay += 0.1f;
+        if (delay < 0) {
+            delay = 0.1f;
+        }
+        URootWindow* rootWindow = root();
+        if (!rootWindow) {
+            return;
+        }
+        float ax = 0;
+        float ay = 0;
+        absolutePosition(ax, ay);
+        float rx = 0;
+        float ry = 0;
+        rootWindow->absolutePosition(rx, ry);
+        mouseMoved(rootWindow->mouseX() + rx - ax, rootWindow->mouseY() + ry - ay);
     }
 
     void UEditWindow::drawWindow(UGC* gc)
@@ -915,44 +1253,45 @@ namespace dx::extension {
         std::vector<TextRow> rows = editRows();
         float lineHeight = largeLineHeight(this);
         float step = lineHeight + largetextwindow::vSpace(this);
-        gc->pushClip(gc->offsetX + hMargin, gc->offsetY + vMargin, std::max(width() - hMargin * 2.0f, 0.0f), std::max(height() - vMargin * 2.0f, 0.0f));
-        for (size_t i = 0; i < rows.size(); i++) {
-            int32_t a = std::max(start, static_cast<int32_t>(rows[i].start));
-            int32_t b = std::min(end, rowEnd(rows, static_cast<int32_t>(i)));
-            if (b <= a) {
-                continue;
+        {
+            UGC::ClipScope clip(gc, gc->offsetX + hMargin, gc->offsetY + vMargin, std::max(width() - hMargin * 2.0f, 0.0f), std::max(height() - vMargin * 2.0f, 0.0f));
+            for (size_t i = 0; i < rows.size(); i++) {
+                int32_t a = std::max(start, static_cast<int32_t>(rows[i].start));
+                int32_t b = std::min(end, rowEnd(rows, static_cast<int32_t>(i)));
+                if (b <= a) {
+                    continue;
+                }
+                float x0 = columnX(rows, a);
+                float x1 = columnX(rows, b);
+                float y = vMargin + static_cast<float>(i) * step;
+                UObject* texture = editwindow::selectTexture(this);
+                gc->setStyle(DSTY_Normal);
+                gc::tileColor(gc) = editwindow::selectColor(this);
+                if (texture) {
+                    gc->drawStretched(hMargin + x0, y, x1 - x0, lineHeight, 0, 0, textureWidth(texture), textureHeight(texture), texture);
+                } else {
+                    gc->drawRect(gc->offsetX + hMargin + x0, gc->offsetY + y, x1 - x0, lineHeight, gc::tileColor(gc), BlendStyle::Normal);
+                }
+                gc->resetState(this, gc->offsetX, gc->offsetY);
             }
-            float x0 = columnX(rows, a);
-            float x1 = columnX(rows, b);
-            float y = vMargin + static_cast<float>(i) * step;
-            UObject* texture = editwindow::selectTexture(this);
-            gc->setStyle(DSTY_Normal);
-            gc::tileColor(gc) = editwindow::selectColor(this);
-            if (texture) {
-                gc->drawStretched(hMargin + x0, y, x1 - x0, lineHeight, 0, 0, textureWidth(texture), textureHeight(texture), texture);
-            } else {
-                gc->drawRect(gc->offsetX + hMargin + x0, gc->offsetY + y, x1 - x0, lineHeight, gc::tileColor(gc), BlendStyle::Normal);
+            for (size_t i = 0; i < rows.size(); i++) {
+                gc->drawTextRow(hMargin, vMargin + static_cast<float>(i) * step, value, rows[i]);
             }
-            gc->resetState(this, gc->offsetX, gc->offsetY);
-        }
-        for (size_t i = 0; i < rows.size(); i++) {
-            gc->drawTextRow(hMargin, vMargin + static_cast<float>(i) * step, value, rows[i]);
-        }
-        for (size_t i = 0; i < rows.size(); i++) {
-            int32_t a = std::max(start, static_cast<int32_t>(rows[i].start));
-            int32_t b = std::min(end, rowEnd(rows, static_cast<int32_t>(i)));
-            if (b <= a) {
-                continue;
+            for (size_t i = 0; i < rows.size(); i++) {
+                int32_t a = std::max(start, static_cast<int32_t>(rows[i].start));
+                int32_t b = std::min(end, rowEnd(rows, static_cast<int32_t>(i)));
+                if (b <= a) {
+                    continue;
+                }
+                float x0 = columnX(rows, a);
+                gc::HAlign(gc) = HALIGN_Left;
+                gc::VAlign(gc) = VALIGN_Top;
+                gc::bWordWrap(gc) = 0;
+                gc::TextColor(gc) = editwindow::inverseColor(this);
+                gc->drawText(hMargin + x0, vMargin + static_cast<float>(i) * step, std::max(width() - hMargin * 2.0f - x0, 0.0f), lineHeight, value.substr(static_cast<size_t>(a), static_cast<size_t>(b - a)));
+                gc->resetState(this, gc->offsetX, gc->offsetY);
             }
-            float x0 = columnX(rows, a);
-            gc::HAlign(gc) = HALIGN_Left;
-            gc::VAlign(gc) = VALIGN_Top;
-            gc::bWordWrap(gc) = 0;
-            gc::TextColor(gc) = editwindow::inverseColor(this);
-            gc->drawText(hMargin + x0, vMargin + static_cast<float>(i) * step, std::max(width() - hMargin * 2.0f - x0, 0.0f), lineHeight, value.substr(static_cast<size_t>(a), static_cast<size_t>(b - a)));
-            gc->resetState(this, gc->offsetX, gc->offsetY);
         }
-        gc->popClip();
         double elapsed = state().time - blinkTime;
         double blinkStart = static_cast<double>(editwindow::blinkStart(this));
         double halfPeriod = static_cast<double>(editwindow::blinkPeriod(this)) * 0.5;
@@ -1066,11 +1405,7 @@ namespace dx::extension {
             UTextWindow* window = textSelf(object);
             value = convertScriptString(value);
             if (UEditWindow* edit = cast<UEditWindow>(window)) {
-                editwindow::selectStart(edit) = 0;
-                editwindow::selectEnd(edit) = static_cast<int32_t>(edit->text().size());
-                editwindow::insertPos(edit) = static_cast<int32_t>(edit->text().size());
-                edit->insertText(value, false, false);
-                edit->setInsertion(0, false);
+                edit->setText(value);
                 return;
             }
             if (window && window->text() != value) {
@@ -1087,6 +1422,10 @@ namespace dx::extension {
             vm::finish(stack);
             UTextWindow* window = textSelf(object);
             value = convertScriptString(value);
+            if (UEditWindow* edit = cast<UEditWindow>(window)) {
+                edit->appendText(value);
+                return;
+            }
             if (window && !value.empty()) {
                 window->text() += value;
                 updateAccelerator(window);
@@ -1118,10 +1457,17 @@ namespace dx::extension {
             UTextWindow* window = textSelf(object);
             std::string part;
             if (window) {
-                int32_t length = static_cast<int32_t>(window->text().size());
-                int32_t first = std::clamp(start, 0, length);
-                int32_t last = std::clamp(start + count, first, length);
-                part = window->text().substr(static_cast<size_t>(first), static_cast<size_t>(last - first));
+                // XTextWindow::execGetTextPart calls
+                // FString::Mid, which adds start and count
+                // in 32 bits and clamps both ends as unsigned: a negative start
+                // gives an empty string, and a negative count whose end wraps
+                // below zero gives the rest of the text. This is the original's
+                // behaviour.
+                uint32_t length = static_cast<uint32_t>(window->text().size());
+                uint32_t first = std::min(static_cast<uint32_t>(start), length);
+                uint32_t end = static_cast<uint32_t>(start) + static_cast<uint32_t>(count);
+                uint32_t last = end < first ? first : std::min(end, length);
+                part = window->text().substr(first, last - first);
             }
             *out = part;
             vm::ret<int32_t>(result, static_cast<int32_t>(part.size()));
@@ -1571,10 +1917,7 @@ namespace dx::extension {
             int32_t count = vm::get<int32_t>(stack);
             vm::finish(stack);
             if (UEditWindow* edit = editSelf(object)) {
-                editwindow::selectStart(edit) = start;
-                editwindow::selectEnd(edit) = start + count;
-                editwindow::insertPos(edit) = start + count;
-                edit->clampPositions();
+                edit->setSelectedArea(start, count);
             }
         }
 
@@ -1584,10 +1927,11 @@ namespace dx::extension {
             int32_t* count = vm::getRef<int32_t>(stack);
             vm::finish(stack);
             if (UEditWindow* edit = editSelf(object)) {
-                int32_t a = std::min(editwindow::selectStart(edit), editwindow::selectEnd(edit));
-                int32_t b = std::max(editwindow::selectStart(edit), editwindow::selectEnd(edit));
-                *start = a;
-                *count = b - a;
+                // XEditWindow::GetSelectedArea: 0 and 0 with nothing selected.
+                int32_t a = editwindow::selectStart(edit);
+                int32_t b = editwindow::selectEnd(edit);
+                *start = std::max(a, 0);
+                *count = std::max(b - a, 0);
             }
         }
 
@@ -1658,7 +2002,7 @@ namespace dx::extension {
             int32_t value = vm::get<int32_t>(stack);
             vm::finish(stack);
             if (UEditWindow* edit = editSelf(object)) {
-                editwindow::maxSize(edit) = value;
+                edit->setMaxSize(value);
             }
         }
 
@@ -1667,7 +2011,7 @@ namespace dx::extension {
             int32_t value = vm::get<int32_t>(stack);
             vm::finish(stack);
             if (UEditWindow* edit = editSelf(object)) {
-                editwindow::maxUndos(edit) = value;
+                edit->setMaxUndos(value);
             }
         }
 
@@ -1679,7 +2023,7 @@ namespace dx::extension {
             bool select = optionalBoolDefault(stack, false);
             vm::finish(stack);
             UEditWindow* edit = editSelf(object);
-            vm::retBool(result, edit && edit->insertText(text, undo, select));
+            vm::retBool(result, edit && edit->insertText(convertScriptString(text), undo, select));
         }
 
         void nativeDeleteChar(UObject* object, Frame& stack, void*)
@@ -1787,6 +2131,7 @@ namespace dx::extension {
                 if (hasCursor) {
                     editwindow::editCursor(edit) = cursor;
                     window::defaultCursor(edit) = cursor;
+                    // As SetDefaultCursor without a hot spot: the cursor's middle, not its corner.
                     window::defaultHotX(edit) = -1;
                     window::defaultHotY(edit) = -1;
                 }
@@ -1803,24 +2148,16 @@ namespace dx::extension {
         void nativeUndo(UObject* object, Frame& stack, void*)
         {
             vm::finish(stack);
-            UEditWindow* edit = editSelf(object);
-            if (edit && edit->undoPosition > 0) {
-                edit->undoPosition--;
-                edit->text() = edit->undoStack[edit->undoPosition];
-                edit->clampPositions();
-                edit->notifyChanged();
+            if (UEditWindow* edit = editSelf(object)) {
+                edit->undo();
             }
         }
 
         void nativeRedo(UObject* object, Frame& stack, void*)
         {
             vm::finish(stack);
-            UEditWindow* edit = editSelf(object);
-            if (edit && edit->undoPosition + 1 < edit->undoStack.size()) {
-                edit->undoPosition++;
-                edit->text() = edit->undoStack[edit->undoPosition];
-                edit->clampPositions();
-                edit->notifyChanged();
+            if (UEditWindow* edit = editSelf(object)) {
+                edit->redo();
             }
         }
 
@@ -1832,19 +2169,11 @@ namespace dx::extension {
             }
         }
 
-        std::string selectionOf(UEditWindow* edit)
-        {
-            int32_t a = std::min(editwindow::selectStart(edit), editwindow::selectEnd(edit));
-            int32_t b = std::max(editwindow::selectStart(edit), editwindow::selectEnd(edit));
-            return edit->text().substr(static_cast<size_t>(a), static_cast<size_t>(b - a));
-        }
-
         void nativeCopy(UObject* object, Frame& stack, void*)
         {
             vm::finish(stack);
             if (UEditWindow* edit = editSelf(object)) {
-                edit->clampPositions();
-                edit->clipboard = selectionOf(edit);
+                edit->copy(false);
             }
         }
 
@@ -1852,11 +2181,7 @@ namespace dx::extension {
         {
             vm::finish(stack);
             if (UEditWindow* edit = editSelf(object)) {
-                edit->clampPositions();
-                edit->clipboard = selectionOf(edit);
-                if (!edit->clipboard.empty()) {
-                    edit->deleteChar(true, true);
-                }
+                edit->copy(true);
             }
         }
 
@@ -1864,7 +2189,7 @@ namespace dx::extension {
         {
             vm::finish(stack);
             if (UEditWindow* edit = editSelf(object)) {
-                edit->insertText(edit->clipboard, true, false);
+                edit->paste();
             }
         }
 

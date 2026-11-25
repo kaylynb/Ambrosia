@@ -3,11 +3,11 @@
 #include "core/config.h"
 #include "core/objects.h"
 #include "render/procedural.h"
+#include "core/text.h"
 
 #include <stb_image.h>
 
 #include <algorithm>
-#include <cctype>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -15,14 +15,6 @@
 
 namespace dx {
     namespace {
-        std::string lowered(std::string text)
-        {
-            std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            });
-            return text;
-        }
-
         std::filesystem::path childNamed(const std::filesystem::path& directory, const std::string& name)
         {
             std::error_code error;

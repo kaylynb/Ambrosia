@@ -1,0 +1,1427 @@
+# Which texts and conversations give away which logins, PINs and door codes.
+# Generated from the game data of the GOTY, Mapfix and Confix installs; passwords and codes
+# are not stored here but read from the machine itself. A row counts once its source has
+# been read or heard, when its confidence is Likely or its verdict is Y, and not when its
+# verdict is N. Source is text:<name> for datacubes, books, newspapers, emails and bulletins,
+# or con:<name> for a conversation.
+source	source kind	map	machine	machine kind	account	confidence	verdict
+text:05_Book01	Book	00_Intro	ComputerPersonal4	Computer	dmoreau	Likely	
+con:FemJCScientistsConsulting2	Conversation	00_Intro	ComputerPersonal4	Computer	dmoreau	Questionable	
+con:ScientistsConsulting2	Conversation	00_Intro	ComputerPersonal4	Computer	dmoreau	Questionable	
+text:05_Datacube03	Datacube	00_Intro	ComputerPersonal4	Computer	psherman	Likely	
+con:CarlaBarks	Conversation	00_Intro	Keypad4	Keypad		Questionable	
+con:FemJCCarlaBarks	Conversation	00_Intro	Keypad4	Keypad		Questionable	
+con:FemJCPinkertonBarks	Conversation	00_Intro	Keypad4	Keypad		Questionable	
+con:PinkertonBarks	Conversation	00_Intro	Keypad4	Keypad		Questionable	
+text:12_Datacube01	Datacube	00_Intro	Keypad4	Keypad		Questionable	
+text:00_Datacube01	Datacube	00_Training	Keypad0	Keypad		Likely	
+text:00_Datacube02	Datacube	00_TrainingFinal	Keypad1	Keypad		Likely	
+text:01_Datacube01	Datacube	01_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:03_Email08	Email	01_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:FemJC03_Email08	Email	01_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	ajacobson	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	ajacobson	Possible	Y
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	ajacobson	Possible	Y
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	anavarre	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	anavarre	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	anavarre	Likely	
+text:01_Datacube05	Datacube	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	ghermann	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	ghermann	Likely	
+con:DL_Office	Conversation	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	JCD	Likely	
+con:MeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	JCD	Likely	
+con:Prebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	JCD	Likely	
+text:01_Datacube01	Datacube	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	jmanderley	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	jmanderley	Likely	
+text:03_Email08	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	jmanderley	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	jmanderley	Likely	
+text:FemJC03_Email08	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	jmanderley	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal1	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	ajacobson	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	ajacobson	Possible	Y
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	ajacobson	Possible	Y
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	anavarre	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	anavarre	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	anavarre	Likely	
+text:01_Datacube05	Datacube	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+con:DL_Office	Conversation	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+con:MeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+con:Prebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal3	Computer	jreyes	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal4	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal4	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal4	Computer	jreyes	Likely	
+text:01_Datacube05	Datacube	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+con:DL_Office	Conversation	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:MeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:Prebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal5	Computer	jreyes	Likely	
+text:01_Datacube05	Datacube	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	ghermann	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	ghermann	Likely	
+con:DL_Office	Conversation	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+con:MeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+con:Prebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+text:01_Datacube01	Datacube	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:03_Email08	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:FemJC03_Email08	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreed	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreed	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreed	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreyes	Likely	
+text:01_Datacube05	Datacube	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	ghermann	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	ghermann	Likely	
+con:DL_Office	Conversation	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+con:MeetJanice	Conversation	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+con:Prebriefing	Conversation	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+text:01_Datacube01	Datacube	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jmanderley	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jmanderley	Likely	
+text:03_Email08	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jmanderley	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jmanderley	Likely	
+text:FemJC03_Email08	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jmanderley	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreed	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreed	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreed	Likely	
+text:01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	01_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreyes	Likely	
+text:01_Email14	Email	01_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:15_Datacube19	Datacube	01_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:FemJC01_Email14	Email	01_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:01_Datacube07	Datacube	01_NYC_UNATCOIsland	ATM0	ATM	230023	Likely	
+text:01_Datacube06	Datacube	01_NYC_UNATCOIsland	ComputerSecurity0	Computer	SATCOM	Likely	
+text:01_Datacube04	Datacube	01_NYC_UNATCOIsland	ComputerSecurity1	Computer	NSF001	Likely	
+text:01_Datacube04	Datacube	01_NYC_UNATCOIsland	ComputerSecurity2	Computer	NSF001	Likely	
+con:FemJCMeetKaplan	Conversation	01_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+con:MeetKaplan	Conversation	01_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+text:01_Datacube03	Datacube	01_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+text:02_Email14	Email	02_NYC_Bar	ATM0	ATM	312446	Likely	
+text:FemJC02_Email14	Email	02_NYC_Bar	ATM0	ATM	312446	Likely	
+text:02_Datacube13	Datacube	02_NYC_Bar	ATM0	ATM	947761	Likely	
+text:02_Email14	Email	02_NYC_Bar	ATM1	ATM	312446	Likely	
+text:FemJC02_Email14	Email	02_NYC_Bar	ATM1	ATM	312446	Likely	
+text:02_Datacube13	Datacube	02_NYC_Bar	ATM1	ATM	947761	Likely	
+con:FemJCMaleHostageRescued	Conversation note	02_NYC_BatteryPark	ComputerPersonal1	Computer	NSF	Likely	
+con:MaleHostageRescued	Conversation note	02_NYC_BatteryPark	ComputerPersonal1	Computer	NSF	Likely	
+text:02_Datacube14	Datacube	02_NYC_BatteryPark	ComputerPersonal1	Computer	NSF	Likely	
+con:FemJCMaleHostageRescued	Conversation note	02_NYC_BatteryPark	ComputerSecurity2	Computer	NSF	Likely	
+con:MaleHostageRescued	Conversation note	02_NYC_BatteryPark	ComputerSecurity2	Computer	NSF	Likely	
+text:02_Datacube14	Datacube	02_NYC_BatteryPark	ComputerSecurity2	Computer	NSF	Likely	
+con:FemJCMeetJosh	Conversation	02_NYC_BatteryPark	Keypad1	Keypad		Likely	
+con:MeetJosh	Conversation	02_NYC_BatteryPark	Keypad1	Keypad		Likely	
+text:02_Datacube15	Datacube	02_NYC_BatteryPark	Keypad2	Keypad		Likely	
+text:08_Datacube01	Datacube	02_NYC_FreeClinic	ComputerPersonal0	Computer	JAllred	Likely	
+text:08_Datacube01	Datacube	02_NYC_FreeClinic	ComputerPersonal1	Computer	Alice_Priest	Likely	
+con:Doctor1Barter	Conversation	02_NYC_FreeClinic	Keypad0	Keypad		Likely	
+con:Doctor2Barter	Conversation	02_NYC_FreeClinic	Keypad0	Keypad		Likely	
+con:FemJCDoctor1Barter	Conversation	02_NYC_FreeClinic	Keypad0	Keypad		Likely	
+con:FemJCDoctor2Barter	Conversation	02_NYC_FreeClinic	Keypad0	Keypad		Likely	
+text:02_Datacube08	Datacube	02_NYC_Hotel	ATM0	ATM	543654	Likely	
+text:02_Datacube13	Datacube	02_NYC_Hotel	ATM0	ATM	947761	Likely	
+text:02_Datacube05	Datacube	02_NYC_Hotel	ComputerPersonal0	Computer	PDenton	Likely	
+con:FemJCJaimeOverheard	Conversation	02_NYC_Smug	ComputerPersonal0	Computer	Schick	Questionable	
+con:JaimeOverheard	Conversation	02_NYC_Smug	ComputerPersonal0	Computer	Schick	Questionable	
+text:02_Email14	Email	02_NYC_Street	ATM0	ATM	312446	Likely	
+text:FemJC02_Email14	Email	02_NYC_Street	ATM0	ATM	312446	Likely	
+text:02_Datacube08	Datacube	02_NYC_Street	ATM0	ATM	543654	Likely	
+text:02_Datacube13	Datacube	02_NYC_Street	ATM0	ATM	947761	Likely	
+con:FemJCJaneyThankful	Conversation	02_NYC_Street	Keypad0	Keypad		Likely	
+con:FemJCWorkerGivesInfo	Conversation	02_NYC_Street	Keypad0	Keypad		Likely	
+con:JaneyThankful	Conversation	02_NYC_Street	Keypad0	Keypad		Likely	
+con:WorkerGivesInfo	Conversation	02_NYC_Street	Keypad0	Keypad		Likely	
+text:02_Datacube02	Datacube	02_NYC_Underground	ComputerPersonal0	Computer	JSteward	Likely	
+text:02_Datacube11	Datacube	02_NYC_Underground	ComputerSecurity0	Computer	MJ12	Likely	
+text:02_Datacube11	Datacube	02_NYC_Underground	ComputerSecurity1	Computer	MJ12	Likely	
+text:02_Datacube11	Datacube	02_NYC_Underground	ComputerSecurity2	Computer	MJ12	Likely	
+text:02_Datacube03	Datacube	02_NYC_Underground	Keypad0	Keypad		Likely	
+text:02_Datacube06	Datacube	02_NYC_Underground	Keypad0	Keypad		Likely	
+text:02_Email08	Email	02_NYC_Underground	Keypad0	Keypad		Likely	
+text:FemJC02_Email08	Email	02_NYC_Underground	Keypad0	Keypad		Likely	
+text:02_Datacube03	Datacube	02_NYC_Underground	Keypad1	Keypad		Likely	
+text:02_Datacube06	Datacube	02_NYC_Underground	Keypad1	Keypad		Likely	
+text:02_Email08	Email	02_NYC_Underground	Keypad1	Keypad		Likely	
+text:FemJC02_Email08	Email	02_NYC_Underground	Keypad1	Keypad		Likely	
+text:02_Datacube03	Datacube	02_NYC_Underground	Keypad11	Keypad		Likely	
+text:02_Datacube06	Datacube	02_NYC_Underground	Keypad11	Keypad		Likely	
+text:02_Email08	Email	02_NYC_Underground	Keypad11	Keypad		Likely	
+text:FemJC02_Email08	Email	02_NYC_Underground	Keypad11	Keypad		Likely	
+text:02_Datacube03	Datacube	02_NYC_Underground	Keypad12	Keypad		Likely	
+text:02_Datacube06	Datacube	02_NYC_Underground	Keypad12	Keypad		Likely	
+text:02_Email08	Email	02_NYC_Underground	Keypad12	Keypad		Likely	
+text:FemJC02_Email08	Email	02_NYC_Underground	Keypad12	Keypad		Likely	
+text:02_Datacube03	Datacube	02_NYC_Underground	Keypad16	Keypad		Likely	
+text:02_Datacube06	Datacube	02_NYC_Underground	Keypad16	Keypad		Likely	
+text:02_Email08	Email	02_NYC_Underground	Keypad16	Keypad		Likely	
+text:FemJC02_Email08	Email	02_NYC_Underground	Keypad16	Keypad		Likely	
+text:02_Datacube03	Datacube	02_NYC_Underground	Keypad2	Keypad		Likely	
+text:02_Datacube06	Datacube	02_NYC_Underground	Keypad2	Keypad		Likely	
+text:02_Email08	Email	02_NYC_Underground	Keypad2	Keypad		Likely	
+text:FemJC02_Email08	Email	02_NYC_Underground	Keypad2	Keypad		Likely	
+text:02_Datacube03	Datacube	02_NYC_Underground	Keypad9	Keypad		Likely	
+text:02_Datacube06	Datacube	02_NYC_Underground	Keypad9	Keypad		Likely	
+text:02_Email08	Email	02_NYC_Underground	Keypad9	Keypad		Likely	
+text:FemJC02_Email08	Email	02_NYC_Underground	Keypad9	Keypad		Likely	
+text:02_Datacube18	Datacube	02_NYC_Warehouse	ComputerPersonal0	Computer	TFrase	Likely	
+con:FemJCMaleHostageRescued	Conversation note	02_NYC_Warehouse	ComputerPersonal5	Computer	NSF	Likely	
+con:MaleHostageRescued	Conversation note	02_NYC_Warehouse	ComputerPersonal5	Computer	NSF	Likely	
+text:02_Datacube14	Datacube	02_NYC_Warehouse	ComputerPersonal5	Computer	NSF	Likely	
+con:FemJCMaleHostageRescued	Conversation note	02_NYC_Warehouse	ComputerSecurity0	Computer	NSF	Likely	
+con:MaleHostageRescued	Conversation note	02_NYC_Warehouse	ComputerSecurity0	Computer	NSF	Likely	
+text:02_Datacube14	Datacube	02_NYC_Warehouse	ComputerSecurity0	Computer	NSF	Likely	
+con:FemJCMaleHostageRescued	Conversation note	02_NYC_Warehouse	ComputerSecurity1	Computer	NSF	Likely	
+con:MaleHostageRescued	Conversation note	02_NYC_Warehouse	ComputerSecurity1	Computer	NSF	Likely	
+text:02_Datacube14	Datacube	02_NYC_Warehouse	ComputerSecurity1	Computer	NSF	Likely	
+text:02_Datacube10	Datacube	02_NYC_Warehouse	Keypad0	Keypad		Likely	
+text:02_Datacube09	Datacube	02_NYC_Warehouse	Keypad1	Keypad		Likely	
+text:02_Datacube09	Datacube	02_NYC_Warehouse	Keypad10	Keypad		Likely	
+text:02_Datacube09	Datacube	02_NYC_Warehouse	Keypad2	Keypad		Likely	
+text:03_Datacube13	Datacube	03_NYC_747	Keypad1	Keypad		Likely	
+text:03_Email01	Email	03_NYC_747	Keypad1	Keypad		Likely	
+text:05_Email10	Email	03_NYC_747	Keypad1	Keypad		Likely	
+text:FemJC03_Email01	Email	03_NYC_747	Keypad1	Keypad		Likely	
+text:FemJC05_Email10	Email	03_NYC_747	Keypad1	Keypad		Likely	
+text:03_Datacube10	Datacube	03_NYC_Airfield	Keypad12	Keypad		Likely	
+text:03_Datacube12	Datacube	03_NYC_AirfieldHeliBase	ComputerPersonal1	Computer	etodd	Likely	
+con:FemJCMeetCurly	Conversation	03_NYC_BatteryPark	Keypad2	Keypad		Likely	
+con:MeetCurly	Conversation	03_NYC_BatteryPark	Keypad2	Keypad		Likely	
+text:03_Book06	Book	03_NYC_BatteryPark	Keypad2	Keypad		Likely	
+con:FemJCM04TroopersOverheard	Conversation	03_NYC_BrooklynBridgeStation	ATM0	ATM	20000	Questionable	
+con:FemJCMJ12Lab_Genetics_Overheard2	Conversation	03_NYC_BrooklynBridgeStation	ATM0	ATM	20000	Questionable	
+con:M04TroopersOverheard	Conversation	03_NYC_BrooklynBridgeStation	ATM0	ATM	20000	Questionable	
+con:MJ12Lab_Genetics_Overheard2	Conversation	03_NYC_BrooklynBridgeStation	ATM0	ATM	20000	Questionable	
+con:FannSatisfied	Conversation	03_NYC_BrooklynBridgeStation	Keypad0	Keypad		Likely	
+con:FemJCFannSatisfied	Conversation	03_NYC_BrooklynBridgeStation	Keypad0	Keypad		Likely	
+text:03_Datacube14	Datacube	03_NYC_BrooklynBridgeStation	Keypad0	Keypad		Likely	
+con:DL_Office	Conversation	03_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	03_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	03_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+con:MeetJanice	Conversation	03_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+con:Prebriefing	Conversation	03_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	03_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+text:01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal3	Computer	anavarre	Likely	
+text:05_Datacube08	Datacube	03_NYC_UNATCOHQ	ComputerPersonal3	Computer	anavarre	Likely	
+text:FemJC01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal3	Computer	anavarre	Likely	
+text:01_Datacube05	Datacube	03_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	03_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal4	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	03_NYC_UNATCOHQ	ComputerPersonal4	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal4	Computer	jreyes	Likely	
+text:01_Datacube05	Datacube	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+text:01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+con:DL_Office	Conversation	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:MeetJanice	Conversation	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:Prebriefing	Conversation	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+text:01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal5	Computer	jreyes	Likely	
+text:01_Datacube01	Datacube	03_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:03_Email08	Email	03_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	03_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:FemJC01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:FemJC03_Email08	Email	03_NYC_UNATCOHQ	ComputerPersonal6	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	03_NYC_UNATCOHQ	ComputerPersonal7	Computer	ajacobson	Likely	
+text:01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal7	Computer	ajacobson	Possible	Y
+text:FemJC01_Email13	Email	03_NYC_UNATCOHQ	ComputerPersonal7	Computer	ajacobson	Possible	Y
+text:01_Email14	Email	03_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:15_Datacube19	Datacube	03_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:FemJC01_Email14	Email	03_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:01_Datacube06	Datacube	03_NYC_UNATCOIsland	ComputerSecurity0	Computer	SATCOM	Likely	
+con:FemJCMeetKaplan	Conversation	03_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+con:MeetKaplan	Conversation	03_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+text:01_Datacube03	Datacube	03_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+text:04_Datacube03	Datacube	04_NYC_Hotel	ATM0	ATM	487659	Likely	
+text:02_Datacube05	Datacube	04_NYC_Hotel	ComputerPersonal0	Computer	PDenton	Likely	
+text:04_Datacube01	Datacube	04_NYC_NSFHQ	ComputerPersonal3	Computer	MCOLLINS	Likely	
+text:04_Datacube01	Datacube	04_NYC_NSFHQ	ComputerPersonal4	Computer	NAPOLEON	Likely	
+text:04_Datacube02	Datacube	04_NYC_NSFHQ	ComputerSecurity1	Computer	TJEFFERSON	Likely	
+text:04_Datacube02	Datacube	04_NYC_NSFHQ	ComputerSecurity5	Computer	TJEFFERSON	Likely	
+con:FemJCJaimeOverheard	Conversation	04_NYC_Smug	ComputerPersonal0	Computer	Schick	Questionable	
+con:JaimeOverheard	Conversation	04_NYC_Smug	ComputerPersonal0	Computer	Schick	Questionable	
+con:FemJCTalkedToPaulAfterMessage	Conversation	04_NYC_Street	Keypad0	Keypad		Likely	
+con:TalkedToPaulAfterMessage	Conversation	04_NYC_Street	Keypad0	Keypad		Likely	
+con:DL_Office	Conversation	04_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	04_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	04_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+con:MeetJanice	Conversation	04_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+con:Prebriefing	Conversation	04_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	04_NYC_UNATCOHQ	ComputerPersonal2	Computer	JCD	Likely	
+text:01_Datacube01	Datacube	04_NYC_UNATCOHQ	ComputerPersonal3	Computer	jmanderley	Likely	
+text:01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal3	Computer	jmanderley	Likely	
+text:03_Email08	Email	04_NYC_UNATCOHQ	ComputerPersonal3	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	04_NYC_UNATCOHQ	ComputerPersonal3	Computer	jmanderley	Likely	
+text:FemJC01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal3	Computer	jmanderley	Likely	
+text:FemJC03_Email08	Email	04_NYC_UNATCOHQ	ComputerPersonal3	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	04_NYC_UNATCOHQ	ComputerPersonal4	Computer	ajacobson	Likely	
+text:01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal4	Computer	ajacobson	Possible	Y
+text:FemJC01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal4	Computer	ajacobson	Possible	Y
+text:01_Datacube05	Datacube	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+text:01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	ghermann	Likely	
+con:DL_Office	Conversation	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:MeetJanice	Conversation	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+con:Prebriefing	Conversation	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	JCD	Likely	
+text:01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal5	Computer	jreyes	Likely	
+text:01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	04_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreyes	Likely	
+text:01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal7	Computer	anavarre	Likely	
+text:05_Datacube08	Datacube	04_NYC_UNATCOHQ	ComputerPersonal7	Computer	anavarre	Likely	
+text:FemJC01_Email13	Email	04_NYC_UNATCOHQ	ComputerPersonal7	Computer	anavarre	Likely	
+text:01_Email14	Email	04_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:15_Datacube19	Datacube	04_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:FemJC01_Email14	Email	04_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:05_Datacube08	Datacube	04_NYC_UNATCOIsland	ComputerPersonal0	Computer	klloyd	Likely	
+text:01_Datacube06	Datacube	04_NYC_UNATCOIsland	ComputerSecurity0	Computer	SATCOM	Likely	
+con:FemJCMeetKaplan	Conversation	04_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+con:MeetKaplan	Conversation	04_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+text:01_Datacube03	Datacube	04_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+text:02_Datacube11	Datacube	04_NYC_Underground	ComputerSecurity0	Computer	MJ12	Likely	
+text:02_Datacube03	Datacube	04_NYC_Underground	Keypad11	Keypad		Likely	
+text:02_Datacube06	Datacube	04_NYC_Underground	Keypad11	Keypad		Likely	
+text:02_Email08	Email	04_NYC_Underground	Keypad11	Keypad		Likely	
+text:FemJC02_Email08	Email	04_NYC_Underground	Keypad11	Keypad		Likely	
+text:02_Datacube03	Datacube	04_NYC_Underground	Keypad2	Keypad		Likely	
+text:02_Datacube06	Datacube	04_NYC_Underground	Keypad2	Keypad		Likely	
+text:02_Email08	Email	04_NYC_Underground	Keypad2	Keypad		Likely	
+text:FemJC02_Email08	Email	04_NYC_Underground	Keypad2	Keypad		Likely	
+con:FemJCPaulInMedLab	Conversation	05_NYC_UNATCOHQ	ComputerPersonal0	Computer	demiurge	Likely	
+con:PaulInMedLab	Conversation	05_NYC_UNATCOHQ	ComputerPersonal0	Computer	demiurge	Likely	
+text:01_Datacube01	Datacube	05_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:03_Email08	Email	05_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:FemJC03_Email08	Email	05_NYC_UNATCOHQ	ComputerPersonal0	Computer	jmanderley	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal1	Computer	ajacobson	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal1	Computer	ajacobson	Possible	Y
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal1	Computer	ajacobson	Possible	Y
+con:FemJCPaulInMedLab	Conversation	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	demiurge	Likely	
+con:PaulInMedLab	Conversation	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	demiurge	Likely	
+text:01_Datacube05	Datacube	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	ghermann	Likely	
+con:DL_Office	Conversation	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+con:MeetJanice	Conversation	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+con:Prebriefing	Conversation	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	JCD	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal3	Computer	jreyes	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal4	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal4	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal4	Computer	jreyes	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal5	Computer	scarter	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal5	Computer	scarter	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal5	Computer	scarter	Likely	
+text:01_Datacube05	Datacube	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	ghermann	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	ghermann	Likely	
+con:DL_Office	Conversation	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+con:MeetJanice	Conversation	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+con:Prebriefing	Conversation	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	JCD	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreed	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreed	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreed	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal6	Computer	jreyes	Likely	
+text:01_Datacube05	Datacube	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	ghermann	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	ghermann	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	ghermann	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	ghermann	Likely	
+con:DL_Office	Conversation	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+con:FemJCMeetJanice	Conversation	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+con:FemJCPrebriefing	Conversation	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+con:MeetJanice	Conversation	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+con:Prebriefing	Conversation	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	JCD	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreed	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreed	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreed	Likely	
+text:01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreyes	Likely	
+text:05_Datacube08	Datacube	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreyes	Likely	
+text:FemJC01_Email13	Email	05_NYC_UNATCOHQ	ComputerPersonal7	Computer	jreyes	Likely	
+text:01_Email14	Email	05_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:15_Datacube19	Datacube	05_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:FemJC01_Email14	Email	05_NYC_UNATCOHQ	Keypad1	Keypad		Likely	
+text:01_Datacube06	Datacube	05_NYC_UNATCOIsland	ComputerSecurity0	Computer	SATCOM	Likely	
+con:FemJCMeetKaplan	Conversation	05_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+con:MeetKaplan	Conversation	05_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+text:01_Datacube03	Datacube	05_NYC_UNATCOIsland	Keypad0	Keypad		Likely	
+text:05_Book01	Book	05_NYC_UNATCOMJ12lab	ComputerPersonal0	Computer	dmoreau	Likely	
+con:FemJCScientistsConsulting2	Conversation	05_NYC_UNATCOMJ12lab	ComputerPersonal0	Computer	dmoreau	Questionable	
+con:ScientistsConsulting2	Conversation	05_NYC_UNATCOMJ12lab	ComputerPersonal0	Computer	dmoreau	Questionable	
+text:05_Datacube03	Datacube	05_NYC_UNATCOMJ12lab	ComputerPersonal0	Computer	psherman	Likely	
+text:05_Book01	Book	05_NYC_UNATCOMJ12lab	ComputerPersonal2	Computer	dmoreau	Likely	
+con:FemJCScientistsConsulting2	Conversation	05_NYC_UNATCOMJ12lab	ComputerPersonal2	Computer	dmoreau	Questionable	
+con:ScientistsConsulting2	Conversation	05_NYC_UNATCOMJ12lab	ComputerPersonal2	Computer	dmoreau	Questionable	
+text:05_Datacube03	Datacube	05_NYC_UNATCOMJ12lab	ComputerPersonal2	Computer	psherman	Likely	
+text:05_Book01	Book	05_NYC_UNATCOMJ12lab	ComputerPersonal4	Computer	dmoreau	Likely	
+con:FemJCScientistsConsulting2	Conversation	05_NYC_UNATCOMJ12lab	ComputerPersonal4	Computer	dmoreau	Questionable	
+con:ScientistsConsulting2	Conversation	05_NYC_UNATCOMJ12lab	ComputerPersonal4	Computer	dmoreau	Questionable	
+text:05_Datacube03	Datacube	05_NYC_UNATCOMJ12lab	ComputerPersonal4	Computer	psherman	Likely	
+text:05_Book01	Book	05_NYC_UNATCOMJ12lab	ComputerPersonal5	Computer	dmoreau	Likely	
+con:FemJCScientistsConsulting2	Conversation	05_NYC_UNATCOMJ12lab	ComputerPersonal5	Computer	dmoreau	Questionable	
+con:ScientistsConsulting2	Conversation	05_NYC_UNATCOMJ12lab	ComputerPersonal5	Computer	dmoreau	Questionable	
+text:05_Datacube03	Datacube	05_NYC_UNATCOMJ12lab	ComputerPersonal5	Computer	psherman	Likely	
+con:FemJCSvenConvos	Conversation	05_NYC_UNATCOMJ12lab	ComputerSecurity0	Computer	mj12	Likely	
+con:SvenConvos	Conversation	05_NYC_UNATCOMJ12lab	ComputerSecurity0	Computer	mj12	Likely	
+text:05_Datacube02	Datacube	05_NYC_UNATCOMJ12lab	ComputerSecurity0	Computer	mj12	Likely	
+text:05_Datacube03	Datacube	05_NYC_UNATCOMJ12lab	ComputerSecurity0	Computer	psherman	Likely	
+con:FemJCSvenConvos	Conversation	05_NYC_UNATCOMJ12lab	ComputerSecurity1	Computer	mj12	Likely	
+con:SvenConvos	Conversation	05_NYC_UNATCOMJ12lab	ComputerSecurity1	Computer	mj12	Likely	
+text:05_Datacube02	Datacube	05_NYC_UNATCOMJ12lab	ComputerSecurity1	Computer	mj12	Likely	
+text:05_Datacube03	Datacube	05_NYC_UNATCOMJ12lab	ComputerSecurity1	Computer	psherman	Likely	
+con:FemJCSvenConvos	Conversation	05_NYC_UNATCOMJ12lab	ComputerSecurity2	Computer	mj12	Likely	
+con:SvenConvos	Conversation	05_NYC_UNATCOMJ12lab	ComputerSecurity2	Computer	mj12	Likely	
+text:05_Datacube02	Datacube	05_NYC_UNATCOMJ12lab	ComputerSecurity2	Computer	mj12	Likely	
+text:05_Datacube03	Datacube	05_NYC_UNATCOMJ12lab	ComputerSecurity2	Computer	psherman	Likely	
+con:FemJCSvenConvos	Conversation	05_NYC_UNATCOMJ12lab	ComputerSecurity4	Computer	mj12	Likely	
+con:SvenConvos	Conversation	05_NYC_UNATCOMJ12lab	ComputerSecurity4	Computer	mj12	Likely	
+text:05_Datacube02	Datacube	05_NYC_UNATCOMJ12lab	ComputerSecurity4	Computer	mj12	Likely	
+text:05_Datacube03	Datacube	05_NYC_UNATCOMJ12lab	ComputerSecurity4	Computer	psherman	Likely	
+text:05_Email11	Email	05_NYC_UNATCOMJ12lab	Keypad0	Keypad		Likely	
+text:FemJC05_Email11	Email	05_NYC_UNATCOMJ12lab	Keypad0	Keypad		Likely	
+text:05_Datacube01	Datacube	05_NYC_UNATCOMJ12lab	Keypad1	Keypad		Likely	
+con:dl_paul	Conversation	05_NYC_UNATCOMJ12lab	Keypad11	Keypad		Likely	
+con:DL_pauldead	Conversation	05_NYC_UNATCOMJ12lab	Keypad11	Keypad		Likely	
+con:FemJCMeetSmuggler	Conversation	05_NYC_UNATCOMJ12lab	Keypad11	Keypad		Likely	
+con:MeetSmuggler	Conversation	05_NYC_UNATCOMJ12lab	Keypad11	Keypad		Likely	
+text:05_Datacube04	Datacube	05_NYC_UNATCOMJ12lab	Keypad13	Keypad		Likely	
+text:05_Email01	Email	05_NYC_UNATCOMJ12lab	Keypad13	Keypad		Likely	
+text:FemJC05_Email01	Email	05_NYC_UNATCOMJ12lab	Keypad13	Keypad		Likely	
+text:03_Datacube13	Datacube	05_NYC_UNATCOMJ12lab	Keypad2	Keypad		Likely	
+text:03_Email01	Email	05_NYC_UNATCOMJ12lab	Keypad2	Keypad		Likely	
+text:05_Email10	Email	05_NYC_UNATCOMJ12lab	Keypad2	Keypad		Likely	
+text:FemJC03_Email01	Email	05_NYC_UNATCOMJ12lab	Keypad2	Keypad		Likely	
+text:FemJC05_Email10	Email	05_NYC_UNATCOMJ12lab	Keypad2	Keypad		Likely	
+con:FemJCMeetDoctorMoreau	Conversation	05_NYC_UNATCOMJ12lab	Keypad3	Keypad		Likely	
+con:MeetDoctorMoreau	Conversation	05_NYC_UNATCOMJ12lab	Keypad3	Keypad		Likely	
+text:05_Datacube03	Datacube	05_NYC_UNATCOMJ12lab	Keypad3	Keypad		Likely	
+text:05_Datacube01	Datacube	05_NYC_UNATCOMJ12lab	Keypad6	Keypad		Likely	
+text:05_Datacube01	Datacube	05_NYC_UNATCOMJ12lab	Keypad7	Keypad		Likely	
+text:05_Datacube04	Datacube	05_NYC_UNATCOMJ12lab	Keypad8	Keypad		Likely	
+text:05_Email01	Email	05_NYC_UNATCOMJ12lab	Keypad8	Keypad		Likely	
+text:FemJC05_Email01	Email	05_NYC_UNATCOMJ12lab	Keypad8	Keypad		Likely	
+text:05_Datacube01	Datacube	05_NYC_UNATCOMJ12lab	Keypad9	Keypad		Likely	
+text:06_Datacube18	Datacube	06_HongKong_Helibase	ComputerPersonal0	Computer	TALON	Likely	
+text:06_Datacube18	Datacube	06_HongKong_Helibase	ComputerSecurity0	Computer	TALON	Likely	
+text:06_Datacube18	Datacube	06_HongKong_Helibase	ComputerSecurity1	Computer	TALON	Likely	
+text:06_Datacube16	Datacube	06_HongKong_Helibase	Keypad0	Keypad		Likely	
+text:06_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerPersonal0	Computer	ADONOVAN	Likely	
+text:06_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerPersonal0	Computer	MBATES	Likely	
+text:06_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerPersonal0	Computer	MCHOW	Likely	
+text:06_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerPersonal0	Computer	MLUNDQUIST	Likely	
+text:06_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerPersonal1	Computer	ADONOVAN	Likely	
+text:06_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerPersonal1	Computer	MBATES	Likely	
+text:06_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerPersonal1	Computer	MCHOW	Likely	
+text:06_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerPersonal1	Computer	MLUNDQUIST	Likely	
+con:DL_Final_Helios03_5	Conversation	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+con:FemJCM06SupervisorConvos	Conversation	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+con:FemJCMeetCarlaBrown	Conversation	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+con:FemJCSvenConvos	Conversation note	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+con:M06SupervisorConvos	Conversation	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+con:MeetCarlaBrown	Conversation	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+con:SvenConvos	Conversation note	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:02_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:05_Datacube02	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:05_Email07	Email	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:05_Email08	Email	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:05_Email11	Email	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:06_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:06_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:06_Datacube18	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:06_Datacube20	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:09_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:10_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:10_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:14_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:14_Datacube03	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:14_Datacube05	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:14_Datacube06	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:15_Datacube06	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:FemJC05_Email07	Email	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:FemJC05_Email08	Email	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+text:FemJC05_Email11	Email	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Likely	
+con:CarlaBarks	Conversation	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Possible	
+con:FemJCCarlaBarks	Conversation	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Possible	
+text:12_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity0	Computer	MJ12	Possible	
+con:DL_Final_Helios03_5	Conversation	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+con:FemJCM06SupervisorConvos	Conversation	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+con:FemJCMeetCarlaBrown	Conversation	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+con:FemJCSvenConvos	Conversation note	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+con:M06SupervisorConvos	Conversation	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+con:MeetCarlaBrown	Conversation	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+con:SvenConvos	Conversation note	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:02_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:05_Datacube02	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:05_Email07	Email	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:05_Email08	Email	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:05_Email11	Email	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:06_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:06_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:06_Datacube18	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:06_Datacube20	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:09_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:10_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:10_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:14_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:14_Datacube03	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:14_Datacube05	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:14_Datacube06	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:15_Datacube06	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:FemJC05_Email07	Email	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:FemJC05_Email08	Email	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+text:FemJC05_Email11	Email	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Likely	
+con:CarlaBarks	Conversation	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Possible	
+con:FemJCCarlaBarks	Conversation	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Possible	
+text:12_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity1	Computer	MJ12	Possible	
+con:DL_Final_Helios03_5	Conversation	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+con:FemJCM06SupervisorConvos	Conversation	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+con:FemJCMeetCarlaBrown	Conversation	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+con:FemJCSvenConvos	Conversation note	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+con:M06SupervisorConvos	Conversation	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+con:MeetCarlaBrown	Conversation	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+con:SvenConvos	Conversation note	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:02_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:05_Datacube02	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:05_Email07	Email	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:05_Email08	Email	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:05_Email11	Email	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:06_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:06_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:06_Datacube18	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:06_Datacube20	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:09_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:10_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:10_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:14_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:14_Datacube03	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:14_Datacube05	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:14_Datacube06	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:15_Datacube06	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:FemJC05_Email07	Email	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:FemJC05_Email08	Email	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+text:FemJC05_Email11	Email	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Likely	
+con:CarlaBarks	Conversation	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Possible	
+con:FemJCCarlaBarks	Conversation	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Possible	
+text:12_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity2	Computer	MJ12	Possible	
+con:DL_Final_Helios03_5	Conversation	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+con:FemJCM06SupervisorConvos	Conversation	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+con:FemJCMeetCarlaBrown	Conversation	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+con:FemJCSvenConvos	Conversation note	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+con:M06SupervisorConvos	Conversation	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+con:MeetCarlaBrown	Conversation	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+con:SvenConvos	Conversation note	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:02_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:05_Datacube02	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:05_Email07	Email	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:05_Email08	Email	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:05_Email11	Email	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:06_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:06_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:06_Datacube18	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:06_Datacube20	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:09_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:10_Datacube11	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:10_Datacube12	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:14_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:14_Datacube03	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:14_Datacube05	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:14_Datacube06	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:15_Datacube06	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:FemJC05_Email07	Email	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:FemJC05_Email08	Email	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+text:FemJC05_Email11	Email	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Likely	
+con:CarlaBarks	Conversation	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Possible	
+con:FemJCCarlaBarks	Conversation	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Possible	
+text:12_Datacube01	Datacube	06_HongKong_MJ12lab	ComputerSecurity3	Computer	MJ12	Possible	
+con:M07Briefing	Conversation	06_HongKong_MJ12lab	Keypad0	Keypad		Likely	
+con:FemJCM07Briefing	Conversation	06_HongKong_MJ12lab	Keypad1	Keypad		Likely	
+con:M07Briefing	Conversation	06_HongKong_MJ12lab	Keypad1	Keypad		Likely	
+text:06_Datacube29	Datacube	06_HongKong_MJ12lab	Keypad2	Keypad		Likely	
+con:CarlaBarks	Conversation	06_HongKong_MJ12lab	Keypad4	Keypad		Questionable	
+con:FemJCCarlaBarks	Conversation	06_HongKong_MJ12lab	Keypad4	Keypad		Questionable	
+con:FemJCPinkertonBarks	Conversation	06_HongKong_MJ12lab	Keypad4	Keypad		Questionable	
+con:PinkertonBarks	Conversation	06_HongKong_MJ12lab	Keypad4	Keypad		Questionable	
+text:12_Datacube01	Datacube	06_HongKong_MJ12lab	Keypad4	Keypad		Questionable	
+text:06_Datacube12	Datacube	06_HongKong_Storage	ComputerPersonal0	Computer	MCHOW	Likely	
+text:06_Datacube12	Datacube	06_HongKong_Storage	ComputerPersonal0	Computer	MLUNDQUIST	Likely	
+con:DL_Final_Helios03_5	Conversation	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+con:FemJCM06SupervisorConvos	Conversation	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+con:FemJCMeetCarlaBrown	Conversation	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+con:FemJCSvenConvos	Conversation note	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+con:M06SupervisorConvos	Conversation	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+con:MeetCarlaBrown	Conversation	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+con:SvenConvos	Conversation note	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:02_Datacube11	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:05_Datacube02	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:05_Email07	Email	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:05_Email08	Email	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:05_Email11	Email	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:06_Datacube01	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:06_Datacube11	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:06_Datacube18	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:06_Datacube20	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:09_Datacube12	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:10_Datacube11	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:10_Datacube12	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:14_Datacube01	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:14_Datacube03	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:14_Datacube05	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:14_Datacube06	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:15_Datacube06	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:FemJC05_Email07	Email	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:FemJC05_Email08	Email	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+text:FemJC05_Email11	Email	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Likely	
+con:CarlaBarks	Conversation	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Possible	
+con:FemJCCarlaBarks	Conversation	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Possible	
+text:12_Datacube01	Datacube	06_HongKong_Storage	ComputerSecurity0	Computer	MJ12	Possible	
+con:FemJCM07Briefing	Conversation	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Likely	
+con:FemJCPinkertonBarks	Conversation	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Likely	
+con:M07Briefing	Conversation	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Likely	
+con:PinkertonBarks	Conversation	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Likely	
+text:12_Email01	Email	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Likely	
+text:15_Email02	Email	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Likely	
+text:FemJC12_Email01	Email	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Likely	
+text:FemJC15_Email02	Email	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Likely	
+con:CarlaBarks	Conversation	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Possible	
+con:FemJCCarlaBarks	Conversation	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Possible	
+text:06_Book01	Book	06_HongKong_Storage	ComputerSecurity1	Computer	MJ12	Possible	
+text:01_Email15	Email	06_HongKong_Storage	Keypad0	Keypad		Likely	
+text:06_Datacube30	Datacube	06_HongKong_Storage	Keypad0	Keypad		Likely	
+text:FemJC01_Email15	Email	06_HongKong_Storage	Keypad0	Keypad		Likely	
+text:01_Email15	Email	06_HongKong_Storage	Keypad1	Keypad		Likely	
+text:06_Datacube30	Datacube	06_HongKong_Storage	Keypad1	Keypad		Likely	
+text:FemJC01_Email15	Email	06_HongKong_Storage	Keypad1	Keypad		Likely	
+con:DL_Daedalus_04	Conversation	06_HongKong_Storage	Keypad2	Keypad		Likely	
+text:06_Datacube25	Datacube	06_HongKong_Storage	Keypad2	Keypad		Likely	
+text:01_Email15	Email	06_HongKong_Storage	Keypad3	Keypad		Likely	
+text:06_Datacube30	Datacube	06_HongKong_Storage	Keypad3	Keypad		Likely	
+text:FemJC01_Email15	Email	06_HongKong_Storage	Keypad3	Keypad		Likely	
+text:06_Datacube06	Datacube	06_HongKong_Storage	Keypad8	Keypad		Questionable	
+con:FemJCMeetTracerTong2	Conversation	06_HongKong_TongBase	ComputerPersonal0	Computer	JCDenton	Likely	
+con:MeetTracerTong2	Conversation	06_HongKong_TongBase	ComputerPersonal0	Computer	JCDenton	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal0	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal1	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal10	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal11	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal12	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal13	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal14	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal15	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal16	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal17	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal18	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal19	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal2	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal20	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal21	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal22	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal24	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal25	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal26	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal27	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal28	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal29	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal3	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal30	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal31	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal32	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal33	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal34	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal35	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal36	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal37	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal38	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal39	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal4	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal40	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal41	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal42	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal43	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal44	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal45	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal46	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal47	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal48	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal49	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal5	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal50	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal51	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal52	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal53	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal54	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal55	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal56	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal57	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal58	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal59	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal6	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal60	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal61	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal62	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal63	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal64	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal65	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal67	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal68	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal69	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal7	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal70	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal71	Computer	ALL_SHIFTS	Likely	
+con:FemJCMeetFrontGuard	Conversation	06_HongKong_VersaLife	ComputerPersonal72	Computer	DSavannah	Questionable	
+con:MeetFrontGuard	Conversation	06_HongKong_VersaLife	ComputerPersonal72	Computer	DSavannah	Questionable	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal8	Computer	ALL_SHIFTS	Likely	
+text:06_Datacube31	Datacube	06_HongKong_VersaLife	ComputerPersonal9	Computer	ALL_SHIFTS	Likely	
+con:Disgruntled_Guy_Convos	Conversation	06_HongKong_VersaLife	Keypad1	Keypad		Likely	
+con:FemJCDisgruntled_Guy_Convos	Conversation	06_HongKong_VersaLife	Keypad1	Keypad		Likely	
+con:FemJCM06SupervisorConvos	Conversation	06_HongKong_VersaLife	Keypad1	Keypad		Likely	
+con:M06SupervisorConvos	Conversation	06_HongKong_VersaLife	Keypad1	Keypad		Likely	
+con:FemJCM07Briefing	Conversation	06_HongKong_WanChai_Garage	Keypad3	Keypad		Likely	
+con:M07Briefing	Conversation	06_HongKong_WanChai_Garage	Keypad3	Keypad		Likely	
+con:FemJCM06AlexJacobsonBarks	Conversation	06_HongKong_WanChai_Market	ComputerSecurity0	Computer	TAM	Likely	
+con:M06AlexJacobsonBarks	Conversation	06_HongKong_WanChai_Market	ComputerSecurity0	Computer	TAM	Likely	
+text:06_Datacube03	Datacube	06_HongKong_WanChai_Market	ComputerSecurity0	Computer	TAM	Likely	
+text:06_Datacube19	Datacube	06_HongKong_WanChai_Market	ComputerSecurity0	Computer	TAM	Likely	
+con:FemJCGate_Guard2	Conversation	06_HongKong_WanChai_Market	Keypad0	Keypad		Likely	
+con:Gate_Guard2	Conversation	06_HongKong_WanChai_Market	Keypad0	Keypad		Likely	
+text:06_Datacube13	Datacube	06_HongKong_WanChai_Market	Keypad1	Keypad		Likely	
+text:06_Datacube13	Datacube	06_HongKong_WanChai_Market	Keypad2	Keypad		Likely	
+con:FemJCMeetTracerTong2	Conversation	06_HongKong_WanChai_Market	Keypad3	Keypad		Likely	
+con:MeetTracerTong2	Conversation	06_HongKong_WanChai_Market	Keypad3	Keypad		Likely	
+text:06_Datacube02	Datacube	06_HongKong_WanChai_Market	Keypad5	Keypad		Likely	
+con:FemJCMeetMaggie	Conversation	06_HongKong_WanChai_Market	Keypad6	Keypad		Likely	
+con:MeetMaggie	Conversation	06_HongKong_WanChai_Market	Keypad6	Keypad		Likely	
+text:12_Datacube01	Datacube	06_HongKong_WanChai_Market	Keypad7	Keypad		Questionable	
+con:FemJCGate_Guard2	Conversation	06_HongKong_WanChai_Market	Keypad8	Keypad		Likely	
+con:Gate_Guard2	Conversation	06_HongKong_WanChai_Market	Keypad8	Keypad		Likely	
+text:06_Datacube23	Datacube	06_HongKong_WanChai_Street	ComputerPersonal0	Computer	FLYBOY	Likely	
+text:01_Book01	Book	06_HongKong_WanChai_Street	ComputerPersonal1	Computer	MCHOW	Questionable	
+text:06_Book16	Book	06_HongKong_WanChai_Street	ComputerPersonal1	Computer	MCHOW	Questionable	
+text:06_Datacube21	Datacube	06_HongKong_WanChai_Street	ComputerPersonal1	Computer	MCHOW	Questionable	
+text:01_Book01	Book	06_HongKong_WanChai_Street	ComputerSecurity0	Computer	MCHOW	Questionable	
+text:06_Book16	Book	06_HongKong_WanChai_Street	ComputerSecurity0	Computer	MCHOW	Questionable	
+text:06_Datacube21	Datacube	06_HongKong_WanChai_Street	ComputerSecurity0	Computer	MCHOW	Questionable	
+text:01_Book01	Book	06_HongKong_WanChai_Street	ComputerSecurity1	Computer	MCHOW	Questionable	
+text:06_Book16	Book	06_HongKong_WanChai_Street	ComputerSecurity1	Computer	MCHOW	Questionable	
+text:06_Datacube21	Datacube	06_HongKong_WanChai_Street	ComputerSecurity1	Computer	MCHOW	Questionable	
+con:DL_Final_Helios03_5	Conversation	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+con:FemJCM06SupervisorConvos	Conversation	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+con:M06SupervisorConvos	Conversation	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:05_Email08	Email	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:05_Email11	Email	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:06_Datacube11	Datacube	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:06_Datacube20	Datacube	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:09_Datacube12	Datacube	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:10_Datacube11	Datacube	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:10_Datacube12	Datacube	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:12_Datacube01	Datacube	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:14_Datacube01	Datacube	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:14_Datacube05	Datacube	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:14_Datacube06	Datacube	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:FemJC05_Email08	Email	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:FemJC05_Email11	Email	06_HongKong_WanChai_Street	ComputerSecurity3	Computer	QUEENSTOWER	Likely	
+text:06_Bulletin07	Bulletin	06_HongKong_WanChai_Street	Keypad2	Keypad		Likely	
+text:06_Datacube20	Datacube	06_HongKong_WanChai_Street	Keypad2	Keypad		Likely	
+text:06_Datacube20	Datacube	06_HongKong_WanChai_Street	Keypad4	Keypad		Likely	
+text:02_Email08	Email	06_HongKong_WanChai_Street	Keypad6	Keypad		Questionable	
+text:FemJC02_Email08	Email	06_HongKong_WanChai_Street	Keypad6	Keypad		Questionable	
+text:01_Datacube06	Datacube	06_HongKong_WanChai_Underworld	ComputerPersonal0	Computer	CODE323	Questionable	
+con:FemJCM06MeetBarThug	Conversation	06_HongKong_WanChai_Underworld	ComputerPersonal0	Computer	Management	Likely	
+con:M06MeetBarThug	Conversation	06_HongKong_WanChai_Underworld	ComputerPersonal0	Computer	Management	Likely	
+con:FemJCM06MeetBarThug	Conversation	06_HongKong_WanChai_Underworld	ComputerSecurity1	Computer	Management	Likely	
+con:M06MeetBarThug	Conversation	06_HongKong_WanChai_Underworld	ComputerSecurity1	Computer	Management	Likely	
+text:08_Datacube01	Datacube	08_NYC_FreeClinic	ComputerPersonal0	Computer	JAllred	Likely	
+text:08_Datacube01	Datacube	08_NYC_FreeClinic	ComputerPersonal1	Computer	Alice_Priest	Likely	
+text:02_Datacube05	Datacube	08_NYC_Hotel	ComputerPersonal0	Computer	PDenton	Likely	
+con:FemJCJaimeOverheard	Conversation	08_NYC_Smug	ComputerPersonal0	Computer	Schick	Questionable	
+con:JaimeOverheard	Conversation	08_NYC_Smug	ComputerPersonal0	Computer	Schick	Questionable	
+text:02_Datacube11	Datacube	08_NYC_Underground	ComputerSecurity0	Computer	MJ12	Likely	
+text:02_Datacube03	Datacube	08_NYC_Underground	Keypad11	Keypad		Likely	
+text:02_Datacube06	Datacube	08_NYC_Underground	Keypad11	Keypad		Likely	
+text:02_Email08	Email	08_NYC_Underground	Keypad11	Keypad		Likely	
+text:FemJC02_Email08	Email	08_NYC_Underground	Keypad11	Keypad		Likely	
+text:02_Datacube03	Datacube	08_NYC_Underground	Keypad2	Keypad		Likely	
+text:02_Datacube06	Datacube	08_NYC_Underground	Keypad2	Keypad		Likely	
+text:02_Email08	Email	08_NYC_Underground	Keypad2	Keypad		Likely	
+text:FemJC02_Email08	Email	08_NYC_Underground	Keypad2	Keypad		Likely	
+con:AnnaManderley2	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:BalconyBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:CafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:DL_SimonsPissed	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCAnnaManderley2	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCBalconyBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCCafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCGuard3Overheard	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCLDDPM05ChetConvos	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCM04MeetJanice	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCM04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCM05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCM05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCM08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCMJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCSailorBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCSimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCTalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:FemJCUpstairsBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:Guard3Overheard	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:Hela_BarkTargetAcquired	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:M04MeetJanice	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:M04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:M05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:M05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:M08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:MJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:SailorBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:SimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:TalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:UpstairsBarks	Conversation	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:06_Email21	Email	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:06_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:08_Bulletin01	Bulletin	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:08_Email05	Email	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:09_Datacube05	Datacube	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:09_Datacube08	Datacube	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:09_Datacube11	Datacube	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:09_Email09	Email	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:09_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:10_Datacube01	Datacube	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:11_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:14_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:FemJC06_Email21	Email	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:FemJC08_Email05	Email	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+text:FemJC09_Email09	Email	09_NYC_Dockyard	ComputerPersonal2	Computer	Walton	Likely	
+con:DL_Final_Helios03_5	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+con:FemJCM06SupervisorConvos	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+con:M06SupervisorConvos	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:05_Email08	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:05_Email11	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:06_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:06_Datacube20	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:09_Datacube12	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:10_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:10_Datacube12	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:12_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:14_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:14_Datacube05	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:14_Datacube06	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:FemJC05_Email08	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+text:FemJC05_Email11	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	USFEMA	Likely	
+con:AnnaManderley2	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:BalconyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:CafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:DL_SimonsPissed	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCAnnaManderley2	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCBalconyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCCafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCGuard3Overheard	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCLDDPM05ChetConvos	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCM04MeetJanice	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCM04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCM05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCM05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCM08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCMJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCSailorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCSimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCTalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:FemJCUpstairsBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:Guard3Overheard	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:Hela_BarkTargetAcquired	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:M04MeetJanice	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:M04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:M05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:M05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:M08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:MJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:SailorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:SimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:TalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:UpstairsBarks	Conversation	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:06_Email21	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:06_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:08_Bulletin01	Bulletin	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:08_Email05	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:09_Datacube05	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:09_Datacube08	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:09_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:09_Email09	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:09_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:10_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:11_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:14_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:FemJC06_Email21	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:FemJC08_Email05	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+text:FemJC09_Email09	Email	09_NYC_Dockyard	ComputerSecurity0	Computer	Walton	Likely	
+con:DL_Final_Helios03_5	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+con:FemJCM06SupervisorConvos	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+con:M06SupervisorConvos	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:05_Email08	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:05_Email11	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:06_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:06_Datacube20	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:09_Datacube12	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:10_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:10_Datacube12	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:12_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:14_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:14_Datacube05	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:14_Datacube06	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:FemJC05_Email08	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+text:FemJC05_Email11	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	USFEMA	Likely	
+con:AnnaManderley2	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:BalconyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:CafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:DL_SimonsPissed	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCAnnaManderley2	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCBalconyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCCafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCGuard3Overheard	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCLDDPM05ChetConvos	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCM04MeetJanice	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCM04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCM05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCM05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCM08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCMJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCSailorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCSimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCTalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:FemJCUpstairsBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:Guard3Overheard	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:Hela_BarkTargetAcquired	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:M04MeetJanice	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:M04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:M05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:M05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:M08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:MJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:SailorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:SimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:TalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:UpstairsBarks	Conversation	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:06_Email21	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:06_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:08_Bulletin01	Bulletin	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:08_Email05	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:09_Datacube05	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:09_Datacube08	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:09_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:09_Email09	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:09_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:10_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:11_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:14_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:FemJC06_Email21	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:FemJC08_Email05	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+text:FemJC09_Email09	Email	09_NYC_Dockyard	ComputerSecurity1	Computer	Walton	Likely	
+con:DL_Final_Helios03_5	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+con:FemJCM06SupervisorConvos	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+con:M06SupervisorConvos	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:05_Email08	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:05_Email11	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:06_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:06_Datacube20	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:09_Datacube12	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:10_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:10_Datacube12	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:12_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:14_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:14_Datacube05	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:14_Datacube06	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:FemJC05_Email08	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+text:FemJC05_Email11	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	USFEMA	Likely	
+con:AnnaManderley2	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:BalconyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:CafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:DL_SimonsPissed	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCAnnaManderley2	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCBalconyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCCafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCGuard3Overheard	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCLDDPM05ChetConvos	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCM04MeetJanice	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCM04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCM05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCM05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCM08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCMJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCSailorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCSimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCTalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:FemJCUpstairsBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:Guard3Overheard	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:Hela_BarkTargetAcquired	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:M04MeetJanice	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:M04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:M05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:M05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:M08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:MJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:SailorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:SimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:TalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:UpstairsBarks	Conversation	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:06_Email21	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:06_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:08_Bulletin01	Bulletin	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:08_Email05	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:09_Datacube05	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:09_Datacube08	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:09_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:09_Email09	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:09_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:10_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:11_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:14_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:FemJC06_Email21	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:FemJC08_Email05	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+text:FemJC09_Email09	Email	09_NYC_Dockyard	ComputerSecurity2	Computer	Walton	Likely	
+con:DL_Final_Helios03_5	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+con:FemJCM06SupervisorConvos	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+con:M06SupervisorConvos	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:05_Email08	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:05_Email11	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:06_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:06_Datacube20	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:09_Datacube12	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:10_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:10_Datacube12	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:12_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:14_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:14_Datacube05	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:14_Datacube06	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:FemJC05_Email08	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+text:FemJC05_Email11	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	USFEMA	Likely	
+con:AnnaManderley2	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:BalconyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:CafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:DL_SimonsPissed	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCAnnaManderley2	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCBalconyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCCafWorker1FriendlyBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCGuard3Overheard	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCLDDPM05ChetConvos	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCM04MeetJanice	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCM04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCM05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCM05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCM08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCMJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCSailorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCSimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCTalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:FemJCUpstairsBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:Guard3Overheard	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:Hela_BarkTargetAcquired	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:M04MeetJanice	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:M04TrooperTalking1Barks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:M05DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:M05MeetSamCarter	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:M08SmugglerConvos	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:MJ12Lab_DoctorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:SailorBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:SimonsInterrogating	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:TalkedToPaulAfterMessage	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+con:UpstairsBarks	Conversation	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:06_Email21	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:06_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:08_Bulletin01	Bulletin	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:08_Email05	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:09_Datacube05	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:09_Datacube08	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:09_Datacube11	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:09_Email09	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:09_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:10_Datacube01	Datacube	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:11_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:14_Newspaper01	Newspaper	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:FemJC06_Email21	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:FemJC08_Email05	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:FemJC09_Email09	Email	09_NYC_Dockyard	ComputerSecurity4	Computer	Walton	Likely	
+text:09_Datacube08	Datacube	09_NYC_Dockyard	Keypad1	Keypad		Likely	
+text:09_Datacube09	Datacube	09_NYC_Dockyard	Keypad2	Keypad		Likely	
+text:09_Email10	Email	09_NYC_Graveyard	ComputerPersonal0	Computer	SDowd	Possible	
+text:FemJC09_Email10	Email	09_NYC_Graveyard	ComputerPersonal0	Computer	SDowd	Possible	
+text:09_Datacube13	Datacube	09_NYC_Ship	ComputerPersonal1	Computer	KZhao	Likely	
+text:09_Datacube10	Datacube	09_NYC_Ship	ComputerPersonal1	Computer	root	Likely	
+text:09_Datacube10	Datacube	09_NYC_Ship	ComputerPersonal2	Computer	root	Likely	
+con:FemJCMeetCurly	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	SECURITY	Likely	
+con:MeetCurly	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	SECURITY	Likely	
+text:03_Datacube14	Datacube	09_NYC_Ship	ComputerSecurity3	Computer	SECURITY	Likely	
+text:09_Datacube09	Datacube	09_NYC_Ship	ComputerSecurity3	Computer	SECURITY	Likely	
+text:09_Datacube12	Datacube	09_NYC_Ship	ComputerSecurity3	Computer	SECURITY	Likely	
+text:09_Datacube14	Datacube	09_NYC_Ship	ComputerSecurity3	Computer	SECURITY	Likely	
+con:AnnaManderley2	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:BalconyBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:CafWorker1FriendlyBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:DL_SimonsPissed	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCAnnaManderley2	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCBalconyBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCCafWorker1FriendlyBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCGuard3Overheard	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCLDDPM05ChetConvos	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCM04MeetJanice	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCM04TrooperTalking1Barks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCM05DoctorBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCM05MeetSamCarter	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCM08SmugglerConvos	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCMJ12Lab_DoctorBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCSailorBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCSimonsInterrogating	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCTalkedToPaulAfterMessage	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:FemJCUpstairsBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:Guard3Overheard	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:Hela_BarkTargetAcquired	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:M04MeetJanice	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:M04TrooperTalking1Barks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:M05DoctorBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:M05MeetSamCarter	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:M08SmugglerConvos	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:MJ12Lab_DoctorBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:SailorBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:SimonsInterrogating	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:TalkedToPaulAfterMessage	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+con:UpstairsBarks	Conversation	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:06_Email21	Email	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:06_Newspaper01	Newspaper	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:08_Bulletin01	Bulletin	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:08_Email05	Email	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:09_Datacube05	Datacube	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:09_Datacube08	Datacube	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:09_Datacube11	Datacube	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:09_Email09	Email	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:09_Newspaper01	Newspaper	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:10_Datacube01	Datacube	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:11_Newspaper01	Newspaper	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:14_Newspaper01	Newspaper	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:FemJC06_Email21	Email	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:FemJC08_Email05	Email	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:FemJC09_Email09	Email	09_NYC_Ship	ComputerSecurity3	Computer	Walton	Likely	
+text:09_Datacube02	Datacube	09_NYC_Ship	Keypad0	Keypad		Likely	
+text:09_Datacube04	Datacube	09_NYC_Ship	Keypad1	Keypad		Likely	
+text:09_Datacube04	Datacube	09_NYC_Ship	Keypad2	Keypad		Likely	
+text:09_Datacube03	Datacube	09_NYC_Ship	Keypad3	Keypad		Likely	
+text:09_Datacube04	Datacube	09_NYC_Ship	Keypad4	Keypad		Likely	
+con:CafWorker1Help	Conversation	09_NYC_Ship	Keypad5	Keypad		Likely	
+con:FemJCCafWorker1Help	Conversation	09_NYC_Ship	Keypad5	Keypad		Likely	
+text:09_Datacube14	Datacube	09_NYC_Ship	Keypad5	Keypad		Likely	
+text:09_Datacube13	Datacube	09_NYC_ShipBelow	ComputerPersonal0	Computer	KZhao	Likely	
+text:09_Datacube10	Datacube	09_NYC_ShipBelow	ComputerPersonal0	Computer	root	Likely	
+text:09_Datacube10	Datacube	09_NYC_ShipBelow	ComputerSecurity0	Computer	root	Likely	
+text:09_Datacube10	Datacube	09_NYC_ShipBelow	ComputerSecurity1	Computer	root	Likely	
+text:09_Datacube10	Datacube	09_NYC_ShipBelow	ComputerSecurity2	Computer	root	Likely	
+text:09_Datacube10	Datacube	09_NYC_ShipBelow	ComputerSecurity3	Computer	root	Likely	
+text:09_Datacube10	Datacube	09_NYC_ShipBelow	ComputerSecurity4	Computer	root	Likely	
+text:09_Datacube07	Datacube	09_NYC_ShipBelow	Keypad0	Keypad		Likely	
+con:FemJCMeetCurly	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	SECURITY	Likely	
+con:MeetCurly	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	SECURITY	Likely	
+text:03_Datacube14	Datacube	09_NYC_ShipFan	ComputerSecurity6	Computer	SECURITY	Likely	
+text:09_Datacube09	Datacube	09_NYC_ShipFan	ComputerSecurity6	Computer	SECURITY	Likely	
+text:09_Datacube12	Datacube	09_NYC_ShipFan	ComputerSecurity6	Computer	SECURITY	Likely	
+text:09_Datacube14	Datacube	09_NYC_ShipFan	ComputerSecurity6	Computer	SECURITY	Likely	
+con:AnnaManderley2	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:BalconyBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:CafWorker1FriendlyBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:DL_SimonsPissed	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCAnnaManderley2	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCBalconyBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCCafWorker1FriendlyBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCGuard3Overheard	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCLDDPM05ChetConvos	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCM04MeetJanice	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCM04TrooperTalking1Barks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCM05DoctorBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCM05MeetSamCarter	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCM08SmugglerConvos	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCMJ12Lab_DoctorBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCSailorBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCSimonsInterrogating	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCTalkedToPaulAfterMessage	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:FemJCUpstairsBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:Guard3Overheard	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:Hela_BarkTargetAcquired	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:M04MeetJanice	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:M04TrooperTalking1Barks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:M05DoctorBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:M05MeetSamCarter	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:M08SmugglerConvos	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:MJ12Lab_DoctorBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:SailorBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:SimonsInterrogating	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:TalkedToPaulAfterMessage	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+con:UpstairsBarks	Conversation	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:06_Email21	Email	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:06_Newspaper01	Newspaper	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:08_Bulletin01	Bulletin	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:08_Email05	Email	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:09_Datacube05	Datacube	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:09_Datacube08	Datacube	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:09_Datacube11	Datacube	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:09_Email09	Email	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:09_Newspaper01	Newspaper	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:10_Datacube01	Datacube	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:11_Newspaper01	Newspaper	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:14_Newspaper01	Newspaper	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:FemJC06_Email21	Email	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:FemJC08_Email05	Email	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:FemJC09_Email09	Email	09_NYC_ShipFan	ComputerSecurity6	Computer	Walton	Likely	
+text:10_Datacube08	Datacube	10_Paris_Catacombs	ATM1	ATM	2221969	Likely	
+text:10_Datacube08	Datacube	10_Paris_Catacombs	ATM2	ATM	2221969	Likely	
+text:10_Datacube12	Datacube	10_Paris_Catacombs	ComputerSecurity0	Computer	rzelazny	Likely	
+text:10_Book09	Book	10_Paris_Catacombs	Keypad0	Keypad		Likely	
+con:FemJCMeetAimee	Conversation	10_Paris_Catacombs	Keypad2	Keypad		Likely	
+con:MeetAimee	Conversation	10_Paris_Catacombs	Keypad2	Keypad		Likely	
+text:10_Datacube11	Datacube	10_Paris_Catacombs_Tunnels	ComputerSecurity0	Computer	Hela	Likely	
+text:10_Datacube02	Datacube	10_Paris_Chateau	ComputerPersonal0	Computer	bduclare	Likely	
+con:AnnetteInterrupted	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:ChadFinalBarks	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:ChadThankful	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:ChadWaiting	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:FemJCAnnetteInterrupted	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:FemJCChadFinalBarks	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:FemJCChadThankful	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:FemJCChadWaiting	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:FemJCMeetChad	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:FemJCMeetNicolette	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:FemJCNicoletteInStudy	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:MeetChad	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:MeetNicolette	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:NicoletteInStudy	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+text:10_Email03	Email	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+text:FemJC10_Email03	Email	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Likely	
+con:FemJCNicoletteChateauBarks	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Possible	
+con:NicoletteChateauBarks	Conversation	10_Paris_Chateau	ComputerPersonal1	Computer	nicolette	Possible	
+text:10_Datacube13	Datacube	10_Paris_Chateau	Keypad2	Keypad		Likely	
+con:FemJCMeetCassandra	Conversation	10_Paris_Club	Keypad0	Keypad		Likely	
+con:MeetCassandra	Conversation	10_Paris_Club	Keypad0	Keypad		Likely	
+text:10_Datacube07	Datacube	10_Paris_Club	Keypad0	Keypad		Likely	
+text:10_Datacube06	Datacube	10_Paris_Metro	ATM4	ATM	001506	Likely	
+text:10_Datacube05	Datacube	10_Paris_Metro	ATM4	ATM	002639	Likely	
+text:10_Datacube04	Datacube	10_Paris_Metro	ATM4	ATM	004418	Likely	
+text:10_Datacube03	Datacube	10_Paris_Metro	ATM4	ATM	005133	Likely	
+text:10_Datacube06	Datacube	10_Paris_Metro	ATM5	ATM	001506	Likely	
+text:10_Datacube05	Datacube	10_Paris_Metro	ATM5	ATM	002639	Likely	
+text:10_Datacube04	Datacube	10_Paris_Metro	ATM5	ATM	004418	Likely	
+text:10_Datacube03	Datacube	10_Paris_Metro	ATM5	ATM	005133	Likely	
+text:10_Datacube06	Datacube	10_Paris_Metro	ATM6	ATM	001506	Likely	
+text:10_Datacube05	Datacube	10_Paris_Metro	ATM6	ATM	002639	Likely	
+text:10_Datacube04	Datacube	10_Paris_Metro	ATM6	ATM	004418	Likely	
+text:10_Datacube03	Datacube	10_Paris_Metro	ATM6	ATM	005133	Likely	
+con:FemJCJoshuaInterrupted	Conversation	10_Paris_Metro	ComputerPersonal0	Computer	streetstation17	Likely	
+con:JoshuaInterrupted	Conversation	10_Paris_Metro	ComputerPersonal0	Computer	streetstation17	Likely	
+text:11_Datacube03	Datacube	11_Paris_Cathedral	ComputerPersonal0	Computer	34501	Likely	
+text:11_Datacube03	Datacube	11_Paris_Cathedral	ComputerSecurity0	Computer	34501	Likely	
+text:11_Datacube03	Datacube	11_Paris_Cathedral	ComputerSecurity1	Computer	34501	Likely	
+text:11_Datacube03	Datacube	11_Paris_Cathedral	Keypad0	Keypad		Likely	
+text:11_Datacube03	Datacube	11_Paris_Cathedral	Keypad1	Keypad		Likely	
+text:11_Datacube01	Datacube	11_Paris_Everett	ComputerPersonal0	Computer	meverett	Likely	
+text:06_Email10	Email	11_Paris_Everett	ComputerPersonal0	Computer	meverett	Questionable	
+text:FemJC06_Email10	Email	11_Paris_Everett	ComputerPersonal0	Computer	meverett	Questionable	
+text:11_Datacube01	Datacube	11_Paris_Everett	ComputerSecurity0	Computer	meverett	Likely	
+text:06_Email10	Email	11_Paris_Everett	ComputerSecurity0	Computer	meverett	Questionable	
+text:FemJC06_Email10	Email	11_Paris_Everett	ComputerSecurity0	Computer	meverett	Questionable	
+text:11_Datacube01	Datacube	11_Paris_Everett	ComputerSecurity1	Computer	meverett	Likely	
+text:06_Email10	Email	11_Paris_Everett	ComputerSecurity1	Computer	meverett	Questionable	
+text:FemJC06_Email10	Email	11_Paris_Everett	ComputerSecurity1	Computer	meverett	Questionable	
+text:11_Datacube01	Datacube	11_Paris_Everett	ComputerSecurity3	Computer	meverett	Likely	
+text:06_Email10	Email	11_Paris_Everett	ComputerSecurity3	Computer	meverett	Questionable	
+text:FemJC06_Email10	Email	11_Paris_Everett	ComputerSecurity3	Computer	meverett	Questionable	
+text:11_Datacube02	Datacube	11_Paris_Everett	Keypad0	Keypad		Likely	
+text:11_Email01	Email	11_Paris_Everett	Keypad1	Keypad		Likely	
+text:FemJC11_Email01	Email	11_Paris_Everett	Keypad1	Keypad		Likely	
+text:11_Email01	Email	11_Paris_Everett	Keypad2	Keypad		Likely	
+text:FemJC11_Email01	Email	11_Paris_Everett	Keypad2	Keypad		Likely	
+con:FemJCMeetStacyWebber	Conversation	12_Vandenberg_Cmd	ComputerSecurity0	Computer	command	Likely	
+con:FemJCStephanieRescued	Conversation	12_Vandenberg_Cmd	ComputerSecurity0	Computer	command	Likely	
+con:MeetStacyWebber	Conversation	12_Vandenberg_Cmd	ComputerSecurity0	Computer	command	Likely	
+con:StephanieRescued	Conversation	12_Vandenberg_Cmd	ComputerSecurity0	Computer	command	Likely	
+con:FemJCMeetStacyWebber	Conversation	12_Vandenberg_Cmd	ComputerSecurity1	Computer	command	Likely	
+con:FemJCStephanieRescued	Conversation	12_Vandenberg_Cmd	ComputerSecurity1	Computer	command	Likely	
+con:MeetStacyWebber	Conversation	12_Vandenberg_Cmd	ComputerSecurity1	Computer	command	Likely	
+con:StephanieRescued	Conversation	12_Vandenberg_Cmd	ComputerSecurity1	Computer	command	Likely	
+con:FemJCMeetStacyWebber	Conversation	12_Vandenberg_Cmd	ComputerSecurity2	Computer	command	Likely	
+con:FemJCStephanieRescued	Conversation	12_Vandenberg_Cmd	ComputerSecurity2	Computer	command	Likely	
+con:MeetStacyWebber	Conversation	12_Vandenberg_Cmd	ComputerSecurity2	Computer	command	Likely	
+con:StephanieRescued	Conversation	12_Vandenberg_Cmd	ComputerSecurity2	Computer	command	Likely	
+con:DL_no_carla	Conversation	12_Vandenberg_Cmd	Keypad0	Keypad		Likely	
+con:FemJCMeetCarlaBrown	Conversation	12_Vandenberg_Cmd	Keypad0	Keypad		Likely	
+con:MeetCarlaBrown	Conversation	12_Vandenberg_Cmd	Keypad0	Keypad		Likely	
+con:DL_no_carla	Conversation	12_Vandenberg_Cmd	Keypad1	Keypad		Likely	
+con:FemJCMeetCarlaBrown	Conversation	12_Vandenberg_Cmd	Keypad1	Keypad		Likely	
+con:MeetCarlaBrown	Conversation	12_Vandenberg_Cmd	Keypad1	Keypad		Likely	
+con:FemJCGaryComputerBriefing	Conversation	12_Vandenberg_Computer	ComputerPersonal0	Computer	GSavage	Likely	
+con:GaryComputerBriefing	Conversation	12_Vandenberg_Computer	ComputerPersonal0	Computer	GSavage	Likely	
+text:12_Email02	Email	12_Vandenberg_Computer	ComputerPersonal0	Computer	GSavage	Possible	
+text:FemJC12_Email02	Email	12_Vandenberg_Computer	ComputerPersonal0	Computer	GSavage	Possible	
+con:FemJCGaryComputerBriefing	Conversation	12_Vandenberg_Computer	ComputerPersonal1	Computer	GSavage	Likely	
+con:GaryComputerBriefing	Conversation	12_Vandenberg_Computer	ComputerPersonal1	Computer	GSavage	Likely	
+text:12_Email02	Email	12_Vandenberg_Computer	ComputerPersonal1	Computer	GSavage	Possible	
+text:FemJC12_Email02	Email	12_Vandenberg_Computer	ComputerPersonal1	Computer	GSavage	Possible	
+con:FemJCMeetStacyWebber	Conversation	12_Vandenberg_Computer	ComputerSecurity1	Computer	command	Likely	
+con:FemJCStephanieRescued	Conversation	12_Vandenberg_Computer	ComputerSecurity1	Computer	command	Likely	
+con:MeetStacyWebber	Conversation	12_Vandenberg_Computer	ComputerSecurity1	Computer	command	Likely	
+con:StephanieRescued	Conversation	12_Vandenberg_Computer	ComputerSecurity1	Computer	command	Likely	
+con:FemJCMeetTimBaker	Conversation	12_Vandenberg_Tunnels	ComputerSecurity1	Computer	Tunnel01	Likely	
+con:MeetTimBaker	Conversation	12_Vandenberg_Tunnels	ComputerSecurity1	Computer	Tunnel01	Likely	
+text:12_Datacube01	Datacube	12_Vandenberg_Tunnels	ComputerSecurity1	Computer	Tunnel01	Likely	
+text:14_Datacube06	Datacube	14_OceanLab_Lab	ComputerSecurity0	Computer	Kraken	Likely	
+text:14_Datacube06	Datacube	14_OceanLab_Lab	ComputerSecurity1	Computer	Oceanguard	Likely	
+text:14_Datacube02	Datacube	14_OceanLab_Lab	Keypad1	Keypad		Likely	
+text:14_Datacube05	Datacube	14_Oceanlab_Silo	ComputerSecurity0	Computer	Elder	Likely	
+con:DL_frontgate	Conversation	14_Oceanlab_Silo	Keypad1	Keypad		Likely	
+con:DL_frontgate	Conversation	14_Oceanlab_Silo	Keypad10	Keypad		Likely	
+con:CarlaBarks	Conversation	14_Oceanlab_Silo	Keypad11	Keypad		Questionable	
+con:FemJCCarlaBarks	Conversation	14_Oceanlab_Silo	Keypad11	Keypad		Questionable	
+con:FemJCPinkertonBarks	Conversation	14_Oceanlab_Silo	Keypad11	Keypad		Questionable	
+con:PinkertonBarks	Conversation	14_Oceanlab_Silo	Keypad11	Keypad		Questionable	
+text:12_Datacube01	Datacube	14_Oceanlab_Silo	Keypad11	Keypad		Questionable	
+con:DL_frontgate	Conversation	14_Oceanlab_Silo	Keypad15	Keypad		Likely	
+con:DL_frontgate	Conversation	14_Oceanlab_Silo	Keypad16	Keypad		Likely	
+con:DL_frontgate	Conversation	14_Oceanlab_Silo	Keypad17	Keypad		Likely	
+con:DL_frontgate	Conversation	14_Oceanlab_Silo	Keypad7	Keypad		Likely	
+text:14_Datacube03	Datacube	14_OceanLab_UC	ComputerPersonal0	Computer	mj12	Likely	
+text:14_Datacube03	Datacube	14_OceanLab_UC	ComputerSecurity0	Computer	mj12	Likely	
+con:FemJCMeetDrPinkerton	Conversation	14_Vandenberg_Sub	ComputerPersonal0	Computer	APinkerton	Likely	
+con:MeetDrPinkerton	Conversation	14_Vandenberg_Sub	ComputerPersonal0	Computer	APinkerton	Likely	
+con:FemJCMeetDrPinkerton	Conversation	14_Vandenberg_Sub	ComputerPersonal1	Computer	APinkerton	Likely	
+con:MeetDrPinkerton	Conversation	14_Vandenberg_Sub	ComputerPersonal1	Computer	APinkerton	Likely	
+con:FemJCMeetDrBrittanyPrinzler	Conversation	14_Vandenberg_Sub	ComputerSecurity0	Computer	tech	Likely	
+con:MeetDrBrittanyPrinzler	Conversation	14_Vandenberg_Sub	ComputerSecurity0	Computer	tech	Likely	
+text:14_Datacube01	Datacube	14_Vandenberg_Sub	ComputerSecurity0	Computer	tech	Likely	
+con:FemJCMeetDrBrittanyPrinzler	Conversation	14_Vandenberg_Sub	ComputerSecurity1	Computer	tech	Likely	
+con:MeetDrBrittanyPrinzler	Conversation	14_Vandenberg_Sub	ComputerSecurity1	Computer	tech	Likely	
+text:14_Datacube01	Datacube	14_Vandenberg_Sub	ComputerSecurity1	Computer	tech	Likely	
+con:FemJCMeetDrBrittanyPrinzler	Conversation	14_Vandenberg_Sub	ComputerSecurity2	Computer	tech	Likely	
+con:MeetDrBrittanyPrinzler	Conversation	14_Vandenberg_Sub	ComputerSecurity2	Computer	tech	Likely	
+text:14_Datacube01	Datacube	14_Vandenberg_Sub	ComputerSecurity2	Computer	tech	Likely	
+con:FemJCMeetDrCorwell	Conversation	14_Vandenberg_Sub	Keypad0	Keypad		Likely	
+con:MeetDrCorwell	Conversation	14_Vandenberg_Sub	Keypad0	Keypad		Likely	
+con:CarlaBarks	Conversation	14_Vandenberg_Sub	Keypad5	Keypad		Questionable	
+con:FemJCCarlaBarks	Conversation	14_Vandenberg_Sub	Keypad5	Keypad		Questionable	
+con:FemJCPinkertonBarks	Conversation	14_Vandenberg_Sub	Keypad5	Keypad		Questionable	
+con:PinkertonBarks	Conversation	14_Vandenberg_Sub	Keypad5	Keypad		Questionable	
+text:12_Datacube01	Datacube	14_Vandenberg_Sub	Keypad5	Keypad		Questionable	
+con:FemJCMeetScaredSoldier	Conversation	15_Area51_Bunker	ComputerSecurity0	Computer	a51	Likely	
+con:MeetScaredSoldier	Conversation	15_Area51_Bunker	ComputerSecurity0	Computer	a51	Likely	
+text:15_Datacube07	Datacube	15_Area51_Bunker	ComputerSecurity0	Computer	a51	Likely	
+con:FemJCMeetScaredSoldier	Conversation	15_Area51_Bunker	ComputerSecurity3	Computer	a51	Likely	
+con:MeetScaredSoldier	Conversation	15_Area51_Bunker	ComputerSecurity3	Computer	a51	Likely	
+text:15_Datacube07	Datacube	15_Area51_Bunker	ComputerSecurity3	Computer	a51	Likely	
+text:15_Datacube01	Datacube	15_Area51_Entrance	Keypad1	Keypad		Likely	
+con:DL_Morgan_Missed_Convo	Conversation	15_Area51_Entrance	Keypad4	Keypad		Likely	
+con:FemJCM15MeetEverett	Conversation	15_Area51_Entrance	Keypad4	Keypad		Likely	
+con:M15MeetEverett	Conversation	15_Area51_Entrance	Keypad4	Keypad		Likely	
+con:DL_Morgan_Missed_Convo	Conversation	15_Area51_Entrance	Keypad5	Keypad		Likely	
+con:FemJCM15MeetEverett	Conversation	15_Area51_Entrance	Keypad5	Keypad		Likely	
+con:M15MeetEverett	Conversation	15_Area51_Entrance	Keypad5	Keypad		Likely	
+text:15_Datacube17	Datacube	15_Area51_Final	ComputerSecurity0	Computer	Area51	Likely	
+text:15_Datacube12	Datacube	15_Area51_Final	Keypad1	Keypad		Likely	
+text:01_Email14	Email	15_Area51_Final	Keypad14	Keypad		Likely	
+text:15_Datacube19	Datacube	15_Area51_Final	Keypad14	Keypad		Likely	
+text:FemJC01_Email14	Email	15_Area51_Final	Keypad14	Keypad		Likely	
+con:FemJCMeetPowerGuy	Conversation	15_Area51_Final	Keypad4	Keypad		Likely	
+con:MeetPowerGuy	Conversation	15_Area51_Final	Keypad4	Keypad		Likely	
+text:15_Datacube08	Datacube	15_Area51_Final	Keypad4	Keypad		Likely	
+con:DL_Final_Helios06	Conversation	15_Area51_Page	ComputerPersonal0	Computer	Icarus	Likely	
+con:DL_Final_Helios03_5	Conversation	15_Area51_Page	ComputerSecurity0	Computer	page	Likely	
+text:15_Datacube21	Datacube	15_Area51_Page	ComputerSecurity0	Computer	page	Likely	
+text:15_Datacube18	Datacube	15_Area51_Page	ComputerSecurity1	Computer	Lab 12	Likely	
+text:15_Datacube11	Datacube	15_Area51_Page	Keypad2	Keypad		Likely	
+text:15_Datacube09	Datacube	15_Area51_Page	Keypad4	Keypad		Likely	
+text:15_Datacube11	Datacube	15_Area51_Page	Keypad7	Keypad		Likely	
+con:DL_Final_Helios06	Conversation	99_Endgame1	ComputerPersonal0	Computer	Icarus	Likely	
+con:CarlaBarks	Conversation	99_Endgame1	Keypad4	Keypad		Questionable	
+con:FemJCCarlaBarks	Conversation	99_Endgame1	Keypad4	Keypad		Questionable	
+con:FemJCPinkertonBarks	Conversation	99_Endgame1	Keypad4	Keypad		Questionable	
+con:PinkertonBarks	Conversation	99_Endgame1	Keypad4	Keypad		Questionable	
+text:12_Datacube01	Datacube	99_Endgame1	Keypad4	Keypad		Questionable	
+text:15_Datacube11	Datacube	99_Endgame1	Keypad7	Keypad		Likely	
+con:FemJCMeetPowerGuy	Conversation	99_Endgame1	Keypad9	Keypad		Likely	
+con:MeetPowerGuy	Conversation	99_Endgame1	Keypad9	Keypad		Likely	
+text:15_Datacube08	Datacube	99_Endgame1	Keypad9	Keypad		Likely	
+con:CarlaBarks	Conversation	99_Endgame2	Keypad4	Keypad		Questionable	
+con:FemJCCarlaBarks	Conversation	99_Endgame2	Keypad4	Keypad		Questionable	
+con:FemJCPinkertonBarks	Conversation	99_Endgame2	Keypad4	Keypad		Questionable	
+con:PinkertonBarks	Conversation	99_Endgame2	Keypad4	Keypad		Questionable	
+text:12_Datacube01	Datacube	99_Endgame2	Keypad4	Keypad		Questionable	
+text:15_Datacube11	Datacube	99_Endgame2	Keypad7	Keypad		Likely	
+con:FemJCMeetPowerGuy	Conversation	99_Endgame2	Keypad9	Keypad		Likely	
+con:MeetPowerGuy	Conversation	99_Endgame2	Keypad9	Keypad		Likely	
+text:15_Datacube08	Datacube	99_Endgame2	Keypad9	Keypad		Likely	
+con:Doctor1Barter	Conversation	99_Endgame3	Keypad0	Keypad		Likely	
+con:Doctor2Barter	Conversation	99_Endgame3	Keypad0	Keypad		Likely	
+con:FemJCDoctor1Barter	Conversation	99_Endgame3	Keypad0	Keypad		Likely	
+con:FemJCDoctor2Barter	Conversation	99_Endgame3	Keypad0	Keypad		Likely	
+con:CarlaBarks	Conversation	99_Endgame3	Keypad4	Keypad		Questionable	
+con:FemJCCarlaBarks	Conversation	99_Endgame3	Keypad4	Keypad		Questionable	
+con:FemJCPinkertonBarks	Conversation	99_Endgame3	Keypad4	Keypad		Questionable	
+con:PinkertonBarks	Conversation	99_Endgame3	Keypad4	Keypad		Questionable	
+text:12_Datacube01	Datacube	99_Endgame3	Keypad4	Keypad		Questionable	
+text:15_Datacube11	Datacube	99_Endgame3	Keypad7	Keypad		Likely	
+con:FemJCMeetPowerGuy	Conversation	99_Endgame3	Keypad9	Keypad		Likely	
+con:MeetPowerGuy	Conversation	99_Endgame3	Keypad9	Keypad		Likely	
+text:15_Datacube08	Datacube	99_Endgame3	Keypad9	Keypad		Likely	

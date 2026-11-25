@@ -17,10 +17,7 @@ namespace dx::compiler {
         if (!linker) {
             return;
         }
-        for (size_t i = 0; i < linker->file().exports().size(); i++) {
-            objects::ensureLoaded(linker->object(static_cast<int32_t>(i + 1)));
-        }
-        objects::flushLoads();
+        objects::loadAllExports(linker);
     }
 
     bool runAssetCommand(UObject* package, const std::filesystem::path& directory, const std::string& command, std::vector<std::string>& log)

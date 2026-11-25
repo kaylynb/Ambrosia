@@ -3,8 +3,9 @@
 #include "compiler/con_file.h"
 #include "compiler/exec_parse.h"
 #include "compiler/script_package.h"
+#include "core/files.h"
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/package.h"
 #include "engine/resources.h"
 #include "extension/consys.h"
 
@@ -151,26 +152,6 @@ namespace dx::compiler {
             return result;
         }
 
-        bool readFile(const std::filesystem::path& file, std::vector<uint8_t>& data)
-        {
-            std::ifstream in(file, std::ios::binary);
-            if (!in) {
-                return false;
-            }
-            data.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-            return true;
-        }
-
-        UObject* findChild(UObject* outer, Name name, UClass* cls)
-        {
-            for (UObject* object : objects::all()) {
-                if (object && !object->destroyed && object->outer == outer && object->name == name && object->cls == cls) {
-                    return object;
-                }
-            }
-            return nullptr;
-        }
-
         std::string textPrefix(UObject* package)
         {
             return iequals(package->name.str(), "DeusExConversations") ? "DeusExCon" : package->name.str();
@@ -196,120 +177,30 @@ namespace dx::compiler {
             return base + buffer;
         }
 
-        class ConReader {
-        public:
-            explicit ConReader(std::vector<uint8_t> source)
-                : data(std::move(source))
-            {
-            }
-
-            int32_t readLong()
-            {
-                uint32_t value = 0;
-                for (int i = 0; i < 4; i++) {
-                    value |= static_cast<uint32_t>(at < data.size() ? data[at] : 0) << (8 * i);
-                    at++;
-                }
-                return static_cast<int32_t>(value);
-            }
-
-            float readFloat()
-            {
-                int32_t bits = readLong();
-                float value = 0;
-                std::memcpy(&value, &bits, sizeof(value));
-                return value;
-            }
-
-            void skip(int64_t count)
-            {
-                at = static_cast<size_t>(std::max<int64_t>(0, static_cast<int64_t>(at) + count));
-            }
-
-            std::vector<uint8_t> readBytes(int32_t count)
-            {
-                std::vector<uint8_t> result;
-                for (int32_t i = 0; i < count; i++) {
-                    result.push_back(at < data.size() ? data[at] : 0);
-                    at++;
-                }
-                return result;
-            }
-
-            std::string readString()
-            {
-                int32_t length = readLong();
-                if (length <= 0) {
-                    return {};
-                }
-                std::vector<uint8_t> bytes = readBytes(length);
-                std::string result(bytes.begin(), bytes.end());
-                return result.substr(0, result.find('\0'));
-            }
-
-            void discardString()
-            {
-                int32_t length = readLong();
-                if (length > 0) {
-                    skip(length);
-                }
-            }
-
-            int32_t readActor(std::string& name)
-            {
-                int32_t id = readLong();
-                if (id > -1) {
-                    name = readString();
-                }
-                return id;
-            }
-
-        private:
-            std::vector<uint8_t> data;
-            size_t at = 0;
-        };
-
         class ConImport {
         public:
-            ConImport(ExecContext& execContext, std::vector<uint8_t> file)
+            ConImport(ExecContext& execContext, const ConFile& source)
                 : context(execContext)
-                , reader(std::move(file))
+                , conFile(source)
             {
             }
 
-            void run(const std::string& fileName)
+            void run()
             {
-                reader.skip(static_cast<int64_t>(std::strlen(ConSignature)) + 1);
-                version = reader.readLong();
-                if (version < 0x1a) {
-                    context.log("CONIMPORT WARNING: Attempt to import obsolete conversation file " + fileName);
-                    return;
-                }
-                reader.skip(8);
-                reader.discardString();
-                reader.skip(8);
-                reader.discardString();
-                audioName = reader.readString();
-                reader.discardString();
-                int32_t missionCount = reader.readLong();
-                for (int32_t i = 0; i < missionCount; i++) {
-                    missions.push_back(reader.readLong());
-                }
+                audioName = conFile.audioPackage;
+                missions = conFile.missions;
                 std::string prefix = textPrefix(context.package);
                 textPackage = objects::packageObject(Name(prefix + "Text"));
                 audioPackage = objects::packageObject(Name(prefix + "Audio" + audioName));
                 missionList = missionConList();
                 audioList = conAudioList();
-                reader.skip(reader.readLong());
-                reader.skip(4);
-                int32_t count = reader.readLong();
-                for (int32_t i = 0; i < count; i++) {
+                for (const ConConversation& source : conFile.conversations) {
                     speechLabels = 0;
                     choiceEndLabels = 0;
                     choiceCount = 0;
                     actorReferences.clear();
                     conversation = create("Conversation", textPackage);
-                    importConversation();
+                    importConversation(source);
                     text(conversation, "audioPackageName") = audioName;
                     addConversation(conversation);
                 }
@@ -379,17 +270,15 @@ namespace dx::compiler {
                 }
             }
 
-            UObject* importFlagRefs()
+            UObject* importFlagRefs(const std::vector<ConFlagRef>& flags)
             {
-                int32_t count = reader.readLong();
                 UObject* head = nullptr;
                 UObject* previous = nullptr;
-                for (int32_t i = 0; i < count; i++) {
+                for (const ConFlagRef& source : flags) {
                     UObject* flagRef = create("ConFlagRef", textPackage);
-                    reader.readLong();
-                    setName(flagRef, "FlagName", reader.readString());
-                    setFlag(flagRef, "Value", (reader.readLong() & 1) != 0);
-                    integer(flagRef, "expiration") = reader.readLong();
+                    setName(flagRef, "FlagName", source.name);
+                    setFlag(flagRef, "Value", source.value);
+                    integer(flagRef, "expiration") = source.expiration;
                     if (!head) {
                         head = flagRef;
                     }
@@ -435,8 +324,8 @@ namespace dx::compiler {
             {
                 std::string directory = audioDirectory(audioPackage->name.str(), audioName);
                 std::filesystem::path file = resolve(context.directory.parent_path(), directory + "\\Audio\\" + audioName + "\\" + path + ".mp3");
-                std::vector<uint8_t> data;
-                if (!readFile(file, data) || data.empty()) {
+                std::optional<std::string> bytes = files::readFile(file);
+                if (!bytes || bytes->empty()) {
                     context.log("ImportSpeechAudio Failed: " + file.string());
                     return -1;
                 }
@@ -449,7 +338,7 @@ namespace dx::compiler {
                 }
                 USound* sound = cast<USound>(object);
                 sound->format = Name("mp3");
-                sound->bytes = std::move(data);
+                sound->bytes.assign(bytes->begin(), bytes->end());
                 cast<extension::UConAudioList>(audioList)->sounds.push_back(sound);
                 return count++;
             }
@@ -461,63 +350,60 @@ namespace dx::compiler {
 
             int32_t importSpeechAudio()
             {
-                reader.readString();
                 std::string path = flag(conversation, "bDataLinkCon") ? "InfoLink\\" + nameText(conversation, "conName") + "\\" : ownerPath();
                 return importAudio(path + numbered(speakerName, actorReferenceCount(speakerID)));
             }
 
             int32_t importChoiceAudio(int32_t index)
             {
-                reader.readString();
                 return importAudio(ownerPath() + numbered("Choice", choiceCount) + static_cast<char>('a' + index));
             }
 
-            void importChoice(UObject* choice, int32_t index)
+            void importChoice(UObject* choice, const ConChoice& source, int32_t index)
             {
-                reader.readLong();
-                text(choice, "choiceText") = reader.readString();
-                setFlag(choice, "bDisplayAsSpeech", (reader.readLong() & 1) != 0);
-                if (reader.readLong() > -1) {
-                    std::string skill = reader.readString();
-                    integer(choice, "skillLevelNeeded") = reader.readLong();
-                    reference(choice, "skillNeeded") = skill.empty() ? nullptr : findChild(textPackage, Name(skill), objects::classClass());
+                text(choice, "choiceText") = source.text;
+                setFlag(choice, "bDisplayAsSpeech", source.displayAsSpeech);
+                if (source.hasSkill) {
+                    integer(choice, "skillLevelNeeded") = source.skillLevel;
+                    reference(choice, "skillNeeded") = source.skill.empty() ? nullptr : findChild(textPackage, Name(source.skill), objects::classClass());
                 }
-                text(choice, "choiceLabel") = reader.readString();
+                text(choice, "choiceLabel") = source.label;
                 integer(choice, "soundID") = importChoiceAudio(index);
-                reference(choice, "flagRef") = importFlagRefs();
+                reference(choice, "flagRef") = importFlagRefs(source.flags);
             }
 
-            void importSpeech(UObject* event)
+            // An actor of -1 leaves its field at the class default, which is empty, as the
+            // reader gives it.
+            void importSpeech(UObject* event, const ConEvent& source)
             {
                 std::string& speaker = text(event, "speakerName");
-                speakerID = reader.readActor(speaker);
+                speaker = source.speaker;
+                speakerID = source.speakerId;
                 setSpeakerName(speaker);
                 incActorReference(speakerID);
-                reader.readActor(text(event, "speakingToName"));
+                text(event, "speakingToName") = source.speakingTo;
                 UObject* speech = create("ConSpeech", textPackage);
                 reference(event, "ConSpeech") = speech;
-                text(speech, "speech") = reader.readString();
+                text(speech, "speech") = source.speech;
                 integer(speech, "soundID") = importSpeechAudio();
-                setFlag(event, "bContinued", (reader.readLong() & 1) != 0);
-                setFlag(event, "bBold", (reader.readLong() & 1) != 0);
-                byte(event, "speechFont") = static_cast<uint8_t>(reader.readLong());
+                setFlag(event, "bContinued", source.continued);
+                setFlag(event, "bBold", source.bold);
+                byte(event, "speechFont") = static_cast<uint8_t>(source.font);
             }
 
-            void importEvent(UObject* event, uint8_t type)
+            void importEvent(UObject* event, const ConEvent& source)
             {
-                switch (type) {
+                switch (static_cast<uint8_t>(source.type)) {
                 case EventSpeech:
-                    importSpeech(event);
+                    importSpeech(event, source);
                     break;
                 case EventChoice: {
-                    reader.readLong();
-                    setFlag(event, "bClearScreen", (reader.readLong() & 1) != 0);
-                    int32_t count = reader.readLong();
+                    setFlag(event, "bClearScreen", source.clearScreen);
                     choiceCount++;
                     UObject* previous = nullptr;
-                    for (int32_t i = 0; i < count; i++) {
+                    for (size_t i = 0; i < source.choices.size(); i++) {
                         UObject* choice = create("ConChoice", textPackage);
-                        importChoice(choice, i);
+                        importChoice(choice, source.choices[i], static_cast<int32_t>(i));
                         if (!reference(event, "ChoiceList")) {
                             reference(event, "ChoiceList") = choice;
                         }
@@ -529,151 +415,121 @@ namespace dx::compiler {
                     break;
                 }
                 case EventSetFlag:
-                    reference(event, "flagRef") = importFlagRefs();
+                    reference(event, "flagRef") = importFlagRefs(source.flags);
                     break;
                 case EventCheckFlag:
-                    reference(event, "flagRef") = importFlagRefs();
-                    text(event, "setLabel") = reader.readString();
+                    reference(event, "flagRef") = importFlagRefs(source.flags);
+                    text(event, "setLabel") = source.setLabel;
                     break;
                 case EventCheckObject:
-                    reader.readLong();
-                    text(event, "ObjectName") = reader.readString();
-                    text(event, "failLabel") = reader.readString();
+                    text(event, "ObjectName") = source.objectName;
+                    text(event, "failLabel") = source.failLabel;
                     break;
                 case EventTransferObject:
-                    reader.readLong();
-                    text(event, "ObjectName") = reader.readString();
-                    integer(event, "transferCount") = version > 0x1a ? reader.readLong() : 1;
-                    reader.readActor(text(event, "fromName"));
-                    reader.readActor(text(event, "toName"));
-                    text(event, "failLabel") = reader.readString();
+                    text(event, "ObjectName") = source.objectName;
+                    integer(event, "transferCount") = source.transferCount;
+                    text(event, "fromName") = source.fromName;
+                    text(event, "toName") = source.toName;
+                    text(event, "failLabel") = source.failLabel;
                     break;
                 case EventMoveCamera:
-                    byte(event, "cameraType") = static_cast<uint8_t>(reader.readLong());
-                    byte(event, "cameraPosition") = static_cast<uint8_t>(reader.readLong());
-                    byte(event, "cameraTransition") = static_cast<uint8_t>(reader.readLong());
+                    byte(event, "cameraType") = static_cast<uint8_t>(source.cameraType);
+                    byte(event, "cameraPosition") = static_cast<uint8_t>(source.cameraPosition);
+                    byte(event, "cameraTransition") = static_cast<uint8_t>(source.cameraTransition);
                     if (byte(event, "cameraType") == 1) {
-                        member<int32_t>(event, "Rotation", "Pitch") = reader.readLong();
-                        member<int32_t>(event, "Rotation", "Yaw") = reader.readLong();
-                        member<int32_t>(event, "Rotation", "Roll") = reader.readLong();
-                        field<float>(event, "heightModifier") = reader.readFloat();
-                        field<float>(event, "centerModifier") = reader.readFloat();
-                        field<float>(event, "distanceMultiplier") = reader.readFloat();
+                        member<int32_t>(event, "Rotation", "Pitch") = source.cameraRotation[0];
+                        member<int32_t>(event, "Rotation", "Yaw") = source.cameraRotation[1];
+                        member<int32_t>(event, "Rotation", "Roll") = source.cameraRotation[2];
+                        field<float>(event, "heightModifier") = source.heightModifier;
+                        field<float>(event, "centerModifier") = source.centerModifier;
+                        field<float>(event, "distanceMultiplier") = source.distanceMultiplier;
                     } else if (byte(event, "cameraType") == 2) {
-                        member<float>(event, "cameraOffset", "X") = reader.readFloat();
-                        member<float>(event, "cameraOffset", "Y") = reader.readFloat();
-                        member<float>(event, "cameraOffset", "Z") = reader.readFloat();
+                        member<float>(event, "cameraOffset", "X") = source.cameraOffset[0];
+                        member<float>(event, "cameraOffset", "Y") = source.cameraOffset[1];
+                        member<float>(event, "cameraOffset", "Z") = source.cameraOffset[2];
                     }
                     break;
-                case EventAnimation: {
-                    reader.readActor(text(event, "eventOwnerName"));
-                    setName(event, "Sequence", reader.readString());
-                    int32_t mode = reader.readLong();
-                    setFlag(event, "bFinishAnim", (mode & 1) != 0);
-                    setFlag(event, "bLoopAnim", (mode & 2) != 0);
-                    reader.readLong();
-                    reader.readLong();
+                case EventAnimation:
+                    text(event, "eventOwnerName") = source.ownerName;
+                    setName(event, "Sequence", source.sequence);
+                    setFlag(event, "bFinishAnim", (source.animMode & 1) != 0);
+                    setFlag(event, "bLoopAnim", (source.animMode & 2) != 0);
                     break;
-                }
                 case EventTrade:
-                    reader.readActor(text(event, "eventOwnerName"));
+                    text(event, "eventOwnerName") = source.ownerName;
                     break;
                 case EventJump:
-                    text(event, "jumpLabel") = reader.readString();
-                    integer(event, "conID") = reader.readLong();
+                    text(event, "jumpLabel") = source.jumpLabel;
+                    integer(event, "conID") = source.conId;
                     jumps.emplace_back(integer(event, "conID"), event);
                     break;
                 case EventRandomLabel: {
-                    int32_t count = reader.readLong();
                     std::vector<std::string>& labels = cast<extension::UConEventRandomLabel>(event)->labels;
-                    for (int32_t i = 0; i < count; i++) {
-                        labels.push_back(reader.readString());
-                    }
-                    setFlag(event, "bCycleEvents", (reader.readLong() & 1) != 0);
-                    setFlag(event, "bCycleOnce", (reader.readLong() & 1) != 0);
-                    setFlag(event, "bCycleRandom", (reader.readLong() & 1) != 0);
+                    labels.insert(labels.end(), source.labels.begin(), source.labels.end());
+                    setFlag(event, "bCycleEvents", source.cycleEvents);
+                    setFlag(event, "bCycleOnce", source.cycleOnce);
+                    setFlag(event, "bCycleRandom", source.cycleRandom);
                     break;
                 }
                 case EventTrigger:
-                    setName(event, "triggerTag", reader.readString());
+                    setName(event, "triggerTag", source.triggerTag);
                     break;
                 case EventAddGoal:
-                    setName(event, "goalName", reader.readString());
-                    setFlag(event, "bGoalCompleted", (reader.readLong() & 1) != 0);
+                    setName(event, "goalName", source.goalName);
+                    setFlag(event, "bGoalCompleted", source.goalCompleted);
                     if (!flag(event, "bGoalCompleted")) {
-                        text(event, "goalText") = reader.readString();
-                        setFlag(event, "bPrimaryGoal", (reader.readLong() & 1) != 0);
+                        text(event, "goalText") = source.goalText;
+                        setFlag(event, "bPrimaryGoal", source.primaryGoal);
                     }
                     break;
                 case EventAddNote:
-                    text(event, "noteText") = reader.readString();
+                    text(event, "noteText") = source.noteText;
                     break;
                 case EventAddSkillPoints:
-                    integer(event, "pointsToAdd") = reader.readLong();
-                    text(event, "awardMessage") = version > 0x1a ? reader.readString() : std::string();
+                    integer(event, "pointsToAdd") = source.points;
+                    text(event, "awardMessage") = source.awardMessage;
                     break;
                 case EventAddCredits:
-                    integer(event, "creditsToAdd") = reader.readLong();
+                    integer(event, "creditsToAdd") = source.credits;
                     break;
                 case EventCheckPersona:
-                    byte(event, "personaType") = static_cast<uint8_t>(reader.readLong());
-                    byte(event, "condition") = static_cast<uint8_t>(reader.readLong());
-                    integer(event, "Value") = reader.readLong();
-                    text(event, "jumpLabel") = reader.readString();
+                    byte(event, "personaType") = static_cast<uint8_t>(source.personaType);
+                    byte(event, "condition") = static_cast<uint8_t>(source.condition);
+                    integer(event, "Value") = source.personaValue;
+                    text(event, "jumpLabel") = source.jumpLabel;
                     break;
-                case EventComment: {
-                    int32_t count = reader.readLong();
-                    std::vector<uint8_t> bytes = reader.readBytes(count);
-                    std::vector<uint16_t> units;
-                    for (size_t i = 0; i < bytes.size(); i += 2) {
-                        uint16_t unit = static_cast<uint16_t>(bytes[i] | (i + 1 < bytes.size() ? bytes[i + 1] << 8 : 0));
-                        if (unit == 0) {
-                            break;
-                        }
-                        units.push_back(unit);
-                    }
-                    text(event, "commentText") = conUnitsToText(units);
+                case EventComment:
+                    text(event, "commentText") = source.comment;
                     break;
-                }
                 default:
                     break;
                 }
             }
 
-            void importConversation()
+            void importConversation(const ConConversation& source)
             {
-                reader.readLong();
-                integer(conversation, "conversationID") = reader.readLong();
+                integer(conversation, "conversationID") = source.id;
                 conversations.emplace_back(integer(conversation, "conversationID"), conversation);
-                setName(conversation, "conName", reader.readString());
-                text(conversation, "Description") = reader.readString();
-                reader.skip(8);
-                reader.discardString();
-                reader.skip(8);
-                reader.discardString();
-                reader.readActor(text(conversation, "conOwnerName"));
-                setFlag(conversation, "bDataLinkCon", (reader.readLong() & 1) != 0);
-                reader.discardString();
-                setFlag(conversation, "bDisplayOnce", (reader.readLong() & 1) != 0);
-                setFlag(conversation, "bFirstPerson", (reader.readLong() & 1) != 0);
-                setFlag(conversation, "bNonInteractive", (reader.readLong() & 1) != 0);
-                setFlag(conversation, "bRandomCamera", (reader.readLong() & 1) != 0);
-                setFlag(conversation, "bCanBeInterrupted", (reader.readLong() & 1) != 0);
-                setFlag(conversation, "bCannotBeInterrupted", version > 0x1b && (reader.readLong() & 1) != 0);
-                setFlag(conversation, "bInvokeBump", (reader.readLong() & 1) != 0);
-                setFlag(conversation, "bInvokeFrob", (reader.readLong() & 1) != 0);
-                setFlag(conversation, "bInvokeSight", (reader.readLong() & 1) != 0);
-                setFlag(conversation, "bInvokeRadius", (reader.readLong() & 1) != 0);
-                integer(conversation, "radiusDistance") = reader.readLong();
-                reference(conversation, "flagRefList") = importFlagRefs();
-                int32_t count = reader.readLong();
+                setName(conversation, "conName", source.name);
+                text(conversation, "Description") = source.description;
+                text(conversation, "conOwnerName") = source.owner;
+                setFlag(conversation, "bDataLinkCon", source.dataLink);
+                setFlag(conversation, "bDisplayOnce", source.displayOnce);
+                setFlag(conversation, "bFirstPerson", source.firstPerson);
+                setFlag(conversation, "bNonInteractive", source.nonInteractive);
+                setFlag(conversation, "bRandomCamera", source.randomCamera);
+                setFlag(conversation, "bCanBeInterrupted", source.canBeInterrupted);
+                setFlag(conversation, "bCannotBeInterrupted", source.cannotBeInterrupted);
+                setFlag(conversation, "bInvokeBump", source.invokeBump);
+                setFlag(conversation, "bInvokeFrob", source.invokeFrob);
+                setFlag(conversation, "bInvokeSight", source.invokeSight);
+                setFlag(conversation, "bInvokeRadius", source.invokeRadius);
+                integer(conversation, "radiusDistance") = source.radius;
+                reference(conversation, "flagRefList") = importFlagRefs(source.flags);
                 UObject* previous = nullptr;
                 bool choices = false;
-                for (int32_t i = 0; i < count; i++) {
-                    reader.readLong();
-                    reader.readLong();
-                    uint8_t type = static_cast<uint8_t>(reader.readLong());
-                    std::string label = reader.readString();
+                for (const ConEvent& item : source.events) {
+                    uint8_t type = static_cast<uint8_t>(item.type);
                     if (type > EventEnd) {
                         context.log("CONIMPORT WARNING: unknown event type " + std::to_string(type));
                         continue;
@@ -681,9 +537,9 @@ namespace dx::compiler {
                     choices = choices || type == EventChoice;
                     UObject* event = create(eventClassNames[type], textPackage);
                     byte(event, "eventType") = type;
-                    importEvent(event, type);
+                    importEvent(event, item);
                     reference(event, "Conversation") = conversation;
-                    text(event, "Label") = label;
+                    text(event, "Label") = item.label;
                     if (!reference(conversation, "eventList")) {
                         reference(conversation, "eventList") = event;
                     }
@@ -754,8 +610,7 @@ namespace dx::compiler {
             }
 
             ExecContext& context;
-            ConReader reader;
-            int32_t version = 0;
+            const ConFile& conFile;
             std::string audioName;
             std::vector<int32_t> missions;
             UObject* textPackage = nullptr;
@@ -850,10 +705,7 @@ namespace dx::compiler {
             if (!linker) {
                 return set;
             }
-            for (size_t i = 0; i < linker->file().exports().size(); i++) {
-                objects::ensureLoaded(linker->object(static_cast<int32_t>(i + 1)));
-            }
-            objects::flushLoads();
+            objects::loadAllExports(linker);
             set.textPackage = linker->packageObject;
             UClass* conversationClass = conClass("Conversation");
             std::vector<UObject*> all;
@@ -940,10 +792,7 @@ namespace dx::compiler {
                 audioName = conversations.empty() ? std::string() : text(conversations.front(), "audioPackageName");
                 std::string audioPackageName = textPrefix(context.package) + "Audio" + audioName;
                 if (Linker* linker = objects::loadPackage(Name(audioPackageName))) {
-                    for (size_t i = 0; i < linker->file().exports().size(); i++) {
-                        objects::ensureLoaded(linker->object(static_cast<int32_t>(i + 1)));
-                    }
-                    objects::flushLoads();
+                    objects::loadAllExports(linker);
                     UObject* list = findChild(linker->packageObject, Name("ConAudioList_" + audioName), conClass("ConAudioList"));
                     if (list) {
                         sounds = cast<extension::UConAudioList>(list)->sounds;
@@ -983,10 +832,10 @@ namespace dx::compiler {
                 for (UObject* conversation : conversations) {
                     exportConversation(conversation);
                 }
-                std::filesystem::path file = context.directory / set.files[index];
-                std::string path = file.string();
-                std::replace(path.begin(), path.end(), '\\', '/');
-                file = path;
+                std::filesystem::path file;
+                if (!exportPath(context, context.directory, set.files[index], file)) {
+                    return false;
+                }
                 std::filesystem::create_directories(file.parent_path());
                 std::ofstream stream(file, std::ios::binary);
                 stream.write(reinterpret_cast<const char*>(out.data.data()), static_cast<std::streamsize>(out.data.size()));
@@ -1064,9 +913,11 @@ namespace dx::compiler {
                 if (!sound) {
                     return;
                 }
-                std::string relative = path + ".mp3";
-                std::replace(relative.begin(), relative.end(), '\\', '/');
-                std::filesystem::path file = audioRoot / relative;
+                std::filesystem::path file;
+                if (!exportPath(context, audioRoot, path + ".mp3", file)) {
+                    success = false;
+                    return;
+                }
                 auto written = writtenAudio.find(file.string());
                 if (written != writtenAudio.end()) {
                     if (written->second != sound && cast<USound>(written->second)->bytes != sound->bytes) {
@@ -1335,12 +1186,18 @@ namespace dx::compiler {
                 return true;
             }
             std::filesystem::path path = resolve(context.directory, file);
-            std::vector<uint8_t> data;
-            if (!readFile(path, data)) {
+            std::optional<std::string> bytes = files::readFile(path);
+            if (!bytes) {
                 context.log("CONIMPORT WARNING: Can't find file '" + path.string() + "' for import");
                 return true;
             }
-            ConImport(context, std::move(data)).run(path.string());
+            std::vector<uint8_t> data(bytes->begin(), bytes->end());
+            ConFile source;
+            if (!readConFile(data, source, nullptr, ConReadMode::Import)) {
+                context.log("CONIMPORT WARNING: Attempt to import obsolete conversation file " + path.string());
+                return true;
+            }
+            ConImport(context, source).run();
             return true;
         }
 

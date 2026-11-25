@@ -1,0 +1,21 @@
+wait 3
+exec camera -600 0 0 0 0
+wait 1
+exec editmode face
+wait 1
+clickview perspective 0.5 0.5
+wait 5
+expect status selected 1 face
+wait 1
+exec extrude 128
+wait 1
+expect vertex -256 128 128
+wait 1
+expect novertex -128 128 128
+wait 1
+exec undo
+wait 1
+expect vertex -128 128 128
+wait 1
+expect status undo done
+quit

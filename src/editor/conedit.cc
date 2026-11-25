@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "debugui/imgui_setup.h"
 
 namespace dx::editor {
     namespace {
@@ -229,7 +230,7 @@ namespace dx::editor {
             for (int32_t i = 0; i < dx::compiler::ConEventTypeCount; i++) {
                 std::string type = dx::compiler::conEventTypeName(static_cast<ConEventType>(i));
                 type.erase(std::remove(type.begin(), type.end(), ' '), type.end());
-                if (lower(type) == lower(name)) {
+                if (lowered(type) == lowered(name)) {
                     found = true;
                     return static_cast<ConEventType>(i);
                 }
@@ -258,16 +259,16 @@ namespace dx::editor {
         }
         conFile = std::move(loaded);
         conPath = file;
-        std::snprintf(conPathInput.data(), conPathInput.size(), "%s", file.string().c_str());
-        std::string package = file.parent_path().filename().string();
-        std::snprintf(conCompileInput.data(), conCompileInput.size(), "%s", lower(package) == "deusexconversations" || package.empty() ? "MyConversations" : package.c_str());
+        std::snprintf(conPathInput.data(), conPathInput.size(), "%s", utf8String(file).c_str());
+        std::string package = utf8String(file.parent_path().filename());
+        std::snprintf(conCompileInput.data(), conCompileInput.size(), "%s", lowered(package) == "deusexconversations" || package.empty() ? "MyConversations" : package.c_str());
         conDirty = false;
         conIssues.clear();
         conTranscript.clear();
         conPreview = {};
         conSelect(conFile.conversations.empty() ? -1 : 0, -1);
         showConEdit = true;
-        status = "loaded " + std::to_string(conFile.conversations.size()) + " conversations from " + file.filename().string();
+        status = "loaded " + std::to_string(conFile.conversations.size()) + " conversations from " + utf8String(file.filename());
         conLog.push_back(status);
         return true;
     }
@@ -292,16 +293,16 @@ namespace dx::editor {
             return false;
         }
         conPath = file;
-        std::snprintf(conPathInput.data(), conPathInput.size(), "%s", file.string().c_str());
+        std::snprintf(conPathInput.data(), conPathInput.size(), "%s", utf8String(file).c_str());
         conDirty = false;
-        conLog.push_back("saved " + file.string());
-        status = "saved " + file.filename().string();
+        conLog.push_back("saved " + utf8String(file));
+        status = "saved " + utf8String(file.filename());
         return true;
     }
 
     bool Editor::conCompile(const std::string& packageName)
     {
-        if (packageName.empty() || lower(packageName) == "deusexconversations") {
+        if (packageName.empty() || lowered(packageName) == "deusexconversations") {
             status = "choose a mod package name to compile into";
             conLog.push_back(status);
             return false;
@@ -313,7 +314,7 @@ namespace dx::editor {
         int32_t count = dx::compiler::compileConFile(conPath.parent_path(), conPath.filename().string(), packageName, lines);
         conLog.insert(conLog.end(), lines.begin(), lines.end());
         std::filesystem::path output = conPath.parent_path().parent_path() / "System";
-        conLog.push_back("compiled " + std::to_string(count) + " conversations into " + (output / (packageName + "Text.u")).string());
+        conLog.push_back("compiled " + std::to_string(count) + " conversations into " + utf8String(output / (packageName + "Text.u")));
         status = "compiled " + std::to_string(count) + " conversations into " + packageName + "Text.u";
         conTab = "check";
         return count == static_cast<int32_t>(conFile.conversations.size());
@@ -355,9 +356,9 @@ namespace dx::editor {
         ImGui::PushID(id);
         if (ImGui::BeginTable("flags", 4, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("Flag", ImGuiTableColumnFlags_WidthStretch, 3.0f);
-            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(40.0f));
             ImGui::TableSetupColumn("Expires", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 20.0f);
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(20.0f));
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < flags.size(); i++) {
                 ImGui::PushID(static_cast<int>(i));
@@ -408,9 +409,14 @@ namespace dx::editor {
         }
         ImGui::SameLine();
         if (ImGui::Button("Delete")) {
-            conFile.conversations.erase(conFile.conversations.begin() + conConversation);
-            conSelect(std::min(conConversation, static_cast<int>(conFile.conversations.size()) - 1), -1);
-            conDirty = true;
+            int index = conConversation;
+            askConfirm("Delete conversation " + conFile.conversations[static_cast<size_t>(index)].name + "?", "Delete", [this, index]() {
+                if (index < 0 || static_cast<size_t>(index) >= conFile.conversations.size()) {
+                    return;
+                }
+                conFile.conversations.erase(conFile.conversations.begin() + index);
+                conSelect(std::min(index, static_cast<int>(conFile.conversations.size()) - 1), -1);
+                conDirty = true; }, nullptr);
         }
         ImGui::EndDisabled();
         if (ImGui::BeginTable("conversations", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0, ImGui::GetContentRegionAvail().y * 0.62f))) {
@@ -499,7 +505,7 @@ namespace dx::editor {
 
     void Editor::conEventList(dx::compiler::ConConversation& conversation)
     {
-        ImGui::SetNextItemWidth(150.0f);
+        ImGui::SetNextItemWidth(debugui::scaled(150.0f));
         ImGui::Combo("##type", &conAddType, [](void*, int index) { return dx::compiler::conEventTypeName(static_cast<ConEventType>(index)); }, nullptr, dx::compiler::ConEventTypeCount);
         ImGui::SameLine();
         if (ImGui::Button("Add Event")) {
@@ -534,9 +540,9 @@ namespace dx::editor {
             return;
         }
         ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 28.0f);
-        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 110.0f);
-        ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(28.0f));
+        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(110.0f));
+        ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(100.0f));
         ImGui::TableSetupColumn("Summary", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
         int previewed = conPreview.conversation == static_cast<size_t>(conConversation) ? conPreview.event : -1;
@@ -867,9 +873,9 @@ namespace dx::editor {
         if (!showConEdit) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(1180, 680), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(200, 90), ImGuiCond_FirstUseEver);
-        std::string title = "Conversation Editor - " + (conPath.empty() ? std::string("untitled") : conPath.filename().string()) + (conDirty ? " *" : "") + "###conedit";
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(1180), debugui::scaled(680)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(200), debugui::scaled(90)), ImGuiCond_FirstUseEver);
+        std::string title = "Conversation Editor - " + (conPath.empty() ? std::string("untitled") : utf8String(conPath.filename())) + (conDirty ? " *" : "") + "###conedit";
         if (!ImGui::Begin(title.c_str(), &showConEdit)) {
             ImGui::End();
             return;
@@ -878,23 +884,28 @@ namespace dx::editor {
             std::snprintf(conPackageInput.data(), conPackageInput.size(), "DeusExConversations");
         }
         if (ImGui::Button("New")) {
-            pendingCommand = "conedit new";
+            guardConversation([this]() {
+                pendingCommand = "conedit new";
+            });
         }
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(420.0f);
+        ImGui::SetNextItemWidth(debugui::scaled(420.0f));
         ImGui::InputTextWithHint("##path", ".con file", conPathInput.data(), conPathInput.size());
         ImGui::SameLine();
         if (ImGui::Button("Open")) {
-            conLoad(conPathInput.data());
+            std::filesystem::path file = utf8Path(conPathInput.data());
+            guardConversation([this, file]() {
+                conLoad(file);
+            });
         }
         ImGui::SameLine();
         if (ImGui::Button("Save")) {
-            conSave(conPathInput.data());
+            conSave(utf8Path(conPathInput.data()));
         }
         ImGui::SameLine();
         ImGui::TextUnformatted("Compile into");
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(150.0f);
+        ImGui::SetNextItemWidth(debugui::scaled(150.0f));
         ImGui::InputText("##compile", conCompileInput.data(), conCompileInput.size());
         ImGui::SameLine();
         ImGui::BeginDisabled(conPath.empty() && conPathInput[0] == 0);
@@ -904,7 +915,7 @@ namespace dx::editor {
         ImGui::EndDisabled();
         ImGui::TextUnformatted("Package");
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(170.0f);
+        ImGui::SetNextItemWidth(debugui::scaled(170.0f));
         ImGui::InputText("##package", conPackageInput.data(), conPackageInput.size());
         ImGui::SameLine();
         if (ImGui::Button("List")) {
@@ -913,7 +924,7 @@ namespace dx::editor {
             status = std::to_string(conPackageFiles.size()) + " conversation files in " + conPackageInput.data();
         }
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(220.0f);
+        ImGui::SetNextItemWidth(debugui::scaled(220.0f));
         if (ImGui::BeginCombo("##files", conPackageFiles.empty() ? "" : conPackageFiles[static_cast<size_t>(conPackageFile)].c_str())) {
             for (size_t i = 0; i < conPackageFiles.size(); i++) {
                 if (ImGui::Selectable(conPackageFiles[i].c_str(), static_cast<int>(i) == conPackageFile)) {
@@ -925,7 +936,10 @@ namespace dx::editor {
         ImGui::SameLine();
         ImGui::BeginDisabled(conPackageFiles.empty());
         if (ImGui::Button("Open From Package")) {
-            pendingCommand = "conedit package " + std::string(conPackageInput.data()) + " " + conPackageFiles[static_cast<size_t>(conPackageFile)];
+            std::string line = "conedit package " + quoteArg(conPackageInput.data()) + " " + quoteArg(conPackageFiles[static_cast<size_t>(conPackageFile)]);
+            guardConversation([this, line]() {
+                pendingCommand = line;
+            });
         }
         ImGui::EndDisabled();
         ImGui::Separator();
@@ -992,24 +1006,23 @@ namespace dx::editor {
             conFile.audioPackage = "Mod";
             dx::compiler::addConversation(conFile, "NewConversation", "JCDenton");
             conPath = dx::config::userDirectory() / "MyConversations" / "MyConversations.con";
-            std::snprintf(conPathInput.data(), conPathInput.size(), "%s", conPath.string().c_str());
+            std::snprintf(conPathInput.data(), conPathInput.size(), "%s", utf8String(conPath).c_str());
             std::snprintf(conCompileInput.data(), conCompileInput.size(), "MyConversations");
             conSelect(0, -1);
             conDirty = true;
             return true;
         }
         if (verb == "open") {
-            return conLoad(rest(input));
+            return conLoad(utf8Path(restArg(rest(input))));
         }
         if (verb == "package") {
-            std::string packageName;
-            std::string file;
-            input >> packageName >> file;
+            std::string packageName = readArg(input);
+            std::string file = readArg(input);
             return conOpenPackage(packageName, file);
         }
         if (verb == "save") {
-            std::string path = rest(input);
-            return conSave(path.empty() ? conPath : std::filesystem::path(path));
+            std::string path = restArg(rest(input));
+            return conSave(path.empty() ? conPath : utf8Path(path));
         }
         if (verb == "compile") {
             std::string packageName = rest(input);
@@ -1170,7 +1183,7 @@ namespace dx::editor {
             input >> name >> value;
             ConFlagRef flag;
             flag.name = name;
-            flag.value = lower(value) != "false";
+            flag.value = lowered(value) != "false";
             event.flags.push_back(flag);
             return true;
         }

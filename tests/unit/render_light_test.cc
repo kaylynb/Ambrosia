@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/props_engine.h"
 #include "engine/world.h"
 #include "render/lighting.h"
@@ -8,7 +10,7 @@
 namespace {
     dx::UObject* makeSpotlight()
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UClass* lightClass = dx::objects::findClass("Engine.Light");
         REQUIRE(lightClass != nullptr);
         dx::UObject* light = dx::objects::newObject(lightClass, dx::objects::packageObject(dx::Name("Transient")), dx::Name(), 0);

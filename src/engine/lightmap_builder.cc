@@ -27,19 +27,14 @@ namespace dx {
             constexpr uint32_t PolyNoAddToBsp = 0x80000000 | 0x40000000 | 0x02000000 | 0x01000000;
             constexpr uint32_t PolyNoShadows = 0x00400000 | 0x00000001 | 0x00000010 | 0x00000080;
 
-            bool outOfCorner = false;
-
             float planeDistance(const BspNode& node, const Vector& p)
             {
                 return node.plane.x * p.x + node.plane.y * p.y + node.plane.z * p.z - node.plane.w;
             }
 
-            bool childOutside(const BspNode& node, int child, bool outside, uint8_t extraFlags)
-            {
-                return child ? (outside || bsp::isCsg(node, extraFlags)) : (outside && !bsp::isCsg(node, extraFlags));
-            }
-
-            bool lineCheck(const UModel& model, int32_t index, Vector end, Vector start, bool outside, uint8_t nodeFlags)
+            // outOfCorner is set once the trace, walked from start, reaches open space. With bright
+            // corners, solid it crosses before that does not block it.
+            bool lineCheck(const UModel& model, int32_t index, Vector end, Vector start, bool outside, uint8_t nodeFlags, bool& outOfCorner)
             {
                 uint8_t csgFlags = nodeFlags & static_cast<uint8_t>(~NodeBrightCorners);
                 while (index >= 0) {
@@ -56,10 +51,10 @@ namespace dx {
                         Vector middle = start + (start - end) * (dist1 / (dist2 - dist1));
                         int frontFirst = dist1 > 0.0f ? 1 : 0;
                         int32_t first = frontFirst ? node.front : node.back;
-                        if (!lineCheck(model, first, middle, start, childOutside(node, frontFirst, outside, csgFlags), nodeFlags)) {
+                        if (!lineCheck(model, first, middle, start, bsp::childOutside(node, frontFirst, outside, csgFlags), nodeFlags, outOfCorner)) {
                             return false;
                         }
-                        outside = childOutside(node, 1 - frontFirst, outside, csgFlags);
+                        outside = bsp::childOutside(node, 1 - frontFirst, outside, csgFlags);
                         index = frontFirst ? node.back : node.front;
                         start = middle;
                     }
@@ -79,8 +74,8 @@ namespace dx {
                 if (model.nodes.empty()) {
                     return true;
                 }
-                outOfCorner = false;
-                return lineCheck(model, 0, end, start, model.rootOutside != 0, nodeFlags);
+                bool outOfCorner = false;
+                return lineCheck(model, 0, end, start, model.rootOutside != 0, nodeFlags, outOfCorner);
             }
 
             bool sceneLight(UObject* a)
@@ -471,6 +466,20 @@ namespace dx {
             }
             model.lightMaps.clear();
             model.lightBits.clear();
+            size_t leafLights = 0;
+            for (const ConvexLeaf& leaf : model.leaves) {
+                for (int32_t start : { leaf.permeating, leaf.volumetric }) {
+                    if (start < 0) {
+                        continue;
+                    }
+                    size_t end = static_cast<size_t>(start);
+                    while (end < model.lights.size() && model.lights[end]) {
+                        end++;
+                    }
+                    leafLights = std::max(leafLights, std::min(end + 1, model.lights.size()));
+                }
+            }
+            model.lights.resize(leafLights);
             for (BspSurf& surf : model.surfs) {
                 surf.lightMap = -1;
             }
@@ -486,6 +495,8 @@ namespace dx {
                     objects::ensureLoaded(brush->polys);
                     objects::flushLoads();
                     brush->lightMaps.clear();
+                    brush->lightBits.clear();
+                    brush->lights.clear();
                     for (Poly& poly : brush->polys->polys) {
                         if (!(poly.polyFlags & PolyNoShadows)) {
                             poly.brushPoly = static_cast<int32_t>(brush->lightMaps.size());

@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "core/files.h"
 
 namespace dx::editor {
     bool Editor::command(const std::string& line)
@@ -10,7 +11,7 @@ namespace dx::editor {
         std::getline(input, rest);
         size_t first = rest.find_first_not_of(' ');
         rest = first == std::string::npos ? std::string() : rest.substr(first);
-        if (verb == "shapeeditor" || verb == "shape" || verb == "floorlofter" || verb == "floor" || verb == "heightmap" || verb == "heightmapdialog" || verb == "addspecialdialog" || verb == "addzone") {
+        if (verb == "shapeeditor" || verb == "shape" || verb == "floorlofter" || verb == "floor" || verb == "heightmap" || verb == "heightmapdialog" || verb == "addspecialdialog") {
             return builderCommand(verb, rest);
         }
         if (verb == "conedit") {
@@ -32,7 +33,7 @@ namespace dx::editor {
             return componentCommand(verb, rest);
         }
         if (verb == "openfile") {
-            return openMapFile(rest);
+            return openMapFile(utf8Path(restArg(rest)));
         }
         if (verb == "loadclass" || verb == "setdefault" || verb == "classmenu" || verb == "classdefaults" || verb == "exportclass" || verb == "deleteclass") {
             return classCommand(verb, rest);
@@ -92,9 +93,10 @@ namespace dx::editor {
             return saveTo(file);
         }
         if (verb == "saveas") {
-            std::filesystem::path file = rest.find('/') != std::string::npos ? std::filesystem::path(rest) : userMapsDirectory() / (rest + ".dx");
+            std::string name = restArg(rest);
+            std::filesystem::path file = utf8Path(name).has_parent_path() ? utf8Path(name) : userMapsDirectory() / utf8Path(name + ".dx");
             if (saveTo(file)) {
-                currentMap = file.stem().string();
+                currentMap = utf8String(file.stem());
                 return true;
             }
             return false;
@@ -107,6 +109,7 @@ namespace dx::editor {
             return true;
         }
         if (verb == "undo" || verb == "redo") {
+            cancelComponentDrag();
             bool done = verb == "undo" ? history.undo() : history.redo();
             geometryChanged();
             componentSelection.clear();
@@ -115,7 +118,7 @@ namespace dx::editor {
         }
         if (verb == "select") {
             for (dx::UObject* actor : actors) {
-                if (lower(actor->name.str()) == lower(rest)) {
+                if (lowered(actor->name.str()) == lowered(rest)) {
                     select(actor);
                     focusSelected();
                     return true;
@@ -220,20 +223,11 @@ namespace dx::editor {
         }
         if (verb == "cube" || verb == "cylinder" || verb == "sheet") {
             dx::UObject* builder = builderBrush();
-            dx::UModel* model = builder ? dx::cast<dx::UModel>(dx::actor::Brush(builder)) : nullptr;
+            dx::UModel* model = builderModel();
             if (!model) {
                 status = "no builder brush";
                 return false;
             }
-            dx::objects::ensureLoaded(model);
-            dx::objects::flushLoads();
-            if (!model->polys) {
-                dx::UPolys* polys = dx::cast<dx::UPolys>(dx::objects::newObject(dx::csg::nativeClass("Polys"), level->outermost(), dx::Name(), EditorActorFlags));
-                polys->loaded = true;
-                model->polys = polys;
-            }
-            dx::objects::ensureLoaded(model->polys);
-            dx::objects::flushLoads();
             std::istringstream values(rest);
             float a = 256;
             float b = 256;
@@ -249,6 +243,7 @@ namespace dx::editor {
             }
             dx::csg::updateBounds(*model);
             brushCache.erase(builder);
+            levelChanged = true;
             status = "builder brush is a " + verb;
             return true;
         }
@@ -258,9 +253,8 @@ namespace dx::editor {
                 return false;
             }
             uint32_t flags = verb == "csgadd" && !rest.empty() ? static_cast<uint32_t>(std::strtoul(rest.c_str(), nullptr, 0)) : 0;
-            dx::bsp::setCurrentTexture(currentTexture);
             history.begin(level, { level->model }, verb == "csgadd" ? "Add brush" : "Subtract brush");
-            dx::UObject* brush = dx::csg::addBrush(level, builder, verb == "csgadd" ? dx::csg::CsgAdd : dx::csg::CsgSubtract, flags);
+            dx::UObject* brush = dx::csg::addBrush(level, builder, verb == "csgadd" ? dx::csg::CsgAdd : dx::csg::CsgSubtract, flags, currentTexture);
             if (!brush) {
                 history.cancel();
                 return false;
@@ -273,7 +267,7 @@ namespace dx::editor {
         }
         if (verb == "addspecial") {
             auto preset = std::find_if(specialPresets.begin(), specialPresets.end(), [&](const SpecialPreset& item) {
-                return lower(item.name) == lower(rest);
+                return lowered(item.name) == lowered(rest);
             });
             if (preset == specialPresets.end()) {
                 status = "no special brush preset " + rest;
@@ -286,8 +280,9 @@ namespace dx::editor {
             if (!builder) {
                 return false;
             }
-            history.begin(level, { builder, dx::actor::Brush(builder) }, verb == "intersect" ? "Brush from intersection" : "Brush from deintersection");
-            bool done = dx::csg::brushFromIntersection(level, builder, verb == "deintersect");
+            dx::UModel* brush = dx::cast<dx::UModel>(dx::actor::Brush(builder));
+            history.begin(level, { builder, brush, brush ? brush->polys : nullptr }, verb == "intersect" ? "Brush from intersection" : "Brush from deintersection");
+            bool done = dx::csg::brushFromIntersection(level, builder, verb == "deintersect", currentTexture);
             if (done) {
                 history.commit();
             } else {
@@ -303,9 +298,8 @@ namespace dx::editor {
             if (!builder) {
                 return false;
             }
-            dx::bsp::setCurrentTexture(currentTexture);
             history.begin(level, {}, "Add mover");
-            dx::UObject* mover = dx::csg::addMover(level, builder, moverClass);
+            dx::UObject* mover = dx::csg::addMover(level, builder, moverClass, currentTexture);
             if (!mover) {
                 history.cancel();
                 status = "cannot add mover";
@@ -321,34 +315,33 @@ namespace dx::editor {
             return runBrushBuilder(rest);
         }
         if (verb == "brushexport") {
-            dx::UObject* builder = builderBrush();
-            if (!builder || rest.empty()) {
+            dx::UModel* model = builderModel();
+            std::string file = restArg(rest);
+            if (!model || file.empty()) {
                 status = "brushexport needs a file";
                 return false;
             }
-            std::ofstream out(rest, std::ios::binary);
-            out << dx::editorops::exportPolys(*dx::cast<dx::UModel>(dx::actor::Brush(builder))->polys);
-            status = out ? "exported brush to " + rest : "cannot write " + rest;
+            std::ofstream out(utf8Path(file), std::ios::binary);
+            out << dx::editorops::exportPolys(*model->polys);
+            status = out ? "exported brush to " + file : "cannot write " + file;
             return static_cast<bool>(out);
         }
         if (verb == "brushimport") {
             dx::UObject* builder = builderBrush();
             std::istringstream arguments(rest);
-            std::string file;
+            std::string file = readArg(arguments);
             int merge = 0;
             uint32_t flags = 0;
-            arguments >> file >> merge >> flags;
-            std::ifstream in(file, std::ios::binary);
-            if (!builder || !in) {
+            arguments >> merge >> flags;
+            std::optional<std::string> text = dx::files::readFile(utf8Path(file));
+            dx::UModel* brush = text ? builderModel() : nullptr;
+            if (!brush) {
                 status = "cannot read " + file;
                 return false;
             }
-            std::stringstream text;
-            text << in.rdbuf();
-            dx::UModel* brush = dx::cast<dx::UModel>(dx::actor::Brush(builder));
             history.begin(level, { builder, brush, brush->polys }, "Brush import");
             brush->linked = 0;
-            dx::editorops::importPolys(*brush->polys, text.str());
+            dx::editorops::importPolys(*brush->polys, *text);
             for (size_t i = 0; i < brush->polys->polys.size(); i++) {
                 brush->polys->polys[i].polyFlags |= flags;
                 brush->polys->polys[i].link = static_cast<int32_t>(i);
@@ -366,13 +359,14 @@ namespace dx::editor {
             dx::csg::RebuildOptions settings = rebuildOptions;
             settings.geometry = verb != "rebuildbsp";
             settings.bsp = verb != "rebuildgeometry" && (verb == "rebuildbsp" || rebuildOptions.bsp);
-            dx::bsp::setCurrentTexture(currentTexture);
+            settings.defaultTexture = currentTexture;
             restoreRegions(true);
             dx::csg::Stats stats = dx::csg::rebuild(level, settings);
             captureRegions();
             geometryChanged();
+            levelChanged = true;
             status = "geometry: " + std::to_string(stats.brushes) + " brushes, " + std::to_string(stats.nodes) + " nodes, " + std::to_string(stats.surfs) + " surfaces, " + std::to_string(stats.zones) + " zones";
-            std::fprintf(stderr, "%s\n", status.c_str());
+            dx::log::info("Log", "{}", status);
             return true;
         }
         if (verb == "light") {
@@ -384,8 +378,9 @@ namespace dx::editor {
             dx::lightbuild::Stats stats = dx::lightbuild::rebuild(level, rest == "selected" ? &chosen : nullptr);
             captureRegions();
             renderer->flushLevel();
+            levelChanged = true;
             status = "lighting: " + std::to_string(stats.lights) + " lights, " + std::to_string(stats.surfaces) + " lightmaps";
-            std::fprintf(stderr, "%s\n", status.c_str());
+            dx::log::info("Log", "{}", status);
             return true;
         }
         if (verb == "brush" || verb == "mover" || verb == "vertexmode" || verb == "vertexmove" || verb == "clipmode" || verb == "clipmarker" || verb == "clip") {
@@ -532,8 +527,11 @@ namespace dx::editor {
             if (!currentTexture || !model) {
                 return false;
             }
-            dx::editorops::setTexture(*model, selectedSurfs, currentTexture);
-            renderer->flushLevel();
+            if (!surfaceEdit("Apply texture", [&](dx::UModel& target) {
+                    dx::editorops::setTexture(target, selectedSurfs, currentTexture);
+                })) {
+                return false;
+            }
             status = "applied " + currentTexture->name.str() + " to " + std::to_string(selectedSurfs.size()) + " surfaces";
             return true;
         }
@@ -572,12 +570,36 @@ namespace dx::editor {
         return false;
     }
 
+    dx::UModel* Editor::builderModel()
+    {
+        dx::UObject* builder = builderBrush();
+        if (!builder) {
+            return nullptr;
+        }
+        dx::UModel* model = dx::cast<dx::UModel>(dx::actor::Brush(builder));
+        if (!model) {
+            model = dx::cast<dx::UModel>(dx::objects::newObject(dx::csg::nativeClass("Model"), level->outermost(), dx::Name(), EditorActorFlags | dx::RF_NotForClient | dx::RF_NotForServer));
+            model->loaded = true;
+            dx::actor::Brush(builder) = model;
+        }
+        dx::objects::ensureLoaded(model);
+        dx::objects::flushLoads();
+        if (!model->polys) {
+            dx::UPolys* polys = dx::cast<dx::UPolys>(dx::objects::newObject(dx::csg::nativeClass("Polys"), level->outermost(), dx::Name(), EditorActorFlags));
+            polys->loaded = true;
+            model->polys = polys;
+        }
+        dx::objects::ensureLoaded(model->polys);
+        dx::objects::flushLoads();
+        return model;
+    }
+
     void Editor::printState()
     {
         std::string selection = selected ? selected->name.str() : std::string("none");
         dx::Vector location = selected ? dx::actor::Location(selected) : dx::Vector {};
         dx::Rotator rotation = selected ? dx::actor::Rotation(selected) : dx::Rotator {};
-        std::printf("state selected=%s location=%.1f,%.1f,%.1f rotation=%d,%d,%d actors=%zu undo=%zu redo=%zu surfaces=%zu selection=%zu status=%s\n", selection.c_str(), static_cast<double>(location.x), static_cast<double>(location.y), static_cast<double>(location.z), rotation.pitch, rotation.yaw, rotation.roll, actors.size(), history.undoCount(), history.redoCount(), selectedSurfs.size(), selectionList().size(), status.c_str());
+        dx::log::info("Log", "state selected={} location={:.1f},{:.1f},{:.1f} rotation={},{},{} actors={} undo={} redo={} surfaces={} selection={} status={}", selection, location.x, location.y, location.z, rotation.pitch, rotation.yaw, rotation.roll, actors.size(), history.undoCount(), history.redoCount(), selectedSurfs.size(), selectionList().size(), status);
         std::fflush(stdout);
     }
 
@@ -635,15 +657,18 @@ namespace dx::editor {
                 detail += actor->name.str() + "=" + formatNumber(scale.x) + "," + formatNumber(scale.y) + "," + formatNumber(scale.z) + " ";
             }
             passed = passed && brushes > 0;
+        } else if (what == "dirty" || what == "clean") {
+            passed = levelDirty() == (what == "dirty");
+            detail = levelDirty() ? "level has unsaved changes" : "level is saved";
         } else {
             detail = "unknown expectation";
         }
-        std::printf("expect %s: %s (%s)\n", passed ? "passed" : "FAILED", rest.c_str(), detail.c_str());
+        dx::log::write(passed ? dx::log::Level::Info : dx::log::Level::Error, "Log", std::format("expect {}: {} ({})", passed ? "passed" : "FAILED", rest, detail));
         std::fflush(stdout);
         return passed;
     }
 
-    void Editor::scheduleAction(int frame, const std::string& action)
+    bool Editor::scheduleInput(int frame, const std::string& action)
     {
         std::istringstream input(action);
         std::string verb;
@@ -673,7 +698,7 @@ namespace dx::editor {
             push(frame, 0, x, y, 0, false, ImGuiKey_None);
             push(frame + 1, 1, x, y, button, true, ImGuiKey_None);
             push(frame + 2, 1, x, y, button, false, ImGuiKey_None);
-            return;
+            return true;
         }
         if (verb == "drag" || verb == "rdrag") {
             float x1 = 0;
@@ -689,7 +714,7 @@ namespace dx::editor {
                 push(frame + 1 + step, 0, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, 0, false, ImGuiKey_None);
             }
             push(frame + 10, 1, x2, y2, button, false, ImGuiKey_None);
-            return;
+            return true;
         }
         if (verb == "wheel") {
             float x = 0;
@@ -698,7 +723,7 @@ namespace dx::editor {
             input >> x >> y >> delta;
             push(frame, 0, x, y, 0, false, ImGuiKey_None);
             push(frame + 1, 3, 0, delta, 0, false, ImGuiKey_None);
-            return;
+            return true;
         }
         if (verb == "type") {
             std::string rest;
@@ -708,15 +733,15 @@ namespace dx::editor {
             event.type = 4;
             event.text = rest.empty() ? rest : rest.substr(1);
             inputEvents.push_back(event);
-            return;
+            return true;
         }
         if (verb == "key" || verb == "keydown" || verb == "keyup") {
             std::string name;
             input >> name;
             ImGuiKey key = keyNamed(name);
             if (key == ImGuiKey_None) {
-                std::fprintf(stderr, "unknown key %s\n", name.c_str());
-                return;
+                dx::log::warn("Log", "unknown key {}", name);
+                return true;
             }
             if (verb != "keyup") {
                 push(frame, 2, 0, 0, 0, true, key);
@@ -724,9 +749,9 @@ namespace dx::editor {
             if (verb != "keydown") {
                 push(verb == "key" ? frame + 1 : frame, 2, 0, 0, 0, false, key);
             }
-            return;
+            return true;
         }
-        scriptActions.emplace_back(frame, action);
+        return false;
     }
 
     void Editor::applyInput(int frameNumber)
@@ -768,28 +793,28 @@ namespace dx::editor {
         }
     }
 
-    void Editor::runScript(int frameNumber, int width, int height)
+    void Editor::runStep(int frameNumber, const std::string& action, int width, int height)
     {
-        for (const auto& [frame, action] : scriptActions) {
-            if (frame != frameNumber) {
-                continue;
-            }
-            std::istringstream input(action);
-            std::string verb;
-            input >> verb;
-            std::string rest;
-            std::getline(input, rest);
-            size_t first = rest.find_first_not_of(' ');
-            rest = first == std::string::npos ? std::string() : rest.substr(first);
-            if (verb == "exec") {
-                command(rest);
-            } else if (verb == "shot") {
-                screenshot(width, height, rest);
-            } else if (verb == "state") {
-                printState();
-            } else if (verb == "expect") {
-                (expect(rest) ? passedExpectations : failedExpectations)++;
-            }
+        if (scheduleInput(frameNumber, action)) {
+            return;
+        }
+        std::istringstream input(action);
+        std::string verb;
+        input >> verb;
+        std::string rest;
+        std::getline(input, rest);
+        size_t first = rest.find_first_not_of(' ');
+        rest = first == std::string::npos ? std::string() : rest.substr(first);
+        if (verb == "exec") {
+            command(rest);
+        } else if (verb == "shot") {
+            screenshot(width, height, rest);
+        } else if (verb == "state") {
+            printState();
+        } else if (verb == "expect") {
+            (expect(rest) ? passedExpectations : failedExpectations)++;
+        } else {
+            dx::log::warn("Log", "unknown step {}", action);
         }
     }
 }

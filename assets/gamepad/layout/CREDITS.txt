@@ -1,0 +1,16 @@
+Controller illustrations:
+Xbox Series Button Icons and Controls
+PS5 Button Icons and Controls
+Switch Button Icons and Controls
+
+Author: Zacksly
+Source: https://zacksly.itch.io/
+License: Creative Commons Attribution 3.0 Unported
+https://creativecommons.org/licenses/by/3.0/
+
+Modified for Ambrosia: cropped, resized, and padded onto transparent square images.
+Ambrosia draws its own gameplay labels and connecting lines over the illustrations.
+
+The illustrations are not an endorsement of Ambrosia by Zacksly or the controller
+manufacturers. See the accompanying LICENSE-xbox.txt, LICENSE-ps.txt, and
+LICENSE-switch.txt for the original attribution instructions.

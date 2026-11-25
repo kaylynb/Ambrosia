@@ -41,20 +41,32 @@ namespace dx::extension {
     struct State {
         float viewportWidth = 800;
         float viewportHeight = 600;
-        float uiScale = 0;
+        int uiScale = 0;
         URootWindow* root = nullptr;
-        std::vector<URootWindow*> remoteRoots;
         UGC* gc = nullptr;
         UGC* windowGc = nullptr;
         Canvas2D* canvas = nullptr;
         Canvas2D* frameCanvas = nullptr;
         std::array<bool, 256> keys {};
         int32_t keyboardGrabs = 0;
+        // Windows destroyed since the last reset, which hands them to the collector.
+        std::vector<UObject*> destroyedWindows;
+        // Extension.TechMedium and Extension.Solid, loaded the first time they are needed.
+        UObject* font = nullptr;
+        UObject* solid = nullptr;
         double time = 0;
+        FrameReader frameReader;
         ViewportDrawer viewportDrawer;
         ActorDrawer actorDrawer;
         Projector projector;
         SoundPlayer soundPlayer;
+        NavigationSkip navigationSkip;
+        NavigationSkip ownFocusLook;
+        NavigationWrap navigationWrap;
+        WindowBackdrop windowBackdrop;
+        OverlayDrawer overlayDrawer;
+        ButtonHook buttonHook;
+        MouseReleaseHook mouseReleaseHook;
     };
 
     State& state();
@@ -90,6 +102,7 @@ namespace dx::extension {
     float textureWidth(UObject* texture);
     float textureHeight(UObject* texture);
     float fontHeight(UObject* font);
+    float lineFontHeight(UObject* normalFont, UObject* boldFont);
     void playSound(UWindow* window, UObject* sound, float volume, float pitch);
     std::string formatNumber(const std::string& format, double value);
 
@@ -105,4 +118,9 @@ namespace dx::extension {
     void registerTextParserNatives();
     void registerFactories();
     void registerConSysFactories();
+    // Registers the library's C++ state with the collector and names every object class it
+    // defines as reporting its references.
+    void registerReferences();
+    void registerFlagReferences();
+    void registerConSysReferences();
 }

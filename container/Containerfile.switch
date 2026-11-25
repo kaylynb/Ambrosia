@@ -1,0 +1,20 @@
+# Nintendo Switch homebrew build: devkitA64 and libnx from devkitPro, with devkitPro's SDL3 fork
+# built into the Switch portlibs, as it has no package yet. `nu x.nu build switch` builds and uses it.
+FROM docker.io/devkitpro/devkita64:latest
+
+# Branch switch-sdl-3.4 of https://github.com/devkitPro/SDL, pinned.
+ARG SDL_COMMIT=c329016c0e338ab4397ad930f83330c9fe058348
+
+RUN git init -q /tmp/sdl \
+    && git -C /tmp/sdl fetch -q --depth 1 https://github.com/devkitPro/SDL "${SDL_COMMIT}" \
+    && git -C /tmp/sdl checkout -q FETCH_HEAD \
+    && cmake -S /tmp/sdl -B /tmp/sdl/build -G Ninja \
+        -DCMAKE_TOOLCHAIN_FILE=/opt/devkitpro/cmake/Switch.cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/opt/devkitpro/portlibs/switch \
+        -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF -DSDL_EXAMPLES=OFF \
+    && cmake --build /tmp/sdl/build \
+    && cmake --install /tmp/sdl/build \
+    && rm -rf /tmp/sdl
+
+WORKDIR /src

@@ -68,6 +68,7 @@ namespace dx::extension {
         event.type = EventCharacter;
         event.ch = c;
         event.noFade = true;
+        event.typedEcho = true;
         addEvent(event, false);
     }
 
@@ -235,7 +236,9 @@ namespace dx::extension {
             processEvent(queuedStart);
             queuedStart++;
         }
-        if (queuedStart >= 0x1000) {
+        // The original game removed the first 4096 events only if a pass ended
+        // exactly at that index. A pass that skipped over it kept the events.
+        if (queuedStart == 0x1000) {
             queued.erase(queued.begin(), queued.begin() + 0x1000);
             queuedStart -= 0x1000;
         }
@@ -374,7 +377,11 @@ namespace dx::extension {
             }
             if (key == IK_Backspace && !input.empty()) {
                 input.pop_back();
-                if (computerwindow::TextX(this) > 0) {
+                // Backspace in the original edit window removed the last character immediately.
+                // If that character is still queued for display here, cancel its echo instead.
+                if (queuedStart < queued.size() && queued.back().typedEcho) {
+                    queued.pop_back();
+                } else if (computerwindow::TextX(this) > 0) {
                     computerwindow::TextX(this)--;
                     int32_t col = computerwindow::TextX(this);
                     int32_t row = computerwindow::TextY(this);
@@ -743,6 +750,8 @@ namespace dx::extension {
         {
             vm::finish(stack);
             UComputerWindow* window = self(object);
+            // The original reported the buffer as flushed only when the queue was empty.
+            // Processing the last event isn't enough if the queue still contains it.
             vm::retBool(result, !window || window->queued.empty());
         }
 

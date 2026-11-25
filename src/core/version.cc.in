@@ -1,0 +1,13 @@
+#include "core/version.h"
+
+namespace dx::version {
+    const char* label()
+    {
+        return "Ambrosia @AMBROSIA_VERSION@";
+    }
+
+    const char* build()
+    {
+        return "@AMBROSIA_BUILD_LABEL@";
+    }
+}

@@ -1,0 +1,24 @@
+wait 2
+exec grid 16 0
+wait 1
+exec camera -628 -528 528 -5825 7038
+wait 1
+exec editmode vertex
+wait 1
+clickview perspective 0.5 0.5
+wait 4
+expect status selected 1 vertex
+dragview perspective 0.5 0.5 0.6 0.45
+wait 15
+expect offgrid 16
+wait 1
+expect novertex -128 -128 128
+wait 1
+exec grid 16 1
+wait 1
+dragview perspective 0.6 0.45 0.7 0.5
+wait 15
+expect grid 16
+wait 1
+expect status edited 1 brush vertices
+quit

@@ -1,7 +1,7 @@
 #include "extension/windows.h"
 
 #include "core/objects.h"
-#include "engine/reader.h"
+#include "core/reader.h"
 
 #include <algorithm>
 #include <cstring>
@@ -17,6 +17,16 @@ namespace dx::extension {
             uint8_t type = 0;
         };
 
+        // Each open iterator holds the flag it reads next. The flags are inners of this base
+        // and found through its hash table anyway; one cleared to None ends that iteration.
+        void addReferences(ReferenceVisitor& references) override
+        {
+            UObject::addReferences(references);
+            for (auto& [id, iterator] : iterators) {
+                references(iterator.next);
+            }
+        }
+
         std::unordered_map<int32_t, Iterator> iterators;
         int32_t nextIterator = 1;
     };
@@ -25,7 +35,12 @@ namespace dx::extension {
     public:
         void serialize(Reader& reader, Linker&) override
         {
-            *reinterpret_cast<std::string*>(propertyAddress(Name("Text"))) = reader.string();
+            // Found through the class rather than the bound offset: ucc loads packages with
+            // only the core set up, before any offsets are bound.
+            std::string text = reader.string();
+            if (uint8_t* address = propertyAddress(Name("Text"))) {
+                *reinterpret_cast<std::string*>(address) = std::move(text);
+            }
         }
     };
 
@@ -119,6 +134,20 @@ namespace dx::extension {
             UObject* previous = nullptr;
             for (UObject* flag = flagbase::hashTable(base, bucket); flag; flag = flag::nextFlag(flag)) {
                 if (flag::FlagName(flag) == name && flag::flagType(flag) == type) {
+                    // XFlagBase::GetNextFlag keeps
+                    // the flag it last returned and reads its next flag on the
+                    // following call, so deleting a flag the iterator has not
+                    // reached yet is skipped over. Ambrosia keeps the next flag
+                    // instead, so move iterators that wait on this one past it.
+                    // Deleting the flag last returned frees it in the original;
+                    // here the iterator carries on with the rest of the bucket.
+                    if (UFlagBase* flagBase = cast<UFlagBase>(base)) {
+                        for (auto& entry : flagBase->iterators) {
+                            if (entry.second.next == flag) {
+                                entry.second.next = flag::nextFlag(flag);
+                            }
+                        }
+                    }
                     if (previous) {
                         flag::nextFlag(previous) = flag::nextFlag(flag);
                     } else {
@@ -410,6 +439,14 @@ namespace dx::extension {
                 }
                 flagbase::hashTable(object, bucket) = nullptr;
             }
+            // The original's iterators go on reading the freed flags here; an
+            // Ambrosia iterator over a cleared base has nothing left to return.
+            if (UFlagBase* base = self(object)) {
+                for (auto& entry : base->iterators) {
+                    entry.second.next = nullptr;
+                    entry.second.bucket = HashSize;
+                }
+            }
         }
 
         void nativeExtSetText(UObject* object, Frame& stack, void*)
@@ -449,15 +486,36 @@ namespace dx::extension {
             std::string* out = vm::getRef<std::string>(stack);
             vm::finish(stack);
             std::string part;
-            if (object) {
-                const std::string& text = extstring::Text(object);
-                int32_t length = static_cast<int32_t>(text.size());
-                int32_t first = std::clamp(start, 0, length);
-                int32_t last = std::clamp(start + count, first, length);
-                part = text.substr(static_cast<size_t>(first), static_cast<size_t>(last - first));
+            if (!object) {
+                *out = part;
+                vm::ret<int32_t>(result, 0);
+                return;
+            }
+            // XExtString::execGetTextPart never adds
+            // start and count: a negative start empties the count, the count is
+            // capped at length - start (a wrapping 32-bit subtract) and then at
+            // 240 characters, and the capped count is returned. This is the
+            // original's behaviour.
+            const std::string& text = extstring::Text(object);
+            uint32_t length = static_cast<uint32_t>(text.size());
+            if (start < 0) {
+                count = 0;
+            }
+            int32_t remaining = static_cast<int32_t>(length - static_cast<uint32_t>(start));
+            if (remaining < count) {
+                count = remaining;
+            }
+            if (count > 240) {
+                count = 240;
+            }
+            if (count < 0) {
+                count = 0;
+            }
+            if (count > 0) {
+                part = text.substr(static_cast<size_t>(start), static_cast<size_t>(count));
             }
             *out = part;
-            vm::ret<int32_t>(result, static_cast<int32_t>(part.size()));
+            vm::ret<int32_t>(result, count);
         }
 
         constexpr size_t PageSize = 255;
@@ -557,5 +615,11 @@ namespace dx::extension {
         objects::registerFactory(Name("FlagBase"), [] { return new UFlagBase(); });
         objects::registerFactory(Name("ExtString"), [] { return new UExtString(); });
         registerConSysFactories();
+    }
+
+    // An ExtString keeps its text in script data and holds no other object.
+    void registerFlagReferences()
+    {
+        gc::reportsReferences<UFlagBase, UExtString>();
     }
 }

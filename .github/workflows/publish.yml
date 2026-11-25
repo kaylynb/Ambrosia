@@ -1,0 +1,61 @@
+name: Publish verified desktop builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful packaging run ID from the default branch
+        required: true
+        type: string
+      tag:
+        description: Existing tag pointing at that commit (e.g. v0.1.0)
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  publish:
+    if: github.ref_name == github.event.repository.default_branch && github.ref_type == 'branch'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      RUN_ID: ${{ inputs.run_id }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify run, tag and archives; publish without rebuilding
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+([.-][A-Za-z0-9]+)*)?$ ]]
+          sha=$(git rev-parse --verify "refs/tags/$TAG^{commit}")
+          gh api "repos/$GH_REPO/actions/runs/$RUN_ID" | jq -e \
+            --arg repo "$GH_REPO" --arg branch "$DEFAULT_BRANCH" --arg sha "$sha" \
+            '.path == ".github/workflows/package.yml" and .event == "workflow_dispatch"
+             and .head_repository.full_name == $repo and .head_branch == $branch
+             and .head_sha == $sha and .conclusion == "success"'
+          version=${TAG#v}
+          mkdir assets
+          cd assets
+          gh run download "$RUN_ID" --name desktop-linux --dir .
+          gh run download "$RUN_ID" --name desktop-windows --dir .
+          assets=()
+          for suffix in linux-x64.tar.gz windows-x64.zip windows-x64-symbols.zip; do
+            file="ambrosia-$version-$suffix"
+            # Check this named file, not an arbitrary path from the checksum file.
+            [[ "$(sha256sum "$file")" == "$(cat "$file.sha256")" ]]
+            assets+=("$file" "$file.sha256")
+          done
+          flags=()
+          if [[ "$version" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$TAG" --verify-tag --title "Ambrosia $version" \
+            --generate-notes "${flags[@]}" "${assets[@]}"

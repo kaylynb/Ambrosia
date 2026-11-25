@@ -1,14 +1,18 @@
 #include "core/natives.h"
 
 #include "core/config.h"
+#include "core/log.h"
 #include "core/objects.h"
+#include "core/random.h"
+#include "core/text.h"
 #include "core/vm.h"
 
+#include <cctype>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <random>
 #include <string>
+#include <unordered_map>
 
 namespace dx {
     namespace {
@@ -20,10 +24,15 @@ namespace dx {
         using vm::ret;
         using vm::retBool;
 
+        std::unordered_map<std::string, std::string>& debugStrings()
+        {
+            static std::unordered_map<std::string, std::string> strings;
+            return strings;
+        }
+
         std::mt19937& randomEngine()
         {
-            static std::mt19937 engine(12345);
-            return engine;
+            return random::engine(random::Stream::Script);
         }
 
         float frand()
@@ -104,7 +113,7 @@ namespace dx {
                     ret<int32_t>(r, 0);
                     return;
                 }
-                ret<int32_t>(r, a / b);
+                ret<int32_t>(r, b == -1 ? static_cast<int32_t>(0u - static_cast<uint32_t>(a)) : a / b);
             });
             registerNative(148, [](UObject*, Frame& s, void* r) {
                 int32_t a = get<int32_t>(s);
@@ -243,9 +252,12 @@ namespace dx {
             registerNative(167, [](UObject*, Frame& s, void* r) {
                 int32_t a = get<int32_t>(s);
                 finish(s);
+                // UObject::execRand is rand() % Max, and the C runtime's rand()
+                // stops at 32767, so Rand(65536) only reaches 32767. Scripts rely on that range without
+                // knowing it, such as ScriptedPawn choosing where to throw a grenade with Rand(65536).
                 int32_t value = 0;
                 if (a > 0) {
-                    value = static_cast<int32_t>(randomEngine()() % static_cast<uint32_t>(a));
+                    value = static_cast<int32_t>((randomEngine()() & 0x7fff) % static_cast<uint32_t>(a));
                 }
                 ret<int32_t>(r, value);
             });
@@ -999,7 +1011,7 @@ namespace dx {
                 std::string text = get<std::string>(s);
                 Name tag = vm::getOpt<Name>(s, Name("ScriptLog"));
                 finish(s);
-                std::fprintf(stderr, "%s: %s\n", tag.c_str(), text.c_str());
+                log::info(tag.str(), "{}", text);
             });
             registerNative(232, [](UObject*, Frame& s, void*) {
                 std::string text = get<std::string>(s);
@@ -1183,15 +1195,20 @@ namespace dx {
                 get<std::string>(s);
                 finish(s);
             });
+            // DebugInfo's string table, which the player's SetDebug and GetDebug cheats fill and
+            // read: keys compare without case, as the engine's strings do. One table serves every
+            // DebugInfo; the game makes only the player's.
             registerNative(4002, [](UObject*, Frame& s, void*) {
-                get<std::string>(s);
-                get<std::string>(s);
+                std::string key = get<std::string>(s);
+                std::string value = get<std::string>(s);
                 finish(s);
+                debugStrings()[lowered(key)] = value;
             });
             registerNative(4003, [](UObject*, Frame& s, void* r) {
-                get<std::string>(s);
+                std::string key = get<std::string>(s);
                 finish(s);
-                ret<std::string>(r, std::string());
+                auto found = debugStrings().find(lowered(key));
+                ret<std::string>(r, found == debugStrings().end() ? std::string() : found->second);
             });
         }
     }

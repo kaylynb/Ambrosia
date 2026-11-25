@@ -2,21 +2,24 @@
 
 #include "audio/audio.h"
 #include "core/config.h"
+#include "core/log.h"
 #include "core/objects.h"
+#include "core/scoped_value.h"
+#include "core/settings.h"
 #include "core/url.h"
 #include "core/vm.h"
 #include "engine/actor.h"
+#include "engine/gamepad.h"
 #include "engine/input.h"
-#include "engine/net.h"
 #include "engine/resources.h"
 #include "engine/savegame.h"
 #include "engine/world.h"
+#include "core/text.h"
 
 #include <array>
-#include <cctype>
-#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <map>
 #include <sstream>
 #include <vector>
@@ -30,6 +33,7 @@ namespace dx {
         std::function<void(int, int)> setResHook;
         std::function<void()> toggleFullscreenHook;
         std::function<void()> screenshotHook;
+        std::function<std::string(const std::string&)> debugOverlayHook;
 
         namespace {
             struct Alias {
@@ -40,6 +44,8 @@ namespace dx {
             struct InputState {
                 std::array<std::string, 256> bindings;
                 std::array<bool, 256> down {};
+                std::array<float, 256> analog {};
+                std::vector<std::pair<std::string, float>> heldAxes;
                 std::vector<Alias> aliases;
                 std::array<std::string, 256> keyNames;
                 uint8_t action = IST_None;
@@ -96,11 +102,17 @@ namespace dx {
                     }
                     state.keyNames[i] = text;
                 }
+                // Engine.u leaves the POV hat as UnknownF0..F3; Extension's copy of the enum and
+                // DefUser.ini call them JoyPov*, so ini bindings for the d-pad resolve under those.
+                state.keyNames[IK_JoyPovUp] = "JoyPovUp";
+                state.keyNames[IK_JoyPovDown] = "JoyPovDown";
+                state.keyNames[IK_JoyPovLeft] = "JoyPovLeft";
+                state.keyNames[IK_JoyPovRight] = "JoyPovRight";
             }
 
             UObject* currentPlayer()
             {
-                return World::current ? World::current->localPlayer : nullptr;
+                return World::hasActive() ? World::active().localPlayer : nullptr;
             }
 
             uint8_t* findInputVariable(UObject* player, const std::string& variable, PropType type)
@@ -117,14 +129,8 @@ namespace dx {
 
             bool parseFloatOption(const std::string& text, const char* key, float& value)
             {
-                std::string lower = text;
-                std::string lowerKey = key;
-                for (char& c : lower) {
-                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                }
-                for (char& c : lowerKey) {
-                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                }
+                std::string lower = lowered(text);
+                std::string lowerKey = lowered(key);
                 size_t at = lower.find(lowerKey);
                 if (at == std::string::npos) {
                     return false;
@@ -190,9 +196,8 @@ namespace dx {
                     Name alias(command);
                     for (const Alias& entry : state.aliases) {
                         if (entry.name == alias) {
-                            state.inAlias = true;
+                            ScopedValue<bool> inAlias(state.inAlias, true);
                             execInputCommands(entry.command);
-                            state.inAlias = false;
                             return true;
                         }
                     }
@@ -268,15 +273,6 @@ namespace dx {
                 return true;
             }
 
-            std::string iniSection(const std::string& path)
-            {
-                size_t dot = path.rfind('.');
-                if (dot == std::string::npos) {
-                    return {};
-                }
-                return config::system().get(path.substr(0, dot), path.substr(dot + 1)).value_or("");
-            }
-
             UObject* findPropertyTarget(const std::string& className)
             {
                 UClass* cls = objects::findClass(className);
@@ -285,16 +281,30 @@ namespace dx {
                 }
                 return cls->defaultObject;
             }
-        }
 
-        void applyAudioSettings()
-        {
-            std::string section = config::system().get("Engine.Engine", "AudioDevice").value_or("");
-            auto volume = [&section](const char* key, float fallback) {
-                std::optional<std::string> value = config::system().get(section, key);
-                return value ? static_cast<float>(std::atof(value->c_str())) / 255.0f : fallback;
-            };
-            audio::setVolumes(volume("SoundVolume", 1.0f), volume("MusicVolume", 1.0f), volume("SpeechVolume", 1.0f));
+            // DefUser.ini ships bindings for 1999 joysticks; replace them with the Xbox layout
+            // while User.ini is still the game's copy, before Ambrosia has saved one of its own to
+            // the user directory (config::initialize). Once there is one, its bindings, rebinds
+            // included, are left as they are.
+            void applyGamepadDefaults()
+            {
+                InputState& state = input();
+                std::error_code missing;
+                if (std::filesystem::exists(config::user().path, missing)) {
+                    return;
+                }
+                std::vector<settings::Entry> entries;
+                for (const gamepad::Binding& entry : gamepad::defaultBindings()) {
+                    if (state.keyNames[entry.key].empty()) {
+                        return;
+                    }
+                    entries.push_back({ "Engine.Input", state.keyNames[entry.key], entry.command });
+                }
+                for (const gamepad::Binding& entry : gamepad::defaultBindings()) {
+                    state.bindings[entry.key] = entry.command;
+                }
+                settings::write(config::user(), entries);
+            }
         }
 
         std::string execute(UObject* context, const std::string& command)
@@ -304,27 +314,11 @@ namespace dx {
             if (word.empty()) {
                 return {};
             }
-            World* world = World::current;
-            if (iequals(word, "servertravel") && world && world->netMode != NM_Standalone) {
-                vm::Call(world->levelInfo, Name("ServerTravel")).s(rest).b(false).run();
-                return {};
-            }
+            World* world = World::hasActive() ? &World::active() : nullptr;
             if (iequals(word, "open") || iequals(word, "start") || iequals(word, "servertravel")) {
                 if (openMapHook) {
                     int32_t travelType = iequals(word, "open") ? TRAVEL_Partial : (iequals(word, "start") ? TRAVEL_Absolute : TRAVEL_Relative);
                     openMapHook(rest, travelType);
-                }
-                return {};
-            }
-            if (iequals(word, "getping")) {
-                return std::to_string(world && world->net && context ? world->net->playerPing(context) : 0);
-            }
-            if (iequals(word, "getloss")) {
-                return std::to_string(world && world->net && context ? world->net->playerLoss(context) : 0);
-            }
-            if (iequals(word, "disconnect")) {
-                if (openMapHook) {
-                    openMapHook(config::system().get("URL", "LocalMap").value_or("DX.dx"), TRAVEL_Absolute);
                 }
                 return {};
             }
@@ -360,6 +354,13 @@ namespace dx {
                 }
                 return {};
             }
+            // Ambrosia's own: opens or closes the game's developer overlay, toggling with no argument.
+            if (iequals(word, "DebugOverlay")) {
+                if (debugOverlayHook) {
+                    return debugOverlayHook(trim(rest));
+                }
+                return {};
+            }
             if (iequals(word, "Shot")) {
                 if (screenshotHook) {
                     screenshotHook();
@@ -388,25 +389,22 @@ namespace dx {
                     uint8_t key = keyFromName(propertyName);
                     if (key) {
                         input().bindings[key] = valueRest;
-                        config::user().set("Engine.Input", propertyName, valueRest);
-                        config::user().save();
+                        settings::write(config::user(), { { "Engine.Input", propertyName, valueRest } });
                     }
                     return {};
                 }
                 if (className.size() > 4 && iequals(className.substr(0, 4), "ini:")) {
-                    std::string section = iniSection(className.substr(4));
+                    std::string section = settings::iniPathSection(className.substr(4));
                     if (section.empty()) {
                         return "Unrecognized ini key " + className;
                     }
-                    if (iequals(propertyName, "UIScale")) {
-                        float custom = static_cast<float>(std::atof(config::system().get(section, propertyName).value_or("0").c_str()));
-                        if (custom != std::floor(custom) && std::atoi(valueRest.c_str()) == static_cast<int>(custom)) {
-                            return {};
-                        }
+                    if (settings::isAudioMixer(section, propertyName)) {
+                        settings::setAudioMixer(valueRest);
+                        return {};
                     }
-                    config::system().set(section, propertyName, valueRest);
-                    config::system().save();
-                    applyAudioSettings();
+                    if (!settings::write(config::system(), { { section, propertyName, valueRest } })) {
+                        return "Cannot save " + config::system().path.string();
+                    }
                     return {};
                 }
                 UClass* cls = objects::findClass(className);
@@ -434,8 +432,13 @@ namespace dx {
                 std::string unused;
                 std::string propertyName = firstToken(propertyRest, unused);
                 if (className.size() > 4 && iequals(className.substr(0, 4), "ini:")) {
-                    std::string section = iniSection(className.substr(4));
-                    return section.empty() ? std::string() : config::system().get(section, propertyName).value_or("");
+                    // A setting the ini has no value for answers its default, so a menu choice
+                    // shows what is in effect.
+                    std::string section = settings::iniPathSection(className.substr(4));
+                    if (settings::isAudioMixer(section, propertyName)) {
+                        return std::to_string(settings::audioMixer());
+                    }
+                    return section.empty() ? std::string() : settings::iniText(section, propertyName);
                 }
                 UObject* target = findPropertyTarget(className);
                 if (!target) {
@@ -510,6 +513,72 @@ namespace dx {
                 }
                 vm::Call(item, Name("GiveTo")).obj(player).run();
                 return "gave " + item->name.str();
+            }
+            if (iequals(word, "loadout") && world) {
+                UObject* player = currentPlayer();
+                UProperty* cheats = player ? player->cls->findProperty(Name("bCheatsEnabled")) : nullptr;
+                if (!cheats || !vm::findFunction(player, Name("HandleItemPickup"))) {
+                    return "loadout needs a Deus Ex player";
+                }
+                // The stock cheats check bCheatsEnabled; flip it on this player only so the
+                // user ini setting is left as it was.
+                uint8_t* cheatsAddress = player->data + cheats->offset;
+                std::string cheatsBefore = cheats->toText(cheatsAddress);
+                cheats->fromText(cheatsAddress, "True");
+                for (const char* cheat : { "AllAugs", "AllSkills", "AllCredits", "AllEnergy", "AllHealth" }) {
+                    execute(player, cheat);
+                }
+                // Fills 29 of the 30 inventory cells, so every item fits and the belt fills up.
+                static const char* items[] = {
+                    "DeusEx.WeaponAssaultGun",
+                    "DeusEx.WeaponRifle",
+                    "DeusEx.WeaponSawedOffShotgun",
+                    "DeusEx.WeaponCrowbar",
+                    "DeusEx.WeaponPistol",
+                    "DeusEx.WeaponStealthPistol",
+                    "DeusEx.WeaponCombatKnife",
+                    "DeusEx.WeaponProd",
+                    "DeusEx.WeaponMiniCrossbow",
+                    "DeusEx.WeaponPepperGun",
+                    "DeusEx.WeaponLAM",
+                    "DeusEx.WeaponEMPGrenade",
+                    "DeusEx.WeaponGasGrenade",
+                    "DeusEx.Multitool",
+                    "DeusEx.Lockpick",
+                    "DeusEx.MedKit",
+                    "DeusEx.BioelectricCell",
+                    "DeusEx.Binoculars",
+                    "DeusEx.TechGoggles",
+                    "DeusEx.WeaponModLaser",
+                };
+                int given = 0;
+                std::string failed;
+                for (const char* name : items) {
+                    UClass* cls = objects::findClass(name);
+                    UObject* item = cls ? world->spawn(cls, nullptr, Name(), actor::Location(player), actor::Rotation(player), nullptr, true) : nullptr;
+                    if (!item) {
+                        failed += std::string(" ") + name;
+                        continue;
+                    }
+                    // DoFrob acts on the player's FrobTarget rather than the argument, as when
+                    // the player picks something up off the floor.
+                    *reinterpret_cast<UObject**>(player->propertyAddress(Name("FrobTarget"))) = item;
+                    vm::Call pickup(player, Name("HandleItemPickup"));
+                    pickup.obj(item).b(false).run();
+                    bool picked = pickup.returnValue() && *reinterpret_cast<uint32_t*>(pickup.returnValue());
+                    *reinterpret_cast<UObject**>(player->propertyAddress(Name("FrobTarget"))) = nullptr;
+                    if (picked && actor::Owner(item) == player) {
+                        given++;
+                    } else {
+                        failed += " " + cls->name.str();
+                        if (!item->destroyed) {
+                            world->destroy(item);
+                        }
+                    }
+                }
+                execute(player, "AllAmmo");
+                cheats->fromText(cheatsAddress, cheatsBefore);
+                return "loadout gave " + std::to_string(given) + " items" + (failed.empty() ? std::string() : ", could not give" + failed);
             }
             if (iequals(word, "invlist") && world) {
                 UObject* player = currentPlayer();
@@ -600,7 +669,7 @@ namespace dx {
             if (iequals(word, "keybinding")) {
                 return binding(keyFromName(rest));
             }
-            if (iequals(word, "set_binding") || iequals(word, "setbind")) {
+            if (iequals(word, "setbind")) {
                 std::string commandRest;
                 std::string keyText = firstToken(rest, commandRest);
                 uint8_t key = keyFromName(keyText);
@@ -634,7 +703,7 @@ namespace dx {
                 }
             }
             if (!execInput(command)) {
-                std::fprintf(stderr, "unrecognized command: %s\n", command.c_str());
+                log::info("Log", "unrecognized command: {}", command);
             }
             return {};
         }
@@ -669,6 +738,7 @@ namespace dx {
                     state.bindings[code] = value;
                 }
             }
+            applyGamepadDefaults();
             state.loaded = true;
         }
 
@@ -689,20 +759,27 @@ namespace dx {
             if (state.bindings[code].empty()) {
                 return false;
             }
-            uint8_t savedAction = state.action;
-            float savedDelta = state.delta;
-            state.action = action;
-            state.delta = delta;
+            ScopedValue<uint8_t> boundAction(state.action, action);
+            ScopedValue<float> boundDelta(state.delta, delta);
             execInputCommands(state.bindings[code]);
-            state.action = savedAction;
-            state.delta = savedDelta;
             return true;
+        }
+
+        void analog(uint8_t code, float value)
+        {
+            input().analog[code] = value;
+        }
+
+        void heldAxis(const std::string& variable, float amount)
+        {
+            input().heldAxes.emplace_back(variable, amount);
         }
 
         void readInput(UObject* player, float deltaSeconds)
         {
             InputState& state = input();
             if (!player || !player->cls) {
+                state.heldAxes.clear();
                 return;
             }
             if (deltaSeconds != -1.0f) {
@@ -710,8 +787,18 @@ namespace dx {
                     if (state.down[static_cast<size_t>(i)]) {
                         key(static_cast<uint8_t>(i), IST_Hold, deltaSeconds);
                     }
+                    float value = state.analog[static_cast<size_t>(i)];
+                    if (value != 0) {
+                        key(static_cast<uint8_t>(i), IST_Hold, value * deltaSeconds);
+                    }
+                }
+                for (const auto& [variable, amount] : state.heldAxes) {
+                    if (uint8_t* address = findInputVariable(player, variable, PropType::Float)) {
+                        *reinterpret_cast<float*>(address) += amount;
+                    }
                 }
             }
+            state.heldAxes.clear();
             float scale = deltaSeconds != -1.0f ? 20.0f / deltaSeconds : 0.0f;
             for (UProperty* property : player->cls->properties) {
                 if ((property->propertyFlags & CPF_Input) && property->type == PropType::Float) {
@@ -724,6 +811,7 @@ namespace dx {
         {
             InputState& state = input();
             state.down.fill(false);
+            state.analog.fill(0);
             if (!player || !player->cls) {
                 return;
             }

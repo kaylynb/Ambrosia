@@ -1,6 +1,7 @@
 #include "core/objects.h"
 #include "core/vm.h"
 #include "engine/actor.h"
+#include "engine/bsp.h"
 #include "engine/resources.h"
 #include "engine/world.h"
 
@@ -58,122 +59,6 @@ namespace dx {
             return { p.x, p.y, p.z, p.w };
         }
 
-        int classify(const DVec& center, const DVec& extent, const DPlane& plane)
-        {
-            double e = extent.x * std::abs(plane.x) + extent.y * std::abs(plane.y) + extent.z * std::abs(plane.z);
-            double s = center.x * plane.x + center.y * plane.y + center.z * plane.z - plane.w;
-            if (s - e > 0) {
-                return -1;
-            }
-            if (s + e < 0) {
-                return 1;
-            }
-            return 0;
-        }
-
-        struct HullScratch {
-            std::vector<DPlane> planes;
-            std::vector<int32_t> planeNodes;
-        };
-
-        bool hullBounds(const UModel& model, int32_t bound, DVec& min, DVec& max)
-        {
-            if (bound < 0 || static_cast<size_t>(bound) >= model.leafHulls.size()) {
-                return false;
-            }
-            size_t index = static_cast<size_t>(bound);
-            while (index < model.leafHulls.size() && model.leafHulls[index] >= 0) {
-                int32_t node = model.leafHulls[index] & ~0x40000000;
-                if (node < 0 || static_cast<size_t>(node) >= model.nodes.size()) {
-                    return false;
-                }
-                index++;
-            }
-            index++;
-            if (index + 6 > model.leafHulls.size()) {
-                return false;
-            }
-            float box[6];
-            for (int i = 0; i < 6; i++) {
-                int32_t raw = model.leafHulls[index + static_cast<size_t>(i)];
-                std::memcpy(&box[i], &raw, 4);
-            }
-            min = { box[0], box[1], box[2] };
-            max = { box[3], box[4], box[5] };
-            return true;
-        }
-
-        void hullPlanes(const UModel& model, int32_t bound, HullScratch& scratch)
-        {
-            scratch.planes.clear();
-            scratch.planeNodes.clear();
-            size_t index = static_cast<size_t>(bound);
-            while (index < model.leafHulls.size() && model.leafHulls[index] >= 0) {
-                int32_t entry = model.leafHulls[index];
-                bool flip = (entry & 0x40000000) != 0;
-                int32_t node = entry & ~0x40000000;
-                DPlane plane = nodePlane(model, node);
-                if (flip) {
-                    plane = { -plane.x, -plane.y, -plane.z, -plane.w };
-                }
-                scratch.planes.push_back(plane);
-                scratch.planeNodes.push_back(node);
-                index++;
-            }
-        }
-
-        bool overlapNode(const UModel& model, int32_t nodeIndex, const DVec& center, const DVec& extent, int depth, HullScratch& scratch)
-        {
-            while (nodeIndex >= 0 && static_cast<size_t>(nodeIndex) < model.nodes.size() && depth < 4096) {
-                depth++;
-                const BspNode& node = model.nodes[static_cast<size_t>(nodeIndex)];
-                DVec min;
-                DVec max;
-                if (node.collisionBound >= 0 && hullBounds(model, node.collisionBound, min, max)) {
-                    bool boxes = !(min.x > center.x + extent.x || center.x - extent.x > max.x || min.y > center.y + extent.y || center.y - extent.y > max.y || min.z > center.z + extent.z || center.z - extent.z > max.z);
-                    if (boxes) {
-                        hullPlanes(model, node.collisionBound, scratch);
-                        bool outside = false;
-                        for (const DPlane& plane : scratch.planes) {
-                            if (classify(center, extent, plane) == -1) {
-                                outside = true;
-                                break;
-                            }
-                        }
-                        if (!outside) {
-                            return true;
-                        }
-                    }
-                }
-                DVec padded { extent.x * 1.1, extent.y * 1.1, extent.z * 1.1 };
-                int side = classify(center, padded, nodePlane(model, nodeIndex));
-                bool front = node.front >= 0 && side <= 0;
-                bool back = node.back >= 0 && side >= 0;
-                if (front && back) {
-                    if (overlapNode(model, node.front, center, extent, depth, scratch)) {
-                        return true;
-                    }
-                    nodeIndex = node.back;
-                } else if (front) {
-                    nodeIndex = node.front;
-                } else if (back) {
-                    nodeIndex = node.back;
-                } else {
-                    break;
-                }
-            }
-            return false;
-        }
-
-        bool modelOverlap(const UModel* model, const Vector& center, const Vector& extent)
-        {
-            if (!model || model->nodes.empty()) {
-                return false;
-            }
-            static HullScratch scratch;
-            return overlapNode(*model, 0, toD(center), toD(extent), 0, scratch);
-        }
-
         struct BrushTransform {
             Vector location;
             Coords axes;
@@ -194,27 +79,14 @@ namespace dx {
             return t;
         }
 
-        Vector worldToBrush(const BrushTransform& t, const Vector& point)
-        {
-            Vector local = transformVector(t.axes, point - t.location);
-            return { local.x / t.scale.x + t.prePivot.x, local.y / t.scale.y + t.prePivot.y, local.z / t.scale.z + t.prePivot.z };
-        }
-
         Vector brushNormalToWorld(const BrushTransform& t, const Vector& normal)
         {
             Vector scaled { normal.x / t.scale.x, normal.y / t.scale.y, normal.z / t.scale.z };
             return untransformVector(t.axes, scaled).normal();
         }
 
-        bool isCsg(const BspNode& node, uint32_t extraFlags)
-        {
-            return node.numVertices > 0 && !(node.nodeFlags & (0x20 | 0x01 | extraFlags));
-        }
-
-        bool childOutside(const BspNode& node, int child, bool outside, uint32_t extraFlags = 0)
-        {
-            return child ? (outside || isCsg(node, extraFlags)) : (outside && !isCsg(node, extraFlags));
-        }
+        using bsp::childOutside;
+        using bsp::isCsg;
 
         DPlane tracePlane(const UModel& model, const BrushTransform* owner, int32_t index)
         {
@@ -304,12 +176,10 @@ namespace dx {
                     }
                     hulls.push_back(hull);
                     hullNodes.push_back(hullNode);
-                    flags.push_back((hull.x < 0 ? 0x01 : hull.x > 0 ? 0x02
-                                                                    : 0)
-                        | (hull.y < 0 ? 0x04 : hull.y > 0 ? 0x08
-                                                          : 0)
-                        | (hull.z < 0 ? 0x10 : hull.z > 0 ? 0x20
-                                                          : 0));
+                    // Count a zero X or Y component as positive, but give zero Z neither sign.
+                    // This gives edges against a floor or ceiling both X and Y bevels.
+                    flags.push_back((hull.x < 0 ? 0x01 : 0x02) | (hull.y < 0 ? 0x04 : 0x08) | (hull.z < 0 ? 0x10 : hull.z > 0 ? 0x20
+                                                                                                                              : 0));
                     index++;
                 }
                 float box[6] = {};
@@ -434,10 +304,10 @@ namespace dx {
                     double dist1 = p.x * start.x + p.y * start.y + p.z * start.z - p.w;
                     double dist2 = p.x * end.x + p.y * end.y + p.z * end.z - p.w;
                     if (dist1 > -0.001 && dist2 > -0.001) {
-                        outside = outside || isCsg(node, nodeFlags & ~0x10u);
+                        outside = outside || isCsg(node, static_cast<uint8_t>(nodeFlags & ~0x10u));
                         nodeIndex = node.front;
                     } else if (dist1 < 0.001 && dist2 < 0.001) {
-                        outside = outside && !isCsg(node, nodeFlags & ~0x10u);
+                        outside = outside && !isCsg(node, static_cast<uint8_t>(nodeFlags & ~0x10u));
                         nodeIndex = node.back;
                     } else {
                         double f = dist1 / (dist2 - dist1);
@@ -466,6 +336,166 @@ namespace dx {
             }
         };
 
+        // UModel::PointCheck for a box: down to the
+        // leaves the box reaches, and at one inside solid space against the hull of the node above
+        // it. A plane separates the box when the box's push-out is no more than its distance in
+        // front; the level's hulls also get their bounding box, and every hull gets the edge
+        // bevels a box trace uses.
+        struct BoxPointCheck {
+            const UModel& model;
+            const BrushTransform* owner;
+            DVec center;
+            DVec extent;
+            uint8_t extraFlags = 0;
+            std::vector<DPlane> hulls {};
+            std::vector<int> flags {};
+
+            DPlane plane(int32_t index) const
+            {
+                return tracePlane(model, owner, index);
+            }
+
+            bool separates(const DPlane& p) const
+            {
+                double pushOut = std::abs(extent.x * p.x) + std::abs(extent.y * p.y) + std::abs(extent.z * p.z);
+                double distance = p.x * center.x + p.y * center.y + p.z * center.z - p.w;
+                return pushOut <= distance;
+            }
+
+            bool bevelSeparates(size_t i, size_t j, const DVec& axis, int mask) const
+            {
+                if (((flags[i] | flags[j]) & mask) != mask) {
+                    return false;
+                }
+                DVec ni { hulls[i].x, hulls[i].y, hulls[i].z };
+                DVec nj { hulls[j].x, hulls[j].y, hulls[j].z };
+                if (dot3(cross3(axis, ni), cross3(axis, nj)) <= 0.001) {
+                    return false;
+                }
+                DVec d = cross3(ni, nj);
+                double dd = dot3(d, d);
+                if (dd < 1e-6) {
+                    // The original goes on with a zero direction, which gives a plane that
+                    // separates nothing.
+                    return false;
+                }
+                DVec c1 = cross3(nj, d);
+                DVec c2 = cross3(d, ni);
+                DVec point { (hulls[i].w * c1.x + hulls[j].w * c2.x) / dd, (hulls[i].w * c1.y + hulls[j].w * c2.y) / dd, (hulls[i].w * c1.z + hulls[j].w * c2.z) / dd };
+                DVec a = normalize3(cross3(axis, normalize3(d)));
+                if (dot3(ni, a) < 0.0) {
+                    a = { -a.x, -a.y, -a.z };
+                }
+                return separates({ a.x, a.y, a.z, dot3(point, a) });
+            }
+
+            bool leafOverlaps(const BspNode& node)
+            {
+                hulls.clear();
+                flags.clear();
+                size_t index = static_cast<size_t>(node.collisionBound);
+                while (index < model.leafHulls.size() && model.leafHulls[index] >= 0 && hulls.size() < 64) {
+                    int32_t entry = model.leafHulls[index];
+                    DPlane hull = plane(entry & ~0x40000000);
+                    if (entry & 0x40000000) {
+                        hull = { -hull.x, -hull.y, -hull.z, -hull.w };
+                    }
+                    hulls.push_back(hull);
+                    flags.push_back((hull.x < 0 ? 0x01 : 0x02) | (hull.y < 0 ? 0x04 : 0x08) | (hull.z < 0 ? 0x10 : hull.z > 0 ? 0x20
+                                                                                                                              : 0));
+                    index++;
+                }
+                for (const DPlane& hull : hulls) {
+                    if (separates(hull)) {
+                        return false;
+                    }
+                }
+                if (!owner) {
+                    double box[6] = {};
+                    size_t boxIndex = static_cast<size_t>(node.collisionBound) + hulls.size() + 1;
+                    for (size_t i = 0; i < 6 && boxIndex + i < model.leafHulls.size(); i++) {
+                        int32_t raw = model.leafHulls[boxIndex + i];
+                        float value = 0;
+                        std::memcpy(&value, &raw, 4);
+                        box[i] = static_cast<double>(value);
+                    }
+                    const DPlane bounds[6] = { { 0, 0, -1, 0.1 - box[2] }, { 0, 0, 1, box[5] + 0.1 }, { -1, 0, 0, 0.1 - box[0] }, { 1, 0, 0, box[3] - 0.1 }, { 0, -1, 0, 0.1 - box[1] }, { 0, 1, 0, box[4] - 0.1 } };
+                    for (const DPlane& bound : bounds) {
+                        if (separates(bound)) {
+                            return false;
+                        }
+                    }
+                }
+                for (size_t i = 0; i < hulls.size(); i++) {
+                    for (size_t j = 0; j < i; j++) {
+                        if (bevelSeparates(i, j, { 1, 0, 0 }, 0x03) || bevelSeparates(i, j, { 0, 1, 0 }, 0x0c) || bevelSeparates(i, j, { 0, 0, 1 }, 0x30)) {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            bool check(int32_t parent, int32_t nodeIndex, bool outside)
+            {
+                bool overlaps = false;
+                while (nodeIndex >= 0) {
+                    const BspNode& node = model.nodes[static_cast<size_t>(nodeIndex)];
+                    DPlane p = plane(nodeIndex);
+                    double pushOut = std::abs(extent.x * 1.1 * p.x) + std::abs(extent.y * 1.1 * p.y) + std::abs(extent.z * 1.1 * p.z);
+                    double distance = p.x * center.x + p.y * center.y + p.z * center.z - p.w;
+                    if (-pushOut < distance && check(nodeIndex, node.front, outside || isCsg(node, extraFlags))) {
+                        overlaps = true;
+                    }
+                    outside = outside && !isCsg(node, extraFlags);
+                    parent = nodeIndex;
+                    nodeIndex = node.back;
+                    if (pushOut < distance) {
+                        return overlaps;
+                    }
+                }
+                if (outside || parent < 0) {
+                    return overlaps;
+                }
+                const BspNode& leaf = model.nodes[static_cast<size_t>(parent)];
+                if (leaf.collisionBound < 0) {
+                    return overlaps;
+                }
+                return leafOverlaps(leaf) || overlaps;
+            }
+        };
+
+        bool modelOverlap(const UModel* model, const BrushTransform* owner, const Vector& center, const Vector& extent)
+        {
+            if (!model) {
+                return false;
+            }
+            if (model->nodes.empty()) {
+                return model->rootOutside == 0;
+            }
+            DVec point = toD(center);
+            if (extent.zero()) {
+                // A point is inside when the walk ends in solid space (a point exactly on a plane
+                // counts as behind it).
+                bool outside = model->rootOutside != 0;
+                int32_t nodeIndex = 0;
+                while (nodeIndex >= 0) {
+                    const BspNode& node = model->nodes[static_cast<size_t>(nodeIndex)];
+                    DPlane p = tracePlane(*model, owner, nodeIndex);
+                    if (p.x * point.x + p.y * point.y + p.z * point.z - p.w <= 0.0) {
+                        outside = outside && !isCsg(node, 0);
+                        nodeIndex = node.back;
+                    } else {
+                        outside = outside || isCsg(node, 0);
+                        nodeIndex = node.front;
+                    }
+                }
+                return !outside;
+            }
+            BoxPointCheck check { *model, owner, point, toD(extent) };
+            return check.check(0, 0, model->rootOutside != 0);
+        }
+
         bool modelTrace(const UModel* model, const BrushTransform* owner, const Vector& start, const Vector& end, const Vector& extent, float& time, Vector& normal, int32_t* hitNode = nullptr, uint8_t nodeFlags = 0)
         {
             if (!model || model->nodes.empty()) {
@@ -478,9 +508,17 @@ namespace dx {
                     return false;
                 }
                 Vector location = toF(trace.location);
-                time = std::clamp((location - start).dot(delta) / delta.dot(delta) - 0.5f / delta.size(), 0.0f, 1.0f);
+                float rawTime = (location - start).dot(delta) / delta.dot(delta) - 0.5f / delta.size();
+                // A zero-length trace inside solid geometry gives NaN. Treat it as a hit
+                // at the start (time 0); rawTime >= 0 is false for NaN.
+                time = !(rawTime >= 0.0f) ? 0.0f : std::min(rawTime, 1.0f);
                 DPlane p = trace.plane(trace.item);
                 normal = { static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(p.z) };
+                // UModel::LineCheck turns a level hit's normal to face back
+                // along the trace; a brush's normal is left as its plane gives it.
+                if (!owner && normal.dot(delta) > 0.0f) {
+                    normal = normal * -1.0f;
+                }
                 if (hitNode) {
                     *hitNode = trace.item;
                 }
@@ -520,7 +558,7 @@ namespace dx {
                 return false;
             }
             BrushTransform t = brushTransform(a);
-            return modelOverlap(model, worldToBrush(t, center), extent);
+            return modelOverlap(model, &t, center, extent);
         }
 
         bool cylinderTrace(UObject* target, const Vector& start, const Vector& end, const Vector& extent, float& time, Vector& normal)
@@ -605,13 +643,12 @@ namespace dx {
             return true;
         }
 
-        bool actorCollides(UObject* other, UObject* source, uint32_t flags)
+        bool actorCollides(const World& world, UObject* other, UObject* source, uint32_t flags)
         {
             if (!other || other == source || other->destroyed || !actor::bCollideActors(other)) {
                 return false;
             }
-            World* world = World::current;
-            if (world && other == world->levelInfo) {
+            if (other == world.levelInfo) {
                 return false;
             }
             int guard = 0;
@@ -633,7 +670,7 @@ namespace dx {
                 return actor::bProjTarget(other) || (actor::bBlockActors(other) && actor::bBlockPlayers(other));
             }
             if (flags & TRACE_Blocking) {
-                return source ? isBlockedBy(source, other) : (actor::bBlockActors(other) != 0 || actor::bBlockPlayers(other) != 0);
+                return source ? isBlockedBy(world, source, other) : (actor::bBlockActors(other) != 0 || actor::bBlockPlayers(other) != 0);
             }
             return (flags & TRACE_Others) != 0;
         }
@@ -663,7 +700,9 @@ namespace dx {
         while (guard++ < 10000) {
             const BspNode& node = model->nodes[static_cast<size_t>(index)];
             float distance = node.plane.x * location.x + node.plane.y * location.y + node.plane.z * location.z - node.plane.w;
-            int side = distance > 0 ? 1 : 0;
+            // UModel::PointRegion puts a point on the plane in front, the side a
+            // surface faces: an actor exactly on a floor or wall is in the room.
+            int side = distance >= 0 ? 1 : 0;
             int32_t next = side ? node.front : node.back;
             if (next < 0) {
                 uint8_t zone = node.zone[side];
@@ -803,12 +842,14 @@ namespace dx {
         if (flags & (TRACE_Level | TRACE_LevelGeometry)) {
             CheckResult hit;
             if (bspLineCheck(hit, start, end, extent, nodeFlags)) {
+                // ULevel::MultiLineCheck: actors are checked up to 5 units
+                // past the level hit, and only movers when that hit is within the first 1% of the
+                // trace and under 30 units away. Without the distance test, a long trace that ends on
+                // a wall would miss whatever stands in front of it.
                 float distance = (hit.location - start).size();
-                if (distance > 0) {
-                    dilation = std::min(1.0f, hit.time * (distance + 5.0f) / distance);
-                }
+                dilation = std::min(1.0f, (distance + 5.0f) * hit.time / (distance + 0.0001f));
                 actorEnd = start + (end - start) * dilation;
-                onlyMovers = hit.time < 0.01f;
+                onlyMovers = hit.time < 0.01f && distance < 30.0f;
                 hits.push_back(hit);
             }
         }
@@ -831,7 +872,7 @@ namespace dx {
                         continue;
                     }
                 }
-                if (!actorCollides(other, source, flags)) {
+                if (!actorCollides(*this, other, source, flags)) {
                     continue;
                 }
                 float time = 1;
@@ -856,6 +897,10 @@ namespace dx {
                         hit.time = (hit.location - start).size() / (end - start).size();
                     }
                     hits.push_back(hit);
+                    // The original keeps at most 64 results, the level hit included.
+                    if (hits.size() >= 64) {
+                        break;
+                    }
                 }
             }
         }
@@ -880,7 +925,7 @@ namespace dx {
     bool World::pointCheck(CheckResult& hit, const Vector& location, const Vector& extent, UObject* source, bool checkActors)
     {
         hit = CheckResult();
-        if (modelOverlap(level ? level->model : nullptr, location, extent)) {
+        if (modelOverlap(level ? level->model : nullptr, nullptr, location, extent)) {
             hit.actor = levelInfo;
             hit.location = location;
             hit.time = 0;
@@ -890,7 +935,7 @@ namespace dx {
             return false;
         }
         for (UObject* other : collisionHash.query(location - extent, location + extent)) {
-            if (!actorCollides(other, source, TRACE_Pawns | TRACE_Movers | TRACE_Others)) {
+            if (!actorCollides(*this, other, source, TRACE_Pawns | TRACE_Movers | TRACE_Others)) {
                 continue;
             }
             bool overlap = false;
@@ -990,7 +1035,7 @@ namespace dx {
             }
         }
         for (UObject* other : encroached) {
-            if (!isBlockedBy(a, other)) {
+            if (!isBlockedBy(*this, a, other)) {
                 continue;
             }
             if (isMovingBrush(a) && !isMovingBrush(other)) {
@@ -1021,13 +1066,13 @@ namespace dx {
         if (touchNotify) {
             for (int i = 0; i < 4; i++) {
                 UObject* touching = actor::Touching(a, i);
-                if (touching && !isOverlapping(a, touching)) {
+                if (touching && !isOverlapping(this, a, touching)) {
                     endTouch(a, touching, false);
                 }
             }
         }
         for (UObject* other : encroached) {
-            if (isBlockedBy(a, other)) {
+            if (isBlockedBy(*this, a, other)) {
                 vm::Call(other, Name("EncroachedBy")).obj(a).run();
             } else if (touchNotify) {
                 beginTouch(a, other);
@@ -1043,7 +1088,9 @@ namespace dx {
         }
         Vector newLocation = destination;
         bool result = true;
-        if ((!noCheck && actor::bCollideWorld(a)) || actor::bCollideWhenPlacing(a)) {
+        // ULevel::FarMoveActor: unlike Epic's version, bNoCheck skips FindSpot for
+        // bCollideWhenPlacing actors too.
+        if (!noCheck && (actor::bCollideWorld(a) || actor::bCollideWhenPlacing(a))) {
             result = findSpot(cylinderExtent(a), newLocation, false, false);
         }
         if (result && !test && !noCheck) {
@@ -1055,7 +1102,8 @@ namespace dx {
         if (result) {
             if (!test) {
                 if (actor::StandingCount(a) > 0) {
-                    for (UObject* other : actors) {
+                    for (size_t i = 0; i < actors.size(); i++) {
+                        UObject* other = actors[i];
                         if (other && actor::Base(other) == a) {
                             setBase(other, nullptr, true);
                         }
@@ -1078,7 +1126,9 @@ namespace dx {
         }
         hit = CheckResult();
         bool movingBrush = isMovingBrush(a);
-        if (delta.x * delta.x + delta.y * delta.y + delta.z * delta.z < 1e-8f) {
+        // ULevel::MoveActor treats a move as none when each component is
+        // under 0.0001.
+        if (std::abs(delta.x) < 0.0001f && std::abs(delta.y) < 0.0001f && std::abs(delta.z) < 0.0001f) {
             if (rotation == actor::Rotation(a)) {
                 return true;
             }
@@ -1113,7 +1163,7 @@ namespace dx {
                     bool pawnLike = isPawn(other) || other->isA(engineClasses().decoration);
                     if ((!ignorePawns || actor::bStatic(other) || !pawnLike) && (!ignoreBases || !isBasedOn(a, other)) && !isBasedOn(other, a)) {
                         maybeTouched = true;
-                        if (isBlockedBy(a, other)) {
+                        if (isBlockedBy(*this, a, other)) {
                             hit = candidate;
                             break;
                         }
@@ -1141,9 +1191,11 @@ namespace dx {
                 }
                 Vector rotationMotion;
                 if (!(rotation == oldRotation)) {
-                    Rotator reduced { 0, (rotation.yaw & 65535) - (oldRotation.yaw & 65535), 0 };
+                    // Deus Ex's ReduceAngle keeps the yaw to multiples of 4, as & 0xfffc.
+                    Rotator reduced { 0, (rotation.yaw & 0xfffc) - (oldRotation.yaw & 0xfffc), 0 };
                     Vector pointer = actor::Location(a) - actor::Location(other);
                     Coords spin = rotationAxes(reduced);
+                    // Apply the inverse rotation to the offset between the two actors.
                     rotationMotion = pointer - untransformVector(spin, pointer);
                 }
                 CheckResult otherHit;
@@ -1185,7 +1237,7 @@ namespace dx {
                     if (other == levelInfo || other->destroyed || a->destroyed) {
                         continue;
                     }
-                    if (!isBasedOn(other, a) && (!ignoreBases || !isBasedOn(a, other)) && !isBlockedBy(a, other)) {
+                    if (!isBasedOn(other, a) && (!ignoreBases || !isBasedOn(a, other)) && !isBlockedBy(*this, a, other)) {
                         beginTouch(a, other);
                     }
                 }
@@ -1193,7 +1245,7 @@ namespace dx {
             if (!a->destroyed) {
                 for (int i = 0; i < 4; i++) {
                     UObject* touching = actor::Touching(a, i);
-                    if (touching && !isOverlapping(a, touching)) {
+                    if (touching && !isOverlapping(this, a, touching)) {
                         endTouch(a, touching, false);
                     }
                 }
@@ -1207,18 +1259,18 @@ namespace dx {
 
     bool moveSmooth(UObject* a, const Vector& delta)
     {
-        World* world = World::current;
-        if (!world) {
+        if (!World::hasActive()) {
             return false;
         }
+        World& world = World::active();
         CheckResult hit;
-        bool moved = world->moveActor(a, delta, actor::Rotation(a), hit, false, false, false, false);
+        bool moved = world.moveActor(a, delta, actor::Rotation(a), hit, false, false, false, false);
         if (hit.time < 1.0f && !a->destroyed) {
             Vector adjusted = (delta - hit.normal * delta.dot(hit.normal)) * (1.0f - hit.time);
             if (delta.dot(adjusted) >= 0) {
                 Vector oldNormal = hit.normal;
                 Vector desired = delta.normal();
-                world->moveActor(a, adjusted, actor::Rotation(a), hit, false, false, false, false);
+                world.moveActor(a, adjusted, actor::Rotation(a), hit, false, false, false, false);
                 if (hit.time < 1.0f && !a->destroyed) {
                     vm::Call(a, Name("HitWall")).v(hit.normal).obj(hit.actor).run();
                     if (oldNormal.dot(hit.normal) <= 0) {
@@ -1233,7 +1285,7 @@ namespace dx {
                             adjusted = {};
                         }
                     }
-                    world->moveActor(a, adjusted, actor::Rotation(a), hit, false, false, false, false);
+                    world.moveActor(a, adjusted, actor::Rotation(a), hit, false, false, false, false);
                 }
             }
         }

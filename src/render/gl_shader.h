@@ -1,5 +1,6 @@
 #pragma once
 
+#include "render/gl_handle.h"
 #include "render/gl_math.h"
 #include "render/render_device.h"
 
@@ -10,7 +11,6 @@ namespace dx {
     class UberShader {
     public:
         UberShader();
-        ~UberShader();
         UberShader(const UberShader&) = delete;
         UberShader& operator=(const UberShader&) = delete;
 
@@ -34,7 +34,7 @@ namespace dx {
         void bindStatic(uint32_t vao);
         void drawStatic(uint32_t vao, int32_t first, int32_t count);
         void drawStaticRanges(uint32_t vao, const int32_t* firsts, const int32_t* counts, int32_t ranges);
-        uint32_t createStatic(const std::vector<GLVertex>& vertices, uint32_t& buffer);
+        StaticGeometry createStatic(const std::vector<GLVertex>& vertices);
 
     private:
         struct Locations {
@@ -76,13 +76,13 @@ namespace dx {
         void select(int32_t index);
         void sendState();
 
-        uint32_t programs[2] = {};
+        ProgramHandle programs[2];
         Locations locations[2];
         bool stale[2] = {};
         int32_t current = 0;
         State state;
-        uint32_t streamVao = 0;
-        uint32_t streamVbo = 0;
+        VertexArrayHandle streamVao;
+        BufferHandle streamVbo;
         size_t streamCapacity = 0;
         size_t streamOffset = 0;
         int32_t uploadBase = 0;
@@ -91,23 +91,30 @@ namespace dx {
     class GammaPass {
     public:
         GammaPass();
-        ~GammaPass();
         GammaPass(const GammaPass&) = delete;
         GammaPass& operator=(const GammaPass&) = delete;
 
         void apply(int width, int height, float exponent);
         void bindTarget(int width, int height);
         void resolve(int width, int height, float exponent);
+        // Copies the window into the texture without drawing, so the last frame is kept when
+        // the brightness needs no pass.
+        void keep(int width, int height);
+        // The last frame kept, before the brightness curve, top row first in RGBA. Each pass
+        // above leaves it in the texture until the next frame.
+        bool read(std::vector<uint8_t>& rgba, int& width, int& height);
 
     private:
         void resize(int width, int height);
         void draw(int width, int height, float exponent);
 
-        uint32_t program = 0;
-        uint32_t vao = 0;
-        uint32_t texture = 0;
-        uint32_t framebuffer = 0;
-        uint32_t depthBuffer = 0;
+        ProgramHandle program;
+        VertexArrayHandle vao;
+        TextureHandle texture;
+        FramebufferHandle framebuffer;
+        RenderbufferHandle depthBuffer;
+        FramebufferHandle readFramebuffer;
+        bool kept = false;
         int textureWidth = 0;
         int textureHeight = 0;
         int32_t exponentLocation = -1;
@@ -116,7 +123,6 @@ namespace dx {
     class ScenePass {
     public:
         ScenePass();
-        ~ScenePass();
         ScenePass(const ScenePass&) = delete;
         ScenePass& operator=(const ScenePass&) = delete;
 
@@ -130,18 +136,17 @@ namespace dx {
         void clearMask();
 
     private:
-        void releaseTextures();
-        void releaseMask();
+        void release();
 
-        uint32_t program = 0;
-        uint32_t vao = 0;
-        uint32_t texture = 0;
-        uint32_t framebuffer = 0;
-        uint32_t colorBuffer = 0;
-        uint32_t depthBuffer = 0;
-        uint32_t maskBuffer = 0;
-        uint32_t depthTexture = 0;
-        uint32_t maskTexture = 0;
+        ProgramHandle program;
+        VertexArrayHandle vao;
+        TextureHandle texture;
+        FramebufferHandle framebuffer;
+        RenderbufferHandle colorBuffer;
+        RenderbufferHandle depthBuffer;
+        RenderbufferHandle maskBuffer;
+        TextureHandle depthTexture;
+        TextureHandle maskTexture;
         int32_t target = 0;
         int32_t maxSamples = 0;
         int32_t inverseSizeLocation = -1;
@@ -159,7 +164,6 @@ namespace dx {
     class OcclusionPass {
     public:
         OcclusionPass();
-        ~OcclusionPass();
         OcclusionPass(const OcclusionPass&) = delete;
         OcclusionPass& operator=(const OcclusionPass&) = delete;
 
@@ -168,7 +172,7 @@ namespace dx {
 
     private:
         struct Program {
-            uint32_t id = 0;
+            ProgramHandle id;
             int32_t linearize = -1;
             int32_t divisor = -1;
             int32_t unproject = -1;
@@ -186,14 +190,14 @@ namespace dx {
         Program blur;
         Program blurResolve;
         Program composite;
-        uint32_t vao = 0;
-        uint32_t resolveFramebuffer = 0;
-        uint32_t depthTexture = 0;
-        uint32_t maskTexture = 0;
-        uint32_t packedFramebuffers[3] = {};
-        uint32_t packedTextures[3] = {};
-        uint32_t resultFramebuffer = 0;
-        uint32_t resultTexture = 0;
+        VertexArrayHandle vao;
+        FramebufferHandle resolveFramebuffer;
+        TextureHandle depthTexture;
+        TextureHandle maskTexture;
+        FramebufferHandle packedFramebuffers[3];
+        TextureHandle packedTextures[3];
+        FramebufferHandle resultFramebuffer;
+        TextureHandle resultTexture;
         int textureWidth = 0;
         int textureHeight = 0;
         int textureDivisor = 0;

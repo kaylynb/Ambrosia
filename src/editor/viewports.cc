@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "core/log.h"
 #include "engine/actor_selection.h"
 
 namespace dx::editor {
@@ -108,45 +109,45 @@ namespace dx::editor {
         return actor->isA(dx::Name("Brush")) && dx::actor::Brush(actor);
     }
 
+    // The objects are made once per target and only their storage changes with the view's size.
     void Editor::ensureFramebuffer(int width, int height)
     {
-        if (framebuffer && width == fbWidth && height == fbHeight) {
+        RenderTarget& target = perspectiveTarget;
+        if (target.framebuffer && width == target.width && height == target.height) {
             return;
         }
-        releaseFramebuffer();
-        fbWidth = width;
-        fbHeight = height;
-        glGenFramebuffers(1, &framebuffer);
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glGenTextures(1, &colorTexture);
-        glBindTexture(GL_TEXTURE_2D, colorTexture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
-        glGenRenderbuffers(1, &depthBuffer);
-        glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    }
-
-    void Editor::releaseFramebuffer()
-    {
-        if (framebuffer) {
-            glDeleteFramebuffers(1, &framebuffer);
-            glDeleteTextures(1, &colorTexture);
-            glDeleteRenderbuffers(1, &depthBuffer);
-            framebuffer = 0;
-            colorTexture = 0;
-            depthBuffer = 0;
+        bool creating = !target.framebuffer;
+        if (creating) {
+            target.framebuffer = dx::gl::createFramebuffer();
+            target.colorTexture = dx::gl::createTexture();
+            target.depthBuffer = dx::gl::createRenderbuffer();
         }
+        target.width = width;
+        target.height = height;
+        glBindFramebuffer(GL_FRAMEBUFFER, target.framebuffer.get());
+        glBindTexture(GL_TEXTURE_2D, target.colorTexture.get());
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glBindRenderbuffer(GL_RENDERBUFFER, target.depthBuffer.get());
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+        if (creating) {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target.colorTexture.get(), 0);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, target.depthBuffer.get());
+        }
+        GLenum complete = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        static bool reported = false;
+        if (complete != GL_FRAMEBUFFER_COMPLETE && !reported) {
+            reported = true;
+            dx::log::error("Editor", "perspective framebuffer incomplete at {}x{}: status 0x{:04x}", width, height, static_cast<unsigned>(complete));
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
     void Editor::renderPerspective(int width, int height)
     {
         ensureFramebuffer(width, height);
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glBindFramebuffer(GL_FRAMEBUFFER, perspectiveTarget.framebuffer.get());
         std::vector<dx::UObject*> shown;
         for (dx::UObject* actor : actors) {
             if (dx::actor::bHidden(actor) && dx::actor::DrawType(actor) == dx::DT_Sprite && dx::actor::Texture(actor)) {
@@ -156,7 +157,7 @@ namespace dx::editor {
         }
         renderer->beginFrame(width, height);
         renderer->setRenderMode(perspectiveMode);
-        renderer->drawScene(level, dx::actorselect::visible(actors), cameraLocation, cameraRotation, fov, nullptr);
+        renderer->drawScene(nullptr, level, dx::actorselect::visible(actors), cameraLocation, cameraRotation, fov, nullptr);
         renderer->setRenderMode(dx::RenderMode::Textured);
         renderer->endFrame();
         for (dx::UObject* actor : shown) {
@@ -336,6 +337,7 @@ namespace dx::editor {
         ImGui::SetNextWindowSize(size);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::Begin(paneTitle.c_str(), nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_MenuBar);
+        viewportActive = viewportActive || ImGui::IsWindowFocused() || ImGui::IsWindowHovered();
         paneMenu(currentPane);
         ImVec2 origin = ImGui::GetCursorScreenPos();
         ImVec2 area = ImGui::GetContentRegionAvail();
@@ -345,7 +347,7 @@ namespace dx::editor {
         int width = std::max(static_cast<int>(area.x), 1);
         int height = std::max(static_cast<int>(area.y), 1);
         renderPerspective(width, height);
-        ImGui::Image(static_cast<ImTextureID>(colorTexture), ImVec2(static_cast<float>(width), static_cast<float>(height)), ImVec2(0, 1), ImVec2(1, 0));
+        ImGui::Image(static_cast<ImTextureID>(perspectiveTarget.colorTexture.get()), ImVec2(static_cast<float>(width), static_cast<float>(height)), ImVec2(0, 1), ImVec2(1, 0));
         bool hovered = ImGui::IsItemHovered();
         ImDrawList* list = ImGui::GetWindowDrawList();
         if (perspectiveMode == dx::RenderMode::Wireframe) {
@@ -434,9 +436,6 @@ namespace dx::editor {
                 }
                 cameraLocation += move * (moveSpeed * io.DeltaTime);
             }
-            if (ImGui::IsMouseReleased(ImGuiMouseButton_Right) && io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Right] < 16.0f && !selectedSurfs.empty()) {
-                ImGui::OpenPopup("SurfacePopup");
-            }
             if (ImGui::IsMouseReleased(ImGuiMouseButton_Right) && io.MouseDragMaxDistanceSqr[ImGuiMouseButton_Right] < 16.0f) {
                 perspectiveContext(io.MousePos, origin, area);
             }
@@ -460,6 +459,7 @@ namespace dx::editor {
         ImGui::SetNextWindowSize(size);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::Begin(paneTitle.c_str(), nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_MenuBar);
+        viewportActive = viewportActive || ImGui::IsWindowFocused() || ImGui::IsWindowHovered();
         paneMenu(currentPane);
         ImVec2 origin = ImGui::GetCursorScreenPos();
         ImVec2 area = ImGui::GetContentRegionAvail();
@@ -566,7 +566,9 @@ namespace dx::editor {
         if (ImGui::IsItemActive() && dragging && selected && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
             componentRef(dragRaw, view.horizontal) += io.MouseDelta.x / view.zoom;
             componentRef(dragRaw, view.vertical) += io.MouseDelta.y / view.zoom * view.verticalSign;
-            translateSelection(snapped(dragRaw) - dx::actor::Location(selected));
+            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                translateSelection(snapped(dragRaw) - dx::actor::Location(selected));
+            }
         }
         orthoBox(view, origin, area);
         ImGui::End();
@@ -606,6 +608,9 @@ namespace dx::editor {
             if (ImGui::IsKeyPressed(ImGuiKey_S, false)) {
                 command("save");
             }
+            if (!viewportActive) {
+                return;
+            }
             if (ImGui::IsKeyPressed(ImGuiKey_D, false)) {
                 command("duplicate");
             }
@@ -621,6 +626,9 @@ namespace dx::editor {
             if (ImGui::IsKeyPressed(ImGuiKey_A, false)) {
                 command("selectall");
             }
+            return;
+        }
+        if (!viewportActive) {
             return;
         }
         if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {

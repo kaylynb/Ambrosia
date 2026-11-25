@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "debugui/imgui_setup.h"
 
 #include "compiler/asset_package.h"
 #include "compiler/exec_parse.h"
@@ -14,9 +15,9 @@ namespace dx::editor {
                 if (!std::filesystem::is_directory(directory, error)) {
                     continue;
                 }
-                for (const auto& entry : std::filesystem::directory_iterator(directory, error)) {
-                    if (lower(entry.path().extension().string()) == extension) {
-                        names.push_back(entry.path().stem().string());
+                for (std::filesystem::directory_iterator entry(directory, error), end; !error && entry != end; entry.increment(error)) {
+                    if (lowered(utf8String(entry->path().extension())) == extension) {
+                        names.push_back(utf8String(entry->path().stem()));
                     }
                 }
             }
@@ -103,7 +104,7 @@ namespace dx::editor {
             }
         }
         std::sort(result.begin(), result.end(), [](dx::UObject* a, dx::UObject* b) {
-            return lower(displayName(a)) < lower(displayName(b));
+            return lowered(displayName(a)) < lowered(displayName(b));
         });
         return result;
     }
@@ -376,7 +377,7 @@ namespace dx::editor {
         ImVec2 origin = ImGui::GetCursorScreenPos();
         ImGui::GetWindowDrawList()->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(0, 0, 0, 255));
         if (info) {
-            ImGui::Image(static_cast<ImTextureID>(info->id), size);
+            ImGui::Image(static_cast<ImTextureID>(info->id()), size);
         } else {
             ImGui::Dummy(size);
         }
@@ -612,7 +613,7 @@ namespace dx::editor {
             }
             float width = info ? static_cast<float>(std::max(info->width, 1u)) : 256.0f;
             float height = info ? static_cast<float>(std::max(info->height, 1u)) : 256.0f;
-            list->PushTextureID(static_cast<ImTextureID>(info ? info->id : thumbnails.white()));
+            list->PushTextureID(static_cast<ImTextureID>(info ? info->id() : thumbnails.white()));
             list->PrimReserve(3, 3);
             for (int k = 0; k < 3; k++) {
                 list->PrimVtx(points[k], ImVec2(triangle.u[k] / width, triangle.v[k] / height), info ? color : IM_COL32(bright, bright * 3 / 4, bright / 2, 255));
@@ -626,15 +627,15 @@ namespace dx::editor {
         if (!showMeshViewer || !currentMesh) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(680, 520), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(360, 120), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(680), debugui::scaled(520)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(360), debugui::scaled(120)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Mesh Viewer", &showMeshViewer)) {
             ImGui::End();
             return;
         }
         dx::UMesh* mesh = currentMesh;
         ImGui::Text("%s  %s  %d verts  %d frames  %zu triangles", mesh->pathName().c_str(), mesh->cls->name.str().c_str(), mesh->frameVerts, mesh->animFrames, mesh->triangles().size());
-        ImGui::BeginChild("sequences", ImVec2(180, 0), true);
+        ImGui::BeginChild("sequences", ImVec2(debugui::scaled(180), 0), true);
         for (const dx::AnimSequence& sequence : mesh->sequences) {
             std::string label = sequence.name.str() + " (" + std::to_string(sequence.numFrames) + ")";
             if (ImGui::Selectable(label.c_str(), sequence.name == meshSequence)) {
@@ -652,7 +653,7 @@ namespace dx::editor {
         ImGui::SameLine();
         ImGui::Checkbox("Wireframe", &meshWire);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(180);
+        ImGui::SetNextItemWidth(debugui::scaled(180));
         ImGui::SliderFloat("Position", &meshFrame, 0.0f, 0.999f);
         if (sequence) {
             ImGui::SameLine();
@@ -696,7 +697,7 @@ namespace dx::editor {
         std::filesystem::path directory = std::filesystem::current_path(error);
         bool ok = dx::compiler::runAssetCommand(dx::objects::packageObject(dx::Name(packageName)), directory, execCommand, messages);
         for (const std::string& line : messages) {
-            std::fprintf(stderr, "%s\n", line.c_str());
+            dx::log::info("Log", "{}", line);
         }
         if (ok) {
             addName(contentModified, packageName);
@@ -716,12 +717,11 @@ namespace dx::editor {
                 std::string name;
                 std::string file;
                 if (!dx::compiler::parseString(rest, "NAME=", name) && dx::compiler::parseString(rest, "FILE=", file)) {
-                    name = std::filesystem::path(file).stem().string();
+                    name = utf8String(utf8Path(file).stem());
                 }
                 for (dx::UObject* texture : textureList) {
-                    if (lower(texture->name.str()) == lower(name)) {
+                    if (lowered(texture->name.str()) == lowered(name)) {
                         currentTexture = texture;
-                        dx::bsp::setCurrentTexture(texture);
                         if (verb == "texturenew") {
                             propertiesTexture = texture;
                             showTextureProperties = true;
@@ -746,7 +746,7 @@ namespace dx::editor {
             dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
             dx::UMesh* mesh = nullptr;
             for (dx::UObject* object : result ? contentObjects(packageName, { "Mesh", "LodMesh" }) : std::vector<dx::UObject*>()) {
-                if (lower(object->name.str()) == lower(meshName)) {
+                if (lowered(object->name.str()) == lowered(meshName)) {
                     mesh = dx::cast<dx::UMesh>(object);
                 }
             }
@@ -776,14 +776,14 @@ namespace dx::editor {
         }
         if (verb == "savecontent") {
             std::istringstream fields(rest);
-            std::string target;
-            fields >> packageName >> target;
+            fields >> packageName;
+            std::string target = readArg(fields);
             dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
-            std::filesystem::path file = target.empty() ? dx::compiler::assetPackagePath(package) : std::filesystem::path(target);
+            std::filesystem::path file = target.empty() ? dx::compiler::assetPackagePath(package) : utf8Path(target);
             std::string error;
             result = dx::compiler::saveAssetPackage(package, file, &error);
-            status = result ? "saved " + file.string() : "save failed: " + error;
-            std::fprintf(stderr, "%s\n", status.c_str());
+            status = result ? "saved " + utf8String(file) : "save failed: " + error;
+            dx::log::write(result ? dx::log::Level::Info : dx::log::Level::Error, "Log", status);
             if (result) {
                 contentModified.erase(std::remove(contentModified.begin(), contentModified.end(), packageName), contentModified.end());
             }

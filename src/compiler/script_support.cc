@@ -2,7 +2,7 @@
 
 #include "core/objects.h"
 #include "core/vm.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <cctype>
 
@@ -138,7 +138,7 @@ namespace dx::compiler::detail {
             className = "PointerProperty";
             break;
         }
-        return createField(new UProperty(type), outer, name, className, flags);
+        return createField(std::make_unique<UProperty>(type), outer, name, className, flags);
     }
 
     UProperty* cloneParameter(UProperty* source, UObject* outer)

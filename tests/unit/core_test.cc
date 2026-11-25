@@ -1,38 +1,31 @@
 #include "core/config.h"
+#include "test_paths.h"
 #include "core/objects.h"
 #include "core/url.h"
 #include "core/vm.h"
+#include "deusex/startup.h"
 #include "engine/world.h"
+#include "fixtures.h"
 
 #include <catch_amalgamated.hpp>
 
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <initializer_list>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace {
-    void setEnvironment(const char* name, const char* value)
-    {
-#ifdef _WIN32
-        _putenv_s(name, value);
-#else
-        if (*value) {
-            setenv(name, value, 1);
-        } else {
-            unsetenv(name);
-        }
-#endif
-    }
-
     void initEngine()
     {
         static bool initialized = false;
         if (!initialized) {
-            dx::engine::initialize(DEUSEX_GAME_DATA);
+            dx::engine::initialize(dx::test::gameData());
             initialized = true;
         }
     }
@@ -495,18 +488,159 @@ TEST_CASE("a subclass created at runtime inherits the parent's defaults, functio
     CHECK(*reinterpret_cast<std::string*>(object->propertyAddress(dx::Name("sxx"))) == "Tim");
 }
 
-TEST_CASE("findGameRoot looks for game-data next to the AppImage")
+TEST_CASE("findObject skips exports that are not loaded outside the editor", "[data]")
 {
-    std::filesystem::path base = std::filesystem::temp_directory_path() / "deusex-appimage-test";
-    std::filesystem::create_directories(base / "game-data" / "System");
-    std::ofstream marker(base / "game-data" / "System" / "DeusEx.u");
-    marker.close();
-    std::string previous = std::getenv("DEUSEX_GAME_DATA") ? std::getenv("DEUSEX_GAME_DATA") : "";
-    setEnvironment("DEUSEX_GAME_DATA", (base / "missing").string().c_str());
-    setEnvironment("APPIMAGE", (base / "deusex.AppImage").string().c_str());
-    std::filesystem::path root = dx::config::findGameRoot("fallback");
-    setEnvironment("APPIMAGE", "");
-    setEnvironment("DEUSEX_GAME_DATA", previous.c_str());
-    std::filesystem::remove_all(base);
-    CHECK(root == base / "game-data");
+    initEngine();
+    dx::UClass* textBuffer = dx::objects::intrinsicClass(dx::Name("TextBuffer"));
+    REQUIRE(textBuffer != nullptr);
+    dx::UObject* found = dx::objects::findObject("Engine.Actor.ScriptText", textBuffer);
+    if (dx::objects::editorMode()) {
+        CHECK(found != nullptr);
+    } else {
+        CHECK(found == nullptr);
+    }
+}
+
+TEST_CASE("Ini save replaces the file only when the write succeeds")
+{
+    dx::test::TempDir directory("ini-save");
+    dx::Ini ini;
+    ini.path = directory / "Test.ini";
+    ini.set("Section", "Key", "One");
+    REQUIRE(ini.save());
+    CHECK_FALSE(std::filesystem::exists(directory / "Test.ini.tmp"));
+    dx::Ini reloaded;
+    REQUIRE(reloaded.load(directory / "Test.ini"));
+    CHECK(reloaded.get("Section", "Key") == "One");
+
+    std::filesystem::create_directories(directory / "Test.ini.tmp");
+    ini.set("Section", "Key", "Two");
+    CHECK_FALSE(ini.save());
+    dx::Ini unchanged;
+    REQUIRE(unchanged.load(directory / "Test.ini"));
+    CHECK(unchanged.get("Section", "Key") == "One");
+
+    dx::Ini missing;
+    missing.path = directory / "missing" / "Test.ini";
+    missing.set("Section", "Key", "One");
+    CHECK_FALSE(missing.save());
+}
+
+TEST_CASE("integer division of the minimum by minus one wraps instead of trapping", "[data]")
+{
+    initEngine();
+    Bytes code;
+    code.op({ 0x91, 0x1D }).u32(0x80000000u).op({ 0x1D }).u32(0xFFFFFFFFu).op({ 0x16 });
+    CHECK(evaluate<int32_t>(dx::objects::objectClass()->defaultObject, code) == INT32_MIN);
+    Bytes other;
+    other.op({ 0x91, 0x1D }).u32(static_cast<uint32_t>(-7)).op({ 0x1D }).u32(0xFFFFFFFFu).op({ 0x16 });
+    CHECK(evaluate<int32_t>(dx::objects::objectClass()->defaultObject, other) == 7);
+}
+
+TEST_CASE("runaway script recursion stops at the guard before the native stack runs out", "[data]")
+{
+    initEngine();
+    dx::UClass* cls = testInfoClass();
+    dx::UObject* object = dx::objects::newObject(cls, nullptr, dx::Name(), 0);
+    dx::UFunction* direct = makeFunction(cls, "CoreRecurseDirect", Bytes());
+    Bytes directCode;
+    directCode.op({ 0x1C }).object(direct).op({ 0x16, 0x04, 0x0B });
+    direct->script = directCode.data;
+    dx::UFunction* nested = makeFunction(cls, "CoreRecurseNested", Bytes());
+    Bytes nestedCode;
+    nestedCode.op({ 0x92, 0x92, 0x1C }).object(nested).op({ 0x16, 0x26, 0x16, 0x26, 0x16, 0x04, 0x0B });
+    nested->script = nestedCode.data;
+    char base = 0;
+    size_t deepest = 0;
+    int criticals = 0;
+    dx::vm::CriticalHandler previous = dx::vm::setCriticalHandler([&](const std::string&) {
+        char here = 0;
+        deepest = std::max(deepest, static_cast<size_t>(reinterpret_cast<uintptr_t>(&base) - reinterpret_cast<uintptr_t>(&here)));
+        criticals++;
+    });
+    for (dx::UFunction* function : { direct, nested }) {
+        deepest = 0;
+        criticals = 0;
+        {
+            dx::vm::Call call(object, function);
+            call.run();
+        }
+        std::printf("%s: guard fired %d time(s) at %zu bytes of native stack (%zu per call)\n", function->name.str().c_str(), criticals, deepest, deepest / 251);
+        CHECK(criticals >= 1);
+        // The executables link a 16 MB stack. AddressSanitizer's frames are larger, so it gets more room.
+#if defined(__SANITIZE_ADDRESS__)
+        CHECK(deepest < 12 * 1024 * 1024);
+#else
+        CHECK(deepest < 4 * 1024 * 1024);
+#endif
+    }
+    dx::vm::setCriticalHandler(previous);
+}
+
+TEST_CASE("relinking a struct refreshes findProperty even when the property vector keeps its storage", "[data]")
+{
+    initEngine();
+    dx::UStruct* structType = new dx::UStruct();
+    structType->name = dx::Name("CoreRelinkStruct");
+    dx::objects::registerObject(structType);
+    dx::UProperty* first = makeParam("Relinked", 0);
+    dx::UProperty* filler = makeParam("RelinkFiller", 0);
+    first->outer = structType;
+    filler->outer = structType;
+    first->next = filler;
+    structType->children = first;
+    structType->link();
+    REQUIRE(structType->properties.size() == 2);
+    REQUIRE(structType->findProperty(dx::Name("Relinked")) == first);
+    CHECK(first->offset == 0);
+    const void* storage = structType->properties.data();
+
+    // A recompile clears the vector (keeping its capacity) and links new properties of the same count.
+    dx::UProperty* second = makeParam("Relinked", 0);
+    second->outer = structType;
+    filler->next = second;
+    structType->children = filler;
+    structType->properties.clear();
+    structType->size = 0;
+    structType->alignment = 1;
+    structType->linked = false;
+    structType->link();
+    REQUIRE(structType->properties.size() == 2);
+    CHECK(static_cast<const void*>(structType->properties.data()) == storage);
+    CHECK(structType->findProperty(dx::Name("Relinked")) == second);
+    CHECK(second->offset == 4);
+}
+
+TEST_CASE("the user directory is ambrosia under the XDG data directory")
+{
+    const char* xdg = std::getenv("XDG_DATA_HOME");
+    REQUIRE(xdg != nullptr);
+    CHECK(dx::config::userDirectory() == std::filesystem::path(xdg) / "ambrosia");
+    CHECK(std::filesystem::is_directory(dx::config::userDirectory()));
+}
+
+TEST_CASE("a class that failed to load refuses to create objects", "[data]")
+{
+    initEngine();
+    dx::UClass* cls = dx::objects::createSubclass(testInfoClass(), dx::Name("CoreLoadFailedInfo"));
+    REQUIRE(dx::objects::newObject(cls, nullptr, dx::Name(), 0) != nullptr);
+    cls->loadFailed = true;
+    CHECK(dx::objects::newObject(cls, nullptr, dx::Name(), 0) == nullptr);
+    dx::UClass* child = dx::objects::createSubclass(cls, dx::Name("CoreLoadFailedChild"));
+    CHECK(dx::objects::newObject(child, nullptr, dx::Name(), 0) == nullptr);
+}
+
+TEST_CASE("bytecode naming an unresolved property is a script error, not a crash", "[data]")
+{
+    initEngine();
+    dx::UObject* self = dx::objects::objectClass()->defaultObject;
+    for (uint8_t token : { uint8_t(0x00), uint8_t(0x01), uint8_t(0x02), uint8_t(0x36) }) {
+        INFO(int(token));
+        Bytes code;
+        code.op({ token }).u32(0).op({ 0x16 });
+        CHECK_THROWS_AS(evaluate<int32_t>(self, code), std::runtime_error);
+    }
+    Bytes structCompare;
+    structCompare.op({ 0x32 }).u32(0).op({ 0x16 });
+    CHECK_THROWS_AS(evaluate<int32_t>(self, structCompare), std::runtime_error);
 }

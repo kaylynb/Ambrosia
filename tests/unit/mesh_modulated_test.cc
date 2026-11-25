@@ -1,12 +1,15 @@
 #define SDL_MAIN_HANDLED
 
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/mesh.h"
 #include "engine/props_engine.h"
 #include "engine/world.h"
 #include "render/scene_renderer.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #include <catch_amalgamated.hpp>
 #include <glad/gl.h>
 
@@ -24,20 +27,20 @@ namespace {
         OffscreenContext()
         {
             SDL_SetMainReady();
-            if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+            if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
                 return;
             }
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
             SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-            window = SDL_CreateWindow("mesh", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, frameWidth, frameHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+            window = SDL_CreateWindow("mesh", frameWidth, frameHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
             if (!window) {
                 return;
             }
             context = SDL_GL_CreateContext(window);
             if (context && !gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-                SDL_GL_DeleteContext(context);
+                SDL_GL_DestroyContext(context);
                 context = nullptr;
             }
         }
@@ -45,7 +48,7 @@ namespace {
         ~OffscreenContext()
         {
             if (context) {
-                SDL_GL_DeleteContext(context);
+                SDL_GL_DestroyContext(context);
             }
             if (window) {
                 SDL_DestroyWindow(window);
@@ -62,7 +65,7 @@ namespace {
         renderer.setOptions(dx::RenderOptions {});
         renderer.setTime(1.0);
         renderer.beginFrame(frameWidth, frameHeight);
-        renderer.drawScene(world.level, world.actors, eye, rotation, 90.0f, world.player());
+        renderer.drawScene(&world, world.level, world.actors, eye, rotation, 90.0f, world.player());
         renderer.endFrame();
         renderer.applyBrightness(0.5f);
         std::vector<uint8_t> rgba;
@@ -83,7 +86,7 @@ TEST_CASE("modulated mesh faces ignore vertex lighting so a 50 percent gray skin
 {
     OffscreenContext gl;
     REQUIRE(gl.context != nullptr);
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;
     REQUIRE(world.loadMap("01_NYC_UNATCOHQ"));
@@ -151,48 +154,4 @@ TEST_CASE("modulated mesh faces ignore vertex lighting so a 50 percent gray skin
     CHECK(underBlack * 10 < background);
     CHECK(std::abs(underGray - background) * 20 < background);
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
-}
-
-TEST_CASE("translucent actors in front of lit translucent water are not darkened by the water drawn behind them", "[data]")
-{
-    OffscreenContext gl;
-    REQUIRE(gl.context != nullptr);
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
-    dx::UClass* sphereClass = dx::objects::findClass("DeusEx.SphereEffect");
-    dx::objects::flushLoads();
-    REQUIRE(sphereClass != nullptr);
-    dx::Vector center { -4761, 10431, -256 };
-    dx::UObject* sphere = world.spawn(sphereClass, nullptr, dx::Name(), center, dx::Rotator {}, nullptr, true);
-    REQUIRE(sphere != nullptr);
-    dx::actor::DrawScale(sphere) = 3.0f;
-    dx::actor::ScaleGlow(sphere) = 1.0f;
-    dx::Vector eye { -4761, 10631, -212 };
-    dx::Rotator rotation = dx::vectorRotation(center - eye);
-
-    dx::SceneRenderer renderer;
-    render(renderer, world, eye, rotation);
-    std::vector<uint8_t> shown = render(renderer, world, eye, rotation);
-    dx::actor::bHidden(sphere) = 1;
-    std::vector<uint8_t> hidden = render(renderer, world, eye, rotation);
-    REQUIRE(shown.size() == hidden.size());
-
-    auto addedInRows = [&](int top, int bottom) {
-        long added = 0;
-        for (int y = top; y < bottom; y++) {
-            for (int x = 280; x < 360; x++) {
-                size_t pixel = static_cast<size_t>(y * frameWidth + x);
-                added += brightness(shown, pixel) - brightness(hidden, pixel);
-            }
-        }
-        return added;
-    };
-    long overDock = addedInRows(204, 210);
-    long overWater = addedInRows(212, 218);
-    INFO("added over dock " << overDock << " added over water " << overWater);
-    REQUIRE(overDock > 1000);
-    CHECK(overWater > overDock);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }

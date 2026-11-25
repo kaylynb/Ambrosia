@@ -1,0 +1,679 @@
+engine-churn-1,SUMMARY,churn,classes DeusEx.ShellCasing DeusEx.BulletHole DeusEx.Rockchip DeusEx.SmokeTrail DeusEx.Spark DeusEx.Tracer DeusEx.MetalFragment DeusEx.WoodFragment DeusEx.BloodSpurt DeusEx.Dart DeusEx.Fireball DeusEx.ExplosionLight
+engine-churn-1,TICK,churn,1,0.9721
+engine-churn-1,TICK,churn,2,1.0128
+engine-churn-1,TICK,churn,3,1.0082
+engine-churn-1,TICK,churn,4,1.0858
+engine-churn-1,TICK,churn,5,1.1971
+engine-churn-1,SUMMARY,churn,rate_per_second=60
+engine-churn-1,SUMMARY,churn,destroyed_actors=12720.000000
+engine-churn-1,SUMMARY,churn,private_kib_per_destroyed=3.474843
+engine-churn-1,SUMMARY,churn,objects_per_destroyed=2.415094
+engine-churn-1,SUMMARY,churn,data_kib_per_destroyed=2.154776
+engine-churn-1,SUMMARY,churn,minute_private,mean=8.6328,sd=0.7586,min=8.1641,max=9.9766,n=5,MiB per minute
+engine-churn-1,SUMMARY,churn,minute_objects,mean=6144.0000,sd=10.4163,min=6137.0000,max=6162.0000,n=5,objects per minute
+engine-churn-1,SUMMARY,churn,tick_ms,first_quarter=0.9721,last_quarter=1.1971,slope_per_minute=0.05230
+engine-churn-2,SUMMARY,churn,classes DeusEx.ShellCasing DeusEx.BulletHole DeusEx.Rockchip DeusEx.SmokeTrail DeusEx.Spark DeusEx.Tracer DeusEx.MetalFragment DeusEx.WoodFragment DeusEx.BloodSpurt DeusEx.Dart DeusEx.Fireball DeusEx.ExplosionLight
+engine-churn-2,TICK,churn,1,0.9026
+engine-churn-2,TICK,churn,2,0.8320
+engine-churn-2,TICK,churn,3,0.8779
+engine-churn-2,TICK,churn,4,2.6928
+engine-churn-2,TICK,churn,5,3.3928
+engine-churn-2,SUMMARY,churn,rate_per_second=60
+engine-churn-2,SUMMARY,churn,destroyed_actors=12720.000000
+engine-churn-2,SUMMARY,churn,private_kib_per_destroyed=3.461635
+engine-churn-2,SUMMARY,churn,objects_per_destroyed=2.415094
+engine-churn-2,SUMMARY,churn,data_kib_per_destroyed=2.154776
+engine-churn-2,SUMMARY,churn,minute_private,mean=8.6000,sd=0.9195,min=7.9023,max=10.1484,n=5,MiB per minute
+engine-churn-2,SUMMARY,churn,minute_objects,mean=6144.0000,sd=10.4163,min=6137.0000,max=6162.0000,n=5,objects per minute
+engine-churn-2,SUMMARY,churn,tick_ms,first_quarter=0.9026,last_quarter=3.3928,slope_per_minute=0.68414
+engine-churn-3,SUMMARY,churn,classes DeusEx.ShellCasing DeusEx.BulletHole DeusEx.Rockchip DeusEx.SmokeTrail DeusEx.Spark DeusEx.Tracer DeusEx.MetalFragment DeusEx.WoodFragment DeusEx.BloodSpurt DeusEx.Dart DeusEx.Fireball DeusEx.ExplosionLight
+engine-churn-3,TICK,churn,1,0.7466
+engine-churn-3,TICK,churn,2,0.7794
+engine-churn-3,TICK,churn,3,0.7790
+engine-churn-3,TICK,churn,4,0.8213
+engine-churn-3,TICK,churn,5,0.8358
+engine-churn-3,SUMMARY,churn,rate_per_second=60
+engine-churn-3,SUMMARY,churn,destroyed_actors=12720.000000
+engine-churn-3,SUMMARY,churn,private_kib_per_destroyed=3.437107
+engine-churn-3,SUMMARY,churn,objects_per_destroyed=2.415094
+engine-churn-3,SUMMARY,churn,data_kib_per_destroyed=2.154776
+engine-churn-3,SUMMARY,churn,minute_private,mean=8.5391,sd=0.6685,min=8.1523,max=9.7188,n=5,MiB per minute
+engine-churn-3,SUMMARY,churn,minute_objects,mean=6144.0000,sd=10.4163,min=6137.0000,max=6162.0000,n=5,objects per minute
+engine-churn-3,SUMMARY,churn,tick_ms,first_quarter=0.7466,last_quarter=0.8358,slope_per_minute=0.02203
+engine-fire-1,TICK,fire,1,0.9338
+engine-fire-1,TICK,fire,2,1.0345
+engine-fire-1,TICK,fire,3,1.0603
+engine-fire-1,TICK,fire,4,0.9783
+engine-fire-1,TICK,fire,5,0.9389
+engine-fire-1,TICK,fire,6,0.9135
+engine-fire-1,TICK,fire,7,0.9801
+engine-fire-1,TICK,fire,8,1.0372
+engine-fire-1,TICK,fire,9,1.0782
+engine-fire-1,TICK,fire,10,1.3105
+engine-fire-1,SUMMARY,fire,map=01_NYC_UNATCOIsland
+engine-fire-1,SUMMARY,fire,rounds_fired=3300.000000,per_minute=330.000000
+engine-fire-1,SUMMARY,fire,destroyed_actors=13192.000000,per_round=3.997576
+engine-fire-1,SUMMARY,fire,private_kib_per_destroyed=3.861734
+engine-fire-1,SUMMARY,fire,objects_per_destroyed=2.689206
+engine-fire-1,SUMMARY,fire,data_kib_per_destroyed=2.468443
+engine-fire-1,SUMMARY,fire,minute_private,mean=4.9750,sd=0.5908,min=4.5039,max=6.5352,n=10,MiB per minute of continuous fire
+engine-fire-1,SUMMARY,fire,minute_objects,mean=3547.6000,sd=21.2561,min=3500.0000,max=3576.0000,n=10,objects per minute of continuous fire
+engine-fire-1,SUMMARY,fire,minute_destroyed,mean=1319.2000,sd=14.7784,min=1293.0000,max=1339.0000,n=10,actors destroyed per minute
+engine-fire-1,SUMMARY,fire,tick_ms,first_quarter=0.9841,last_quarter=1.1944,slope_per_minute=0.02158
+engine-fire-2,TICK,fire,1,0.9979
+engine-fire-2,TICK,fire,2,2.7237
+engine-fire-2,TICK,fire,3,1.0341
+engine-fire-2,TICK,fire,4,1.1168
+engine-fire-2,TICK,fire,5,1.1510
+engine-fire-2,TICK,fire,6,1.3604
+engine-fire-2,TICK,fire,7,2.5750
+engine-fire-2,TICK,fire,8,3.0361
+engine-fire-2,TICK,fire,9,1.5497
+engine-fire-2,TICK,fire,10,2.2811
+engine-fire-2,SUMMARY,fire,map=01_NYC_UNATCOIsland
+engine-fire-2,SUMMARY,fire,rounds_fired=3300.000000,per_minute=330.000000
+engine-fire-2,SUMMARY,fire,destroyed_actors=13192.000000,per_round=3.997576
+engine-fire-2,SUMMARY,fire,private_kib_per_destroyed=3.838084
+engine-fire-2,SUMMARY,fire,objects_per_destroyed=2.689206
+engine-fire-2,SUMMARY,fire,data_kib_per_destroyed=2.468443
+engine-fire-2,SUMMARY,fire,minute_private,mean=4.9445,sd=0.5584,min=4.3789,max=6.3242,n=10,MiB per minute of continuous fire
+engine-fire-2,SUMMARY,fire,minute_objects,mean=3547.6000,sd=21.2561,min=3500.0000,max=3576.0000,n=10,objects per minute of continuous fire
+engine-fire-2,SUMMARY,fire,minute_destroyed,mean=1319.2000,sd=14.7784,min=1293.0000,max=1339.0000,n=10,actors destroyed per minute
+engine-fire-2,SUMMARY,fire,tick_ms,first_quarter=1.8608,last_quarter=1.9154,slope_per_minute=0.10864
+engine-fire-3,TICK,fire,1,0.8146
+engine-fire-3,TICK,fire,2,0.8194
+engine-fire-3,TICK,fire,3,0.8170
+engine-fire-3,TICK,fire,4,0.7747
+engine-fire-3,TICK,fire,5,0.7485
+engine-fire-3,TICK,fire,6,0.7733
+engine-fire-3,TICK,fire,7,0.8047
+engine-fire-3,TICK,fire,8,0.8289
+engine-fire-3,TICK,fire,9,0.8037
+engine-fire-3,TICK,fire,10,0.8083
+engine-fire-3,SUMMARY,fire,map=01_NYC_UNATCOIsland
+engine-fire-3,SUMMARY,fire,rounds_fired=3300.000000,per_minute=330.000000
+engine-fire-3,SUMMARY,fire,destroyed_actors=13192.000000,per_round=3.997576
+engine-fire-3,SUMMARY,fire,private_kib_per_destroyed=3.859915
+engine-fire-3,SUMMARY,fire,objects_per_destroyed=2.689206
+engine-fire-3,SUMMARY,fire,data_kib_per_destroyed=2.468443
+engine-fire-3,SUMMARY,fire,minute_private,mean=4.9727,sd=0.5427,min=4.5234,max=6.3516,n=10,MiB per minute of continuous fire
+engine-fire-3,SUMMARY,fire,minute_objects,mean=3547.6000,sd=21.2561,min=3500.0000,max=3576.0000,n=10,objects per minute of continuous fire
+engine-fire-3,SUMMARY,fire,minute_destroyed,mean=1319.2000,sd=14.7784,min=1293.0000,max=1339.0000,n=10,actors destroyed per minute
+engine-fire-3,SUMMARY,fire,tick_ms,first_quarter=0.8170,last_quarter=0.8060,slope_per_minute=0.00004
+engine-idle-canal-1,TICK,idle,1,0.1699
+engine-idle-canal-1,TICK,idle,2,0.1601
+engine-idle-canal-1,TICK,idle,3,0.1653
+engine-idle-canal-1,TICK,idle,4,0.1628
+engine-idle-canal-1,TICK,idle,5,0.1576
+engine-idle-canal-1,TICK,idle,6,0.1602
+engine-idle-canal-1,TICK,idle,7,0.1858
+engine-idle-canal-1,TICK,idle,8,0.1774
+engine-idle-canal-1,TICK,idle,9,0.1631
+engine-idle-canal-1,TICK,idle,10,0.1592
+engine-idle-canal-1,SUMMARY,idle,map=06_HongKong_WanChai_Canal
+engine-idle-canal-1,SUMMARY,idle,minute_private,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=10,MiB per game minute
+engine-idle-canal-1,SUMMARY,idle,minute_objects,mean=2.7000,sd=8.5381,min=0.0000,max=27.0000,n=10,objects per game minute
+engine-idle-canal-1,SUMMARY,idle,minute_destroyed,mean=2.7000,sd=8.5381,min=0.0000,max=27.0000,n=10,actors destroyed per game minute
+engine-idle-canal-1,SUMMARY,idle,tick_ms,first_quarter=0.1650,last_quarter=0.1611,slope_per_minute=0.00034
+engine-idle-canal-1,SUMMARY,idle,player_health=100
+engine-idle-canal-2,TICK,idle,1,0.1800
+engine-idle-canal-2,TICK,idle,2,0.1801
+engine-idle-canal-2,TICK,idle,3,0.2082
+engine-idle-canal-2,TICK,idle,4,0.1804
+engine-idle-canal-2,TICK,idle,5,0.1973
+engine-idle-canal-2,TICK,idle,6,0.1925
+engine-idle-canal-2,TICK,idle,7,0.1725
+engine-idle-canal-2,TICK,idle,8,0.1642
+engine-idle-canal-2,TICK,idle,9,0.1700
+engine-idle-canal-2,TICK,idle,10,0.1664
+engine-idle-canal-2,SUMMARY,idle,map=06_HongKong_WanChai_Canal
+engine-idle-canal-2,SUMMARY,idle,minute_private,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=10,MiB per game minute
+engine-idle-canal-2,SUMMARY,idle,minute_objects,mean=2.7000,sd=8.5381,min=0.0000,max=27.0000,n=10,objects per game minute
+engine-idle-canal-2,SUMMARY,idle,minute_destroyed,mean=2.7000,sd=8.5381,min=0.0000,max=27.0000,n=10,actors destroyed per game minute
+engine-idle-canal-2,SUMMARY,idle,tick_ms,first_quarter=0.1801,last_quarter=0.1682,slope_per_minute=-0.00268
+engine-idle-canal-2,SUMMARY,idle,player_health=100
+engine-idle-canal-3,TICK,idle,1,0.1581
+engine-idle-canal-3,TICK,idle,2,0.1548
+engine-idle-canal-3,TICK,idle,3,0.1532
+engine-idle-canal-3,TICK,idle,4,0.1546
+engine-idle-canal-3,TICK,idle,5,0.1574
+engine-idle-canal-3,TICK,idle,6,0.1560
+engine-idle-canal-3,TICK,idle,7,0.1517
+engine-idle-canal-3,TICK,idle,8,0.1560
+engine-idle-canal-3,TICK,idle,9,0.1531
+engine-idle-canal-3,TICK,idle,10,0.1526
+engine-idle-canal-3,SUMMARY,idle,map=06_HongKong_WanChai_Canal
+engine-idle-canal-3,SUMMARY,idle,minute_private,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=10,MiB per game minute
+engine-idle-canal-3,SUMMARY,idle,minute_objects,mean=2.7000,sd=8.5381,min=0.0000,max=27.0000,n=10,objects per game minute
+engine-idle-canal-3,SUMMARY,idle,minute_destroyed,mean=2.7000,sd=8.5381,min=0.0000,max=27.0000,n=10,actors destroyed per game minute
+engine-idle-canal-3,SUMMARY,idle,tick_ms,first_quarter=0.1564,last_quarter=0.1528,slope_per_minute=-0.00035
+engine-idle-canal-3,SUMMARY,idle,player_health=100
+engine-idle-island-1,TICK,idle,1,0.5162
+engine-idle-island-1,TICK,idle,2,0.4980
+engine-idle-island-1,TICK,idle,3,0.4864
+engine-idle-island-1,TICK,idle,4,0.4730
+engine-idle-island-1,TICK,idle,5,0.5006
+engine-idle-island-1,TICK,idle,6,0.4902
+engine-idle-island-1,TICK,idle,7,0.4772
+engine-idle-island-1,TICK,idle,8,0.4701
+engine-idle-island-1,TICK,idle,9,0.4688
+engine-idle-island-1,TICK,idle,10,0.4702
+engine-idle-island-1,SUMMARY,idle,map=01_NYC_UNATCOIsland
+engine-idle-island-1,SUMMARY,idle,minute_private,mean=0.3426,sd=0.2978,min=0.0000,max=1.0625,n=10,MiB per game minute
+engine-idle-island-1,SUMMARY,idle,minute_objects,mean=451.9000,sd=40.4130,min=432.0000,max=566.0000,n=10,objects per game minute
+engine-idle-island-1,SUMMARY,idle,minute_destroyed,mean=452.3000,sd=42.7319,min=433.0000,max=573.0000,n=10,actors destroyed per game minute
+engine-idle-island-1,SUMMARY,idle,tick_ms,first_quarter=0.5071,last_quarter=0.4695,slope_per_minute=-0.00423
+engine-idle-island-1,SUMMARY,idle,player_health=100
+engine-idle-island-2,TICK,idle,1,0.5108
+engine-idle-island-2,TICK,idle,2,0.4879
+engine-idle-island-2,TICK,idle,3,0.4786
+engine-idle-island-2,TICK,idle,4,0.4868
+engine-idle-island-2,TICK,idle,5,0.4995
+engine-idle-island-2,TICK,idle,6,0.5798
+engine-idle-island-2,TICK,idle,7,0.7190
+engine-idle-island-2,TICK,idle,8,0.6117
+engine-idle-island-2,TICK,idle,9,0.4923
+engine-idle-island-2,TICK,idle,10,0.4968
+engine-idle-island-2,SUMMARY,idle,map=01_NYC_UNATCOIsland
+engine-idle-island-2,SUMMARY,idle,minute_private,mean=0.3590,sd=0.2935,min=0.0000,max=1.0820,n=10,MiB per game minute
+engine-idle-island-2,SUMMARY,idle,minute_objects,mean=451.9000,sd=40.4130,min=432.0000,max=566.0000,n=10,objects per game minute
+engine-idle-island-2,SUMMARY,idle,minute_destroyed,mean=452.3000,sd=42.7319,min=433.0000,max=573.0000,n=10,actors destroyed per game minute
+engine-idle-island-2,SUMMARY,idle,tick_ms,first_quarter=0.4993,last_quarter=0.4946,slope_per_minute=0.00817
+engine-idle-island-2,SUMMARY,idle,player_health=100
+engine-idle-island-3,TICK,idle,1,0.5009
+engine-idle-island-3,TICK,idle,2,0.4717
+engine-idle-island-3,TICK,idle,3,0.4813
+engine-idle-island-3,TICK,idle,4,0.4810
+engine-idle-island-3,TICK,idle,5,0.4828
+engine-idle-island-3,TICK,idle,6,0.4800
+engine-idle-island-3,TICK,idle,7,0.4860
+engine-idle-island-3,TICK,idle,8,0.4839
+engine-idle-island-3,TICK,idle,9,0.4835
+engine-idle-island-3,TICK,idle,10,0.5023
+engine-idle-island-3,SUMMARY,idle,map=01_NYC_UNATCOIsland
+engine-idle-island-3,SUMMARY,idle,minute_private,mean=0.3570,sd=0.2871,min=0.0000,max=1.0586,n=10,MiB per game minute
+engine-idle-island-3,SUMMARY,idle,minute_objects,mean=451.9000,sd=40.4130,min=432.0000,max=566.0000,n=10,objects per game minute
+engine-idle-island-3,SUMMARY,idle,minute_destroyed,mean=452.3000,sd=42.7319,min=433.0000,max=573.0000,n=10,actors destroyed per game minute
+engine-idle-island-3,SUMMARY,idle,tick_ms,first_quarter=0.4863,last_quarter=0.4929,slope_per_minute=0.00074
+engine-idle-island-3,SUMMARY,idle,player_health=100
+engine-idle-market-1,TICK,idle,1,0.2201
+engine-idle-market-1,TICK,idle,2,0.2152
+engine-idle-market-1,TICK,idle,3,0.2241
+engine-idle-market-1,TICK,idle,4,0.2145
+engine-idle-market-1,TICK,idle,5,0.2154
+engine-idle-market-1,TICK,idle,6,0.2356
+engine-idle-market-1,TICK,idle,7,0.2217
+engine-idle-market-1,TICK,idle,8,0.2192
+engine-idle-market-1,TICK,idle,9,0.2203
+engine-idle-market-1,TICK,idle,10,0.2164
+engine-idle-market-1,SUMMARY,idle,map=06_HongKong_WanChai_Market
+engine-idle-market-1,SUMMARY,idle,minute_private,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=10,MiB per game minute
+engine-idle-market-1,SUMMARY,idle,minute_objects,mean=1.0000,sd=3.1623,min=0.0000,max=10.0000,n=10,objects per game minute
+engine-idle-market-1,SUMMARY,idle,minute_destroyed,mean=1.1000,sd=3.4785,min=0.0000,max=11.0000,n=10,actors destroyed per game minute
+engine-idle-market-1,SUMMARY,idle,tick_ms,first_quarter=0.2177,last_quarter=0.2183,slope_per_minute=0.00012
+engine-idle-market-1,SUMMARY,idle,player_health=100
+engine-idle-market-2,TICK,idle,1,0.2077
+engine-idle-market-2,TICK,idle,2,0.2050
+engine-idle-market-2,TICK,idle,3,0.2200
+engine-idle-market-2,TICK,idle,4,0.2121
+engine-idle-market-2,TICK,idle,5,0.2102
+engine-idle-market-2,TICK,idle,6,0.2121
+engine-idle-market-2,TICK,idle,7,0.2179
+engine-idle-market-2,TICK,idle,8,0.2234
+engine-idle-market-2,TICK,idle,9,0.2158
+engine-idle-market-2,TICK,idle,10,0.2189
+engine-idle-market-2,SUMMARY,idle,map=06_HongKong_WanChai_Market
+engine-idle-market-2,SUMMARY,idle,minute_private,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=10,MiB per game minute
+engine-idle-market-2,SUMMARY,idle,minute_objects,mean=1.0000,sd=3.1623,min=0.0000,max=10.0000,n=10,objects per game minute
+engine-idle-market-2,SUMMARY,idle,minute_destroyed,mean=1.1000,sd=3.4785,min=0.0000,max=11.0000,n=10,actors destroyed per game minute
+engine-idle-market-2,SUMMARY,idle,tick_ms,first_quarter=0.2063,last_quarter=0.2173,slope_per_minute=0.00129
+engine-idle-market-2,SUMMARY,idle,player_health=100
+engine-idle-market-3,TICK,idle,1,0.2165
+engine-idle-market-3,TICK,idle,2,0.2101
+engine-idle-market-3,TICK,idle,3,0.2092
+engine-idle-market-3,TICK,idle,4,0.2139
+engine-idle-market-3,TICK,idle,5,0.2205
+engine-idle-market-3,TICK,idle,6,0.2082
+engine-idle-market-3,TICK,idle,7,0.2069
+engine-idle-market-3,TICK,idle,8,0.2069
+engine-idle-market-3,TICK,idle,9,0.2122
+engine-idle-market-3,TICK,idle,10,0.2060
+engine-idle-market-3,SUMMARY,idle,map=06_HongKong_WanChai_Market
+engine-idle-market-3,SUMMARY,idle,minute_private,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=10,MiB per game minute
+engine-idle-market-3,SUMMARY,idle,minute_objects,mean=1.0000,sd=3.1623,min=0.0000,max=10.0000,n=10,objects per game minute
+engine-idle-market-3,SUMMARY,idle,minute_destroyed,mean=1.1000,sd=3.4785,min=0.0000,max=11.0000,n=10,actors destroyed per game minute
+engine-idle-market-3,SUMMARY,idle,tick_ms,first_quarter=0.2133,last_quarter=0.2091,slope_per_minute=-0.00076
+engine-idle-market-3,SUMMARY,idle,player_health=100
+engine-idle-street-1,TICK,idle,1,0.1293
+engine-idle-street-1,TICK,idle,2,0.1333
+engine-idle-street-1,TICK,idle,3,0.1360
+engine-idle-street-1,TICK,idle,4,0.1389
+engine-idle-street-1,TICK,idle,5,0.1332
+engine-idle-street-1,TICK,idle,6,0.1361
+engine-idle-street-1,TICK,idle,7,0.1371
+engine-idle-street-1,TICK,idle,8,0.1518
+engine-idle-street-1,TICK,idle,9,0.1312
+engine-idle-street-1,TICK,idle,10,0.1283
+engine-idle-street-1,SUMMARY,idle,map=04_NYC_Street
+engine-idle-street-1,SUMMARY,idle,minute_private,mean=0.0074,sd=0.0235,min=0.0000,max=0.0742,n=10,MiB per game minute
+engine-idle-street-1,SUMMARY,idle,minute_objects,mean=1.2000,sd=1.0328,min=0.0000,max=3.0000,n=10,objects per game minute
+engine-idle-street-1,SUMMARY,idle,minute_destroyed,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=10,actors destroyed per game minute
+engine-idle-street-1,SUMMARY,idle,tick_ms,first_quarter=0.1313,last_quarter=0.1298,slope_per_minute=0.00032
+engine-idle-street-1,SUMMARY,idle,player_health=100
+engine-idle-street-2,TICK,idle,1,0.1289
+engine-idle-street-2,TICK,idle,2,0.1325
+engine-idle-street-2,TICK,idle,3,0.1314
+engine-idle-street-2,TICK,idle,4,0.1375
+engine-idle-street-2,TICK,idle,5,0.1351
+engine-idle-street-2,TICK,idle,6,0.1373
+engine-idle-street-2,TICK,idle,7,0.1416
+engine-idle-street-2,TICK,idle,8,0.1419
+engine-idle-street-2,TICK,idle,9,0.1367
+engine-idle-street-2,TICK,idle,10,0.1339
+engine-idle-street-2,SUMMARY,idle,map=04_NYC_Street
+engine-idle-street-2,SUMMARY,idle,minute_private,mean=0.0070,sd=0.0222,min=0.0000,max=0.0703,n=10,MiB per game minute
+engine-idle-street-2,SUMMARY,idle,minute_objects,mean=1.2000,sd=1.0328,min=0.0000,max=3.0000,n=10,objects per game minute
+engine-idle-street-2,SUMMARY,idle,minute_destroyed,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=10,actors destroyed per game minute
+engine-idle-street-2,SUMMARY,idle,tick_ms,first_quarter=0.1307,last_quarter=0.1353,slope_per_minute=0.00086
+engine-idle-street-2,SUMMARY,idle,player_health=100
+engine-idle-street-3,TICK,idle,1,0.1257
+engine-idle-street-3,TICK,idle,2,0.1285
+engine-idle-street-3,TICK,idle,3,0.1331
+engine-idle-street-3,TICK,idle,4,0.1321
+engine-idle-street-3,TICK,idle,5,0.1294
+engine-idle-street-3,TICK,idle,6,0.1280
+engine-idle-street-3,TICK,idle,7,0.1297
+engine-idle-street-3,TICK,idle,8,0.1251
+engine-idle-street-3,TICK,idle,9,0.1275
+engine-idle-street-3,TICK,idle,10,0.1214
+engine-idle-street-3,SUMMARY,idle,map=04_NYC_Street
+engine-idle-street-3,SUMMARY,idle,minute_private,mean=0.0141,sd=0.0297,min=0.0000,max=0.0742,n=10,MiB per game minute
+engine-idle-street-3,SUMMARY,idle,minute_objects,mean=1.2000,sd=1.0328,min=0.0000,max=3.0000,n=10,objects per game minute
+engine-idle-street-3,SUMMARY,idle,minute_destroyed,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=10,actors destroyed per game minute
+engine-idle-street-3,SUMMARY,idle,tick_ms,first_quarter=0.1271,last_quarter=0.1245,slope_per_minute=-0.00057
+engine-idle-street-3,SUMMARY,idle,player_health=100
+engine-save-1,SUMMARY,save,quicksave_private,mean=0.0530,sd=0.1984,min=0.0000,max=0.7422,n=14,MiB per quicksave
+engine-save-1,SUMMARY,save,quicksave_objects,mean=17.2857,sd=3.8316,min=12.0000,max=25.0000,n=14,objects per quicksave
+engine-save-1,SUMMARY,save,quicksave_slot_mib=7.711221
+engine-save-1,SUMMARY,save,quickload_private,mean=23.8778,sd=0.4753,min=23.3398,max=25.0352,n=14,MiB per quickload
+engine-save-1,SUMMARY,save,quickload_objects,mean=4734.0000,sd=0.0000,min=4734.0000,max=4734.0000,n=14,objects per quickload
+engine-save-1,SUMMARY,save,quickload_retired_linkers,mean=7.7112,sd=0.0000,min=7.7112,max=7.7112,n=14,MiB of package images retired per quickload
+engine-save-1,SUMMARY,save,quickload_object_data,mean=4.7670,sd=0.0000,min=4.7670,max=4.7670,n=14,MiB of object data per quickload
+engine-save-1,SUMMARY,save,list_private,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=149,MiB per listing
+engine-save-1,SUMMARY,save,list_average_kib=0.000000,saveinfo_file_kib=0.470703
+engine-save-1,SUMMARY,save,list_objects,mean=16.0000,sd=0.0000,min=16.0000,max=16.0000,n=149,objects per listing
+engine-save-1,SUMMARY,save,slots_listed=8
+engine-save-2,SUMMARY,save,quicksave_private,mean=0.0530,sd=0.1984,min=0.0000,max=0.7422,n=14,MiB per quicksave
+engine-save-2,SUMMARY,save,quicksave_objects,mean=17.2857,sd=3.8316,min=12.0000,max=25.0000,n=14,objects per quicksave
+engine-save-2,SUMMARY,save,quicksave_slot_mib=7.711221
+engine-save-2,SUMMARY,save,quickload_private,mean=23.8424,sd=0.5012,min=23.1406,max=24.8555,n=14,MiB per quickload
+engine-save-2,SUMMARY,save,quickload_objects,mean=4734.0000,sd=0.0000,min=4734.0000,max=4734.0000,n=14,objects per quickload
+engine-save-2,SUMMARY,save,quickload_retired_linkers,mean=7.7112,sd=0.0000,min=7.7112,max=7.7112,n=14,MiB of package images retired per quickload
+engine-save-2,SUMMARY,save,quickload_object_data,mean=4.7670,sd=0.0000,min=4.7670,max=4.7670,n=14,MiB of object data per quickload
+engine-save-2,SUMMARY,save,list_private,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=149,MiB per listing
+engine-save-2,SUMMARY,save,list_average_kib=0.000000,saveinfo_file_kib=0.470703
+engine-save-2,SUMMARY,save,list_objects,mean=16.0000,sd=0.0000,min=16.0000,max=16.0000,n=149,objects per listing
+engine-save-2,SUMMARY,save,slots_listed=8
+engine-save-3,SUMMARY,save,quicksave_private,mean=0.0533,sd=0.1994,min=0.0000,max=0.7461,n=14,MiB per quicksave
+engine-save-3,SUMMARY,save,quicksave_objects,mean=17.2857,sd=3.8316,min=12.0000,max=25.0000,n=14,objects per quicksave
+engine-save-3,SUMMARY,save,quicksave_slot_mib=7.711221
+engine-save-3,SUMMARY,save,quickload_private,mean=23.8638,sd=0.4507,min=23.1836,max=24.8789,n=14,MiB per quickload
+engine-save-3,SUMMARY,save,quickload_objects,mean=4734.0000,sd=0.0000,min=4734.0000,max=4734.0000,n=14,objects per quickload
+engine-save-3,SUMMARY,save,quickload_retired_linkers,mean=7.7112,sd=0.0000,min=7.7112,max=7.7112,n=14,MiB of package images retired per quickload
+engine-save-3,SUMMARY,save,quickload_object_data,mean=4.7670,sd=0.0000,min=4.7670,max=4.7670,n=14,MiB of object data per quickload
+engine-save-3,SUMMARY,save,list_private,mean=0.0000,sd=0.0000,min=0.0000,max=0.0000,n=149,MiB per listing
+engine-save-3,SUMMARY,save,list_average_kib=0.000000,saveinfo_file_kib=0.470703
+engine-save-3,SUMMARY,save,list_objects,mean=16.0000,sd=0.0000,min=16.0000,max=16.0000,n=149,objects per listing
+engine-save-3,SUMMARY,save,slots_listed=8
+engine-sounds-1,SUMMARY,sounds,package=DeusExSounds,sounds=399,compressed=1,audio_minutes=6.7,file_mib=16.78,sound_data_mib=16.73,decoded_mib=50.49,expansion=3.0,private_growth_mib=58.29
+engine-sounds-1,SUMMARY,sounds,package=Ambient,sounds=85,compressed=0,audio_minutes=3.7,file_mib=9.30,sound_data_mib=9.29,decoded_mib=27.83,expansion=3.0,private_growth_mib=33.40
+engine-sounds-1,SUMMARY,sounds,package=MoverSFX,sounds=66,compressed=0,audio_minutes=1.5,file_mib=3.80,sound_data_mib=3.80,decoded_mib=11.37,expansion=3.0,private_growth_mib=13.82
+engine-sounds-1,SUMMARY,sounds,package=DeusExConAudioAIBarks,sounds=1498,compressed=1498,audio_minutes=41.0,file_mib=14.07,sound_data_mib=14.00,decoded_mib=620.10,expansion=44.3,private_growth_mib=726.74
+engine-sounds-1,SUMMARY,sounds,package=DeusExConAudioMission01,sounds=580,compressed=580,audio_minutes=34.6,file_mib=11.87,sound_data_mib=11.84,decoded_mib=524.01,expansion=44.3,private_growth_mib=611.25
+engine-sounds-1,SUMMARY,sounds,package=DeusExConAudioMission02,sounds=998,compressed=998,audio_minutes=49.5,file_mib=16.98,sound_data_mib=16.93,decoded_mib=749.95,expansion=44.3,private_growth_mib=878.79
+engine-sounds-1,SUMMARY,sounds,package=DeusExConAudioHK_Shared,sounds=1737,compressed=1737,audio_minutes=87.6,file_mib=30.23,sound_data_mib=30.13,decoded_mib=1331.77,expansion=44.2,private_growth_mib=1557.45
+engine-sounds-1,SUMMARY,sounds,total,sound_data_mib=102.71,decoded_mib=3315.51
+engine-sounds-2,SUMMARY,sounds,package=DeusExSounds,sounds=399,compressed=1,audio_minutes=6.7,file_mib=16.78,sound_data_mib=16.73,decoded_mib=50.49,expansion=3.0,private_growth_mib=58.34
+engine-sounds-2,SUMMARY,sounds,package=Ambient,sounds=85,compressed=0,audio_minutes=3.7,file_mib=9.30,sound_data_mib=9.29,decoded_mib=27.83,expansion=3.0,private_growth_mib=33.41
+engine-sounds-2,SUMMARY,sounds,package=MoverSFX,sounds=66,compressed=0,audio_minutes=1.5,file_mib=3.80,sound_data_mib=3.80,decoded_mib=11.37,expansion=3.0,private_growth_mib=14.00
+engine-sounds-2,SUMMARY,sounds,package=DeusExConAudioAIBarks,sounds=1498,compressed=1498,audio_minutes=41.0,file_mib=14.07,sound_data_mib=14.00,decoded_mib=620.10,expansion=44.3,private_growth_mib=726.62
+engine-sounds-2,SUMMARY,sounds,package=DeusExConAudioMission01,sounds=580,compressed=580,audio_minutes=34.6,file_mib=11.87,sound_data_mib=11.84,decoded_mib=524.01,expansion=44.3,private_growth_mib=610.50
+engine-sounds-2,SUMMARY,sounds,package=DeusExConAudioMission02,sounds=998,compressed=998,audio_minutes=49.5,file_mib=16.98,sound_data_mib=16.93,decoded_mib=749.95,expansion=44.3,private_growth_mib=879.20
+engine-sounds-2,SUMMARY,sounds,package=DeusExConAudioHK_Shared,sounds=1737,compressed=1737,audio_minutes=87.6,file_mib=30.23,sound_data_mib=30.13,decoded_mib=1331.77,expansion=44.2,private_growth_mib=1558.07
+engine-sounds-2,SUMMARY,sounds,total,sound_data_mib=102.71,decoded_mib=3315.51
+engine-sounds-3,SUMMARY,sounds,package=DeusExSounds,sounds=399,compressed=1,audio_minutes=6.7,file_mib=16.78,sound_data_mib=16.73,decoded_mib=50.49,expansion=3.0,private_growth_mib=58.34
+engine-sounds-3,SUMMARY,sounds,package=Ambient,sounds=85,compressed=0,audio_minutes=3.7,file_mib=9.30,sound_data_mib=9.29,decoded_mib=27.83,expansion=3.0,private_growth_mib=33.41
+engine-sounds-3,SUMMARY,sounds,package=MoverSFX,sounds=66,compressed=0,audio_minutes=1.5,file_mib=3.80,sound_data_mib=3.80,decoded_mib=11.37,expansion=3.0,private_growth_mib=14.00
+engine-sounds-3,SUMMARY,sounds,package=DeusExConAudioAIBarks,sounds=1498,compressed=1498,audio_minutes=41.0,file_mib=14.07,sound_data_mib=14.00,decoded_mib=620.10,expansion=44.3,private_growth_mib=725.95
+engine-sounds-3,SUMMARY,sounds,package=DeusExConAudioMission01,sounds=580,compressed=580,audio_minutes=34.6,file_mib=11.87,sound_data_mib=11.84,decoded_mib=524.01,expansion=44.3,private_growth_mib=611.67
+engine-sounds-3,SUMMARY,sounds,package=DeusExConAudioMission02,sounds=998,compressed=998,audio_minutes=49.5,file_mib=16.98,sound_data_mib=16.93,decoded_mib=749.95,expansion=44.3,private_growth_mib=878.51
+engine-sounds-3,SUMMARY,sounds,package=DeusExConAudioHK_Shared,sounds=1737,compressed=1737,audio_minutes=87.6,file_mib=30.23,sound_data_mib=30.13,decoded_mib=1331.77,expansion=44.2,private_growth_mib=1557.64
+engine-sounds-3,SUMMARY,sounds,total,sound_data_mib=102.71,decoded_mib=3315.51
+engine-travel-1,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOHQ_private,mean=7.0966,sd=0.2454,min=6.5195,max=7.3984,n=11,MiB per transition
+engine-travel-1,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOIsland_private,mean=24.2440,sd=0.3952,min=23.7383,max=25.0742,n=11,MiB per transition
+engine-travel-1,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOHQ_objects,mean=1689.1818,sd=0.4045,min=1689.0000,max=1690.0000,n=11,objects per transition
+engine-travel-1,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOIsland_objects,mean=4853.8182,sd=12.7343,min=4840.0000,max=4884.0000,n=11,objects per transition
+engine-travel-1,SUMMARY,travel_unatco,round_trip_private,mean=31.3406,sd=0.4162,min=30.9023,max=32.2461,n=11,MiB per round trip
+engine-travel-1,SUMMARY,travel_unatco,round_trip_objects,mean=6543.0000,sd=13.1072,min=6529.0000,max=6574.0000,n=11,objects per round trip
+engine-travel-1,SUMMARY,travel_unatco,round_trip_object_data,mean=6.7771,sd=0.0029,min=6.7756,max=6.7856,n=11,MiB of object data per round trip
+engine-travel-1,SUMMARY,travel_unatco,round_trip_retired_linkers,mean=9.5046,sd=0.0029,min=9.4964,max=9.5076,n=11,MiB of package images retired per round trip
+engine-travel-1,SUMMARY,travel_unatco,transition_wall_ms,mean=208.6572,sd=57.4771,min=149.9817,max=365.4667,n=24,ms
+engine-travel-1,SUMMARY,travel_unatco,map_file_mib,01_NYC_UNATCOIsland=8.975598,01_NYC_UNATCOHQ=2.457034
+engine-travel-1,SUMMARY,travel_unatco,stored_levels_mib=9.504543
+engine-travel-1,SUMMARY,travel_unatco,total_private_growth_mib=561.144531
+engine-travel-2,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOHQ_private,mean=7.0870,sd=0.4615,min=6.3320,max=7.8008,n=11,MiB per transition
+engine-travel-2,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOIsland_private,mean=24.1967,sd=0.4443,min=23.6680,max=25.1367,n=11,MiB per transition
+engine-travel-2,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOHQ_objects,mean=1689.1818,sd=0.4045,min=1689.0000,max=1690.0000,n=11,objects per transition
+engine-travel-2,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOIsland_objects,mean=4853.8182,sd=12.7343,min=4840.0000,max=4884.0000,n=11,objects per transition
+engine-travel-2,SUMMARY,travel_unatco,round_trip_private,mean=31.2837,sd=0.4990,min=30.6914,max=32.3750,n=11,MiB per round trip
+engine-travel-2,SUMMARY,travel_unatco,round_trip_objects,mean=6543.0000,sd=13.1072,min=6529.0000,max=6574.0000,n=11,objects per round trip
+engine-travel-2,SUMMARY,travel_unatco,round_trip_object_data,mean=6.7771,sd=0.0029,min=6.7756,max=6.7856,n=11,MiB of object data per round trip
+engine-travel-2,SUMMARY,travel_unatco,round_trip_retired_linkers,mean=9.5046,sd=0.0029,min=9.4964,max=9.5076,n=11,MiB of package images retired per round trip
+engine-travel-2,SUMMARY,travel_unatco,transition_wall_ms,mean=182.8741,sd=43.1503,min=136.3134,max=243.3797,n=24,ms
+engine-travel-2,SUMMARY,travel_unatco,map_file_mib,01_NYC_UNATCOIsland=8.975598,01_NYC_UNATCOHQ=2.457034
+engine-travel-2,SUMMARY,travel_unatco,stored_levels_mib=9.504543
+engine-travel-2,SUMMARY,travel_unatco,total_private_growth_mib=560.691406
+engine-travel-3,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOHQ_private,mean=6.9240,sd=0.3361,min=6.1523,max=7.2852,n=11,MiB per transition
+engine-travel-3,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOIsland_private,mean=24.3935,sd=0.4857,min=23.5078,max=25.4648,n=11,MiB per transition
+engine-travel-3,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOHQ_objects,mean=1689.1818,sd=0.4045,min=1689.0000,max=1690.0000,n=11,objects per transition
+engine-travel-3,SUMMARY,travel_unatco,arrive_01_NYC_UNATCOIsland_objects,mean=4853.8182,sd=12.7343,min=4840.0000,max=4884.0000,n=11,objects per transition
+engine-travel-3,SUMMARY,travel_unatco,round_trip_private,mean=31.3175,sd=0.4831,min=30.6875,max=32.5078,n=11,MiB per round trip
+engine-travel-3,SUMMARY,travel_unatco,round_trip_objects,mean=6543.0000,sd=13.1072,min=6529.0000,max=6574.0000,n=11,objects per round trip
+engine-travel-3,SUMMARY,travel_unatco,round_trip_object_data,mean=6.7771,sd=0.0029,min=6.7756,max=6.7856,n=11,MiB of object data per round trip
+engine-travel-3,SUMMARY,travel_unatco,round_trip_retired_linkers,mean=9.5046,sd=0.0029,min=9.4964,max=9.5076,n=11,MiB of package images retired per round trip
+engine-travel-3,SUMMARY,travel_unatco,transition_wall_ms,mean=187.4461,sd=52.4048,min=135.7082,max=318.1392,n=24,ms
+engine-travel-3,SUMMARY,travel_unatco,map_file_mib,01_NYC_UNATCOIsland=8.975598,01_NYC_UNATCOHQ=2.457034
+engine-travel-3,SUMMARY,travel_unatco,stored_levels_mib=9.504543
+engine-travel-3,SUMMARY,travel_unatco,total_private_growth_mib=561.019531
+engine-travel-small-1,SUMMARY,travel_street_bar,arrive_02_NYC_Bar_private,mean=2.4918,sd=0.5899,min=1.8398,max=3.7461,n=11,MiB per transition
+engine-travel-small-1,SUMMARY,travel_street_bar,arrive_02_NYC_Street_private,mean=12.8150,sd=0.6541,min=11.7461,max=13.6289,n=11,MiB per transition
+engine-travel-small-1,SUMMARY,travel_street_bar,arrive_02_NYC_Bar_objects,mean=791.0909,sd=0.3015,min=791.0000,max=792.0000,n=11,objects per transition
+engine-travel-small-1,SUMMARY,travel_street_bar,arrive_02_NYC_Street_objects,mean=2689.1818,sd=0.8739,min=2688.0000,max=2691.0000,n=11,objects per transition
+engine-travel-small-1,SUMMARY,travel_street_bar,round_trip_private,mean=15.3068,sd=0.5774,min=14.5000,max=16.4766,n=11,MiB per round trip
+engine-travel-small-1,SUMMARY,travel_street_bar,round_trip_objects,mean=3480.2727,sd=1.1037,min=3479.0000,max=3483.0000,n=11,objects per round trip
+engine-travel-small-1,SUMMARY,travel_street_bar,round_trip_object_data,mean=3.3208,sd=0.0012,min=3.3190,max=3.3229,n=11,MiB of object data per round trip
+engine-travel-small-1,SUMMARY,travel_street_bar,round_trip_retired_linkers,mean=4.2782,sd=0.0030,min=4.2693,max=4.2793,n=11,MiB of package images retired per round trip
+engine-travel-small-1,SUMMARY,travel_street_bar,transition_wall_ms,mean=107.9851,sd=25.3584,min=80.4993,max=158.5184,n=24,ms
+engine-travel-small-1,SUMMARY,travel_street_bar,map_file_mib,02_NYC_Street=5.182520,02_NYC_Bar=0.584664
+engine-travel-small-1,SUMMARY,travel_street_bar,stored_levels_mib=4.279545
+engine-travel-small-1,SUMMARY,travel_street_bar,total_private_growth_mib=315.726562
+engine-travel-small-2,SUMMARY,travel_street_bar,arrive_02_NYC_Bar_private,mean=2.6104,sd=0.4867,min=2.0703,max=3.8516,n=11,MiB per transition
+engine-travel-small-2,SUMMARY,travel_street_bar,arrive_02_NYC_Street_private,mean=12.6811,sd=0.3967,min=11.9727,max=13.1953,n=11,MiB per transition
+engine-travel-small-2,SUMMARY,travel_street_bar,arrive_02_NYC_Bar_objects,mean=791.0909,sd=0.3015,min=791.0000,max=792.0000,n=11,objects per transition
+engine-travel-small-2,SUMMARY,travel_street_bar,arrive_02_NYC_Street_objects,mean=2689.1818,sd=0.8739,min=2688.0000,max=2691.0000,n=11,objects per transition
+engine-travel-small-2,SUMMARY,travel_street_bar,round_trip_private,mean=15.2915,sd=0.4984,min=14.4922,max=16.2930,n=11,MiB per round trip
+engine-travel-small-2,SUMMARY,travel_street_bar,round_trip_objects,mean=3480.2727,sd=1.1037,min=3479.0000,max=3483.0000,n=11,objects per round trip
+engine-travel-small-2,SUMMARY,travel_street_bar,round_trip_object_data,mean=3.3208,sd=0.0012,min=3.3190,max=3.3229,n=11,MiB of object data per round trip
+engine-travel-small-2,SUMMARY,travel_street_bar,round_trip_retired_linkers,mean=4.2782,sd=0.0030,min=4.2693,max=4.2793,n=11,MiB of package images retired per round trip
+engine-travel-small-2,SUMMARY,travel_street_bar,transition_wall_ms,mean=99.5302,sd=20.4334,min=77.6684,max=125.1298,n=24,ms
+engine-travel-small-2,SUMMARY,travel_street_bar,map_file_mib,02_NYC_Street=5.182520,02_NYC_Bar=0.584664
+engine-travel-small-2,SUMMARY,travel_street_bar,stored_levels_mib=4.279545
+engine-travel-small-2,SUMMARY,travel_street_bar,total_private_growth_mib=315.546875
+engine-travel-small-3,SUMMARY,travel_street_bar,arrive_02_NYC_Bar_private,mean=2.5703,sd=0.5599,min=2.1562,max=4.0039,n=11,MiB per transition
+engine-travel-small-3,SUMMARY,travel_street_bar,arrive_02_NYC_Street_private,mean=12.7170,sd=0.4686,min=11.7422,max=13.4258,n=11,MiB per transition
+engine-travel-small-3,SUMMARY,travel_street_bar,arrive_02_NYC_Bar_objects,mean=791.0909,sd=0.3015,min=791.0000,max=792.0000,n=11,objects per transition
+engine-travel-small-3,SUMMARY,travel_street_bar,arrive_02_NYC_Street_objects,mean=2689.1818,sd=0.8739,min=2688.0000,max=2691.0000,n=11,objects per transition
+engine-travel-small-3,SUMMARY,travel_street_bar,round_trip_private,mean=15.2873,sd=0.6057,min=14.5273,max=16.8516,n=11,MiB per round trip
+engine-travel-small-3,SUMMARY,travel_street_bar,round_trip_objects,mean=3480.2727,sd=1.1037,min=3479.0000,max=3483.0000,n=11,objects per round trip
+engine-travel-small-3,SUMMARY,travel_street_bar,round_trip_object_data,mean=3.3208,sd=0.0012,min=3.3190,max=3.3229,n=11,MiB of object data per round trip
+engine-travel-small-3,SUMMARY,travel_street_bar,round_trip_retired_linkers,mean=4.2782,sd=0.0030,min=4.2693,max=4.2793,n=11,MiB of package images retired per round trip
+engine-travel-small-3,SUMMARY,travel_street_bar,transition_wall_ms,mean=99.0696,sd=21.0545,min=76.6545,max=135.0852,n=24,ms
+engine-travel-small-3,SUMMARY,travel_street_bar,map_file_mib,02_NYC_Street=5.182520,02_NYC_Bar=0.584664
+engine-travel-small-3,SUMMARY,travel_street_bar,stored_levels_mib=4.279545
+engine-travel-small-3,SUMMARY,travel_street_bar,total_private_growth_mib=315.582031
+exe-fire-1,SUMMARY,exe-fire,minute_PrivateMiB,mean=8.928,sd=0.935,min=8.140,max=10.280,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_table,mean=2554.500,sd=61.267,min=2499.000,max=2621.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_destroyed,mean=2332.250,sd=44.776,min=2283.000,max=2375.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_data,mean=2.175,sd=0.068,min=2.116,max=2.244,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_destroyed_data,mean=1.875,sd=0.050,min=1.825,max=1.922,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_sound_decoded,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_meshdraw,mean=806.750,sd=26.538,min=783.000,max=837.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_meshdraw_dead,mean=809.250,sd=42.146,min=767.000,max=846.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_meshdraw_bytes,mean=2.970,sd=0.054,min=2.898,max=3.016,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_pose_bytes,mean=0.233,sd=0.008,min=0.226,max=0.242,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_light_bytes,mean=0.067,sd=0.002,min=0.065,max=0.069,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_queries,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_destroyed_windows,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-1,SUMMARY,exe-fire,minute_destroyed_window_data,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_PrivateMiB,mean=9.002,sd=1.086,min=8.160,max=10.570,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_table,mean=2554.500,sd=61.267,min=2499.000,max=2621.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_destroyed,mean=2332.250,sd=44.776,min=2283.000,max=2375.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_data,mean=2.175,sd=0.068,min=2.116,max=2.244,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_destroyed_data,mean=1.875,sd=0.050,min=1.825,max=1.922,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_sound_decoded,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_meshdraw,mean=806.750,sd=26.538,min=783.000,max=837.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_meshdraw_dead,mean=809.250,sd=42.146,min=767.000,max=846.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_meshdraw_bytes,mean=2.970,sd=0.054,min=2.898,max=3.016,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_pose_bytes,mean=0.233,sd=0.008,min=0.226,max=0.242,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_light_bytes,mean=0.067,sd=0.002,min=0.065,max=0.069,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_queries,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_destroyed_windows,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-fire-2,SUMMARY,exe-fire,minute_destroyed_window_data,mean=0.000,sd=0.000,min=0.000,max=0.000,n=4,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_PrivateMiB,mean=-0.013,sd=0.604,min=-1.500,max=0.630,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_table,mean=70.333,sd=3.571,min=64.000,max=75.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_destroyed,mean=70.556,sd=3.678,min=64.000,max=75.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_data,mean=0.009,sd=0.002,min=0.006,max=0.012,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_destroyed_data,mean=0.009,sd=0.003,min=0.005,max=0.012,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_sound_decoded,mean=0.160,sd=0.257,min=0.000,max=0.658,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_meshdraw,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_meshdraw_bytes,mean=0.000,sd=0.002,min=-0.003,max=0.003,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_pose_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_queries,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_destroyed_windows,mean=6.333,sd=2.784,min=3.000,max=9.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-1,SUMMARY,exe-idle,minute_destroyed_window_data,mean=0.003,sd=0.002,min=0.001,max=0.005,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_PrivateMiB,mean=-0.004,sd=0.626,min=-1.510,max=0.840,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_table,mean=70.333,sd=3.571,min=64.000,max=75.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_destroyed,mean=70.556,sd=3.678,min=64.000,max=75.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_data,mean=0.009,sd=0.002,min=0.006,max=0.012,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_destroyed_data,mean=0.009,sd=0.003,min=0.005,max=0.012,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_sound_decoded,mean=0.160,sd=0.257,min=0.000,max=0.658,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_meshdraw,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_meshdraw_bytes,mean=0.000,sd=0.002,min=-0.003,max=0.003,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_pose_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_queries,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_destroyed_windows,mean=6.333,sd=2.784,min=3.000,max=9.000,n=9,per game minute (MiB or count), minute 1 left out
+exe-idle-market-2,SUMMARY,exe-idle,minute_destroyed_window_data,mean=0.003,sd=0.002,min=0.001,max=0.005,n=9,per game minute (MiB or count), minute 1 left out
+exe-menus-1,SUMMARY,exe-menus,round_PrivateMiB,mean=0.816,sd=0.704,min=0.250,max=4.430,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_table,mean=535.846,sd=6.592,min=527.000,max=558.000,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_destroyed,mean=536.000,sd=6.743,min=529.000,max=559.000,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_data,mean=0.357,sd=0.001,min=0.356,max=0.363,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_destroyed_data,mean=0.357,sd=0.001,min=0.356,max=0.359,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_sound_decoded,mean=0.006,sd=0.029,min=0.000,max=0.153,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_meshdraw,mean=0.128,sd=0.469,min=0.000,max=2.000,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_meshdraw_bytes,mean=0.006,sd=0.019,min=-0.003,max=0.085,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_pose_bytes,mean=0.001,sd=0.002,min=0.000,max=0.010,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.001,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_queries,mean=0.077,sd=0.270,min=0.000,max=1.000,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_destroyed_windows,mean=508.000,sd=0.000,min=508.000,max=508.000,n=39,per round of 7 screens
+exe-menus-1,SUMMARY,exe-menus,round_destroyed_window_data,mean=0.356,sd=0.000,min=0.355,max=0.356,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_PrivateMiB,mean=0.811,sd=0.627,min=-0.430,max=3.020,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_table,mean=535.846,sd=6.592,min=527.000,max=558.000,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_destroyed,mean=536.000,sd=6.743,min=529.000,max=559.000,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_data,mean=0.357,sd=0.001,min=0.356,max=0.363,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_destroyed_data,mean=0.357,sd=0.001,min=0.356,max=0.359,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_sound_decoded,mean=0.006,sd=0.029,min=0.000,max=0.153,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_meshdraw,mean=0.128,sd=0.469,min=0.000,max=2.000,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_meshdraw_bytes,mean=0.006,sd=0.020,min=-0.010,max=0.089,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_pose_bytes,mean=0.001,sd=0.002,min=0.000,max=0.010,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.001,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_queries,mean=0.077,sd=0.270,min=0.000,max=1.000,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_destroyed_windows,mean=508.000,sd=0.000,min=508.000,max=508.000,n=39,per round of 7 screens
+exe-menus-2,SUMMARY,exe-menus,round_destroyed_window_data,mean=0.356,sd=0.000,min=0.355,max=0.356,n=39,per round of 7 screens
+exe-save-1,SUMMARY,exe-save,quicksave_PrivateMiB,mean=-0.008,sd=0.443,min=-1.000,max=0.740,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_table,mean=32.111,sd=5.533,min=25.000,max=39.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_destroyed,mean=32.333,sd=4.610,min=26.000,max=38.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_data,mean=0.002,sd=0.002,min=0.001,max=0.007,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_destroyed_data,mean=0.002,sd=0.001,min=0.001,max=0.003,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_sound_decoded,mean=0.017,sd=0.051,min=0.000,max=0.154,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_meshdraw,mean=0.444,sd=0.882,min=0.000,max=2.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_meshdraw_bytes,mean=0.019,sd=0.036,min=-0.004,max=0.088,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_pose_bytes,mean=0.002,sd=0.004,min=0.000,max=0.010,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_queries,mean=0.222,sd=0.441,min=0.000,max=1.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_destroyed_windows,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quicksave_destroyed_window_data,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-1,SUMMARY,exe-save,quickload_PrivateMiB,mean=26.266,sd=6.429,min=20.060,max=41.730,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_table,mean=4778.000,sd=0.000,min=4778.000,max=4778.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_destroyed,mean=118.000,sd=0.000,min=118.000,max=118.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_data,mean=4.777,sd=0.000,min=4.777,max=4.777,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_destroyed_data,mean=0.054,sd=0.000,min=0.053,max=0.054,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_retired_bytes,mean=7.711,sd=0.000,min=7.711,max=7.711,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_sound_decoded,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_meshdraw,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_meshdraw_bytes,mean=-0.015,sd=0.063,min=-0.155,max=0.063,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_pose_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_queries,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_destroyed_windows,mean=65.000,sd=0.000,min=65.000,max=65.000,n=9,per quickload
+exe-save-1,SUMMARY,exe-save,quickload_destroyed_window_data,mean=0.047,sd=0.001,min=0.047,max=0.048,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quicksave_PrivateMiB,mean=-0.031,sd=0.712,min=-1.750,max=0.740,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_table,mean=32.111,sd=5.533,min=25.000,max=39.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_destroyed,mean=32.333,sd=4.610,min=26.000,max=38.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_data,mean=0.002,sd=0.002,min=0.001,max=0.007,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_destroyed_data,mean=0.002,sd=0.001,min=0.001,max=0.003,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_sound_decoded,mean=0.017,sd=0.051,min=0.000,max=0.154,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_meshdraw,mean=0.444,sd=0.882,min=0.000,max=2.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_meshdraw_bytes,mean=0.018,sd=0.036,min=-0.004,max=0.089,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_pose_bytes,mean=0.002,sd=0.004,min=0.000,max=0.010,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_queries,mean=0.222,sd=0.441,min=0.000,max=1.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_destroyed_windows,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quicksave_destroyed_window_data,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quicksave
+exe-save-2,SUMMARY,exe-save,quickload_PrivateMiB,mean=25.800,sd=6.810,min=20.670,max=40.850,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_table,mean=4778.000,sd=0.000,min=4778.000,max=4778.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_destroyed,mean=118.000,sd=0.000,min=118.000,max=118.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_data,mean=4.777,sd=0.000,min=4.777,max=4.777,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_destroyed_data,mean=0.054,sd=0.000,min=0.053,max=0.054,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_linker_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_retired_bytes,mean=7.711,sd=0.000,min=7.711,max=7.711,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_sound_decoded,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_meshdraw,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_meshdraw_bytes,mean=-0.012,sd=0.062,min=-0.145,max=0.060,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_pose_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_queries,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_destroyed_windows,mean=65.000,sd=0.000,min=65.000,max=65.000,n=9,per quickload
+exe-save-2,SUMMARY,exe-save,quickload_destroyed_window_data,mean=0.047,sd=0.001,min=0.047,max=0.048,n=9,per quickload
+exe-talk-1,SUMMARY,exe-talk,step_PrivateMiB,mean=4.073,sd=11.425,min=-1.550,max=39.670,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_table,mean=233.583,sd=276.586,min=129.000,max=1108.000,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_destroyed,mean=174.000,sd=71.790,min=128.000,max=385.000,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_data,mean=0.015,sd=0.022,min=0.006,max=0.084,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_destroyed_data,mean=0.010,sd=0.007,min=0.005,max=0.027,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_linker_bytes,mean=0.989,sd=3.426,min=0.000,max=11.868,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_sound_decoded,mean=1.119,sd=1.996,min=0.000,max=4.853,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_meshdraw,mean=3.167,sd=10.347,min=0.000,max=36.000,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_meshdraw_dead,mean=0.167,sd=0.389,min=0.000,max=1.000,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_meshdraw_bytes,mean=0.098,sd=0.257,min=-0.004,max=0.895,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_pose_bytes,mean=0.010,sd=0.034,min=0.000,max=0.119,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_light_bytes,mean=0.000,sd=0.001,min=0.000,max=0.002,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_queries,mean=1.333,sd=4.008,min=0.000,max=14.000,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_destroyed_windows,mean=2.000,sd=3.464,min=0.000,max=9.000,n=12,per 15 game seconds of conversation
+exe-talk-1,SUMMARY,exe-talk,step_destroyed_window_data,mean=0.001,sd=0.002,min=0.000,max=0.005,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_PrivateMiB,mean=2.888,sd=7.437,min=-1.630,max=25.430,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_table,mean=233.583,sd=276.586,min=129.000,max=1108.000,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_destroyed,mean=174.000,sd=71.790,min=128.000,max=385.000,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_data,mean=0.015,sd=0.022,min=0.006,max=0.084,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_destroyed_data,mean=0.010,sd=0.007,min=0.005,max=0.027,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_linker_bytes,mean=0.989,sd=3.426,min=0.000,max=11.868,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_retired_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_sound_decoded,mean=1.119,sd=1.996,min=0.000,max=4.853,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_meshdraw,mean=3.167,sd=10.347,min=0.000,max=36.000,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_meshdraw_dead,mean=0.167,sd=0.389,min=0.000,max=1.000,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_meshdraw_bytes,mean=0.102,sd=0.262,min=-0.001,max=0.915,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_pose_bytes,mean=0.010,sd=0.034,min=0.000,max=0.119,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_light_bytes,mean=0.000,sd=0.001,min=0.000,max=0.002,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_queries,mean=1.333,sd=4.008,min=0.000,max=14.000,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_destroyed_windows,mean=2.000,sd=3.464,min=0.000,max=9.000,n=12,per 15 game seconds of conversation
+exe-talk-2,SUMMARY,exe-talk,step_destroyed_window_data,mean=0.001,sd=0.002,min=0.000,max=0.005,n=12,per 15 game seconds of conversation
+exe-travel-1,SUMMARY,exe-travel,round_trip_PrivateMiB,mean=35.019,sd=6.797,min=26.690,max=50.830,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_table,mean=6439.889,sd=19.795,min=6419.000,max=6484.000,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_destroyed,mean=259.333,sd=18.062,min=243.000,max=301.000,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_data,mean=6.527,sd=0.003,min=6.524,max=6.535,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_destroyed_data,mean=0.111,sd=0.003,min=0.107,max=0.118,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_linker_bytes,mean=-0.000,sd=0.001,min=-0.001,max=0.001,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_retired_bytes,mean=9.491,sd=0.001,min=9.489,max=9.493,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_sound_decoded,mean=0.011,sd=0.034,min=0.000,max=0.101,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_meshdraw,mean=-0.667,sd=1.414,min=-3.000,max=1.000,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_meshdraw_bytes,mean=-0.036,sd=0.095,min=-0.242,max=0.108,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_pose_bytes,mean=-0.003,sd=0.005,min=-0.012,max=0.002,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_queries,mean=-0.333,sd=1.000,min=-2.000,max=1.000,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_destroyed_windows,mean=137.000,sd=0.000,min=137.000,max=137.000,n=9,per round trip (MiB or count)
+exe-travel-1,SUMMARY,exe-travel,round_trip_destroyed_window_data,mean=0.099,sd=0.001,min=0.098,max=0.099,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_PrivateMiB,mean=32.643,sd=5.993,min=22.420,max=41.050,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_table,mean=6439.889,sd=19.795,min=6419.000,max=6484.000,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_destroyed,mean=259.333,sd=18.062,min=243.000,max=301.000,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_data,mean=6.527,sd=0.003,min=6.524,max=6.535,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_destroyed_data,mean=0.111,sd=0.003,min=0.107,max=0.118,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_linker_bytes,mean=-0.000,sd=0.001,min=-0.001,max=0.001,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_retired_bytes,mean=9.491,sd=0.001,min=9.489,max=9.493,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_sound_decoded,mean=0.011,sd=0.034,min=0.000,max=0.101,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_meshdraw,mean=-0.667,sd=1.414,min=-3.000,max=1.000,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_meshdraw_bytes,mean=-0.022,sd=0.095,min=-0.206,max=0.108,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_pose_bytes,mean=-0.003,sd=0.005,min=-0.012,max=0.002,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_queries,mean=-0.333,sd=1.000,min=-2.000,max=1.000,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_destroyed_windows,mean=137.000,sd=0.000,min=137.000,max=137.000,n=9,per round trip (MiB or count)
+exe-travel-2,SUMMARY,exe-travel,round_trip_destroyed_window_data,mean=0.099,sd=0.001,min=0.098,max=0.099,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_PrivateMiB,mean=16.640,sd=3.350,min=13.750,max=24.680,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_table,mean=3352.111,sd=4.428,min=3349.000,max=3362.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_destroyed,mean=136.333,sd=4.472,min=134.000,max=146.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_data,mean=3.061,sd=0.002,min=3.058,max=3.065,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_destroyed_data,mean=0.100,sd=0.002,min=0.099,max=0.105,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_linker_bytes,mean=-0.000,sd=0.000,min=-0.001,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_retired_bytes,mean=4.270,sd=0.001,min=4.269,max=4.271,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_sound_decoded,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_meshdraw,mean=0.111,sd=0.601,min=-1.000,max=1.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_meshdraw_bytes,mean=0.001,sd=0.008,min=-0.012,max=0.015,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_pose_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_queries,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_destroyed_windows,mean=130.000,sd=0.000,min=130.000,max=130.000,n=9,per round trip (MiB or count)
+exe-travel-small-1,SUMMARY,exe-travel,round_trip_destroyed_window_data,mean=0.095,sd=0.000,min=0.094,max=0.095,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_PrivateMiB,mean=17.736,sd=7.478,min=13.980,max=37.470,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_table,mean=3352.111,sd=4.428,min=3349.000,max=3362.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_destroyed,mean=136.333,sd=4.472,min=134.000,max=146.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_data,mean=3.061,sd=0.002,min=3.058,max=3.065,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_destroyed_data,mean=0.100,sd=0.002,min=0.099,max=0.105,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_linker_bytes,mean=-0.000,sd=0.000,min=-0.001,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_retired_bytes,mean=4.270,sd=0.001,min=4.269,max=4.271,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_sound_decoded,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_meshdraw,mean=0.111,sd=0.601,min=-1.000,max=1.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_meshdraw_dead,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_meshdraw_bytes,mean=0.001,sd=0.008,min=-0.012,max=0.015,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_pose_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_light_bytes,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_queries,mean=0.000,sd=0.000,min=0.000,max=0.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_destroyed_windows,mean=130.000,sd=0.000,min=130.000,max=130.000,n=9,per round trip (MiB or count)
+exe-travel-small-2,SUMMARY,exe-travel,round_trip_destroyed_window_data,mean=0.095,sd=0.000,min=0.094,max=0.095,n=9,per round trip (MiB or count)

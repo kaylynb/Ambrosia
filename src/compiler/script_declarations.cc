@@ -1,8 +1,9 @@
 #include "compiler/script_parser.h"
+#include "core/gc.h"
 
 #include "core/objects.h"
 #include "core/vm.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 #include <cctype>
@@ -22,7 +23,7 @@ namespace dx::compiler::detail {
             fail("enum: '" + enumToken.identifier + "' already defined here");
         }
         requireSymbol("{", "'Enum'");
-        UEnum* enumType = createField(new UEnum(), scope, Name(enumToken.identifier), "Enum", RF_Public);
+        UEnum* enumType = createField(std::make_unique<UEnum>(), scope, Name(enumToken.identifier), "Enum", RF_Public);
         enumType->next = scope->children;
         scope->children = enumType;
         Token tagToken;
@@ -48,6 +49,7 @@ namespace dx::compiler::detail {
 
     UStruct* ScriptCompiler::compileStruct(UStruct* scope)
     {
+        RecursionGuard guard(*this, "Struct");
         if (topNest->nestType != NestClass) {
             fail("Enums can only be declared in class or struct scope");
         }
@@ -70,7 +72,7 @@ namespace dx::compiler::detail {
                 fail("'expands': Can't find base struct '" + parentName.identifier + "'");
             }
         }
-        UStruct* structType = createField(new UStruct(), scope, Name(structToken.identifier), "Struct", RF_Public);
+        UStruct* structType = createField(std::make_unique<UStruct>(), scope, Name(structToken.identifier), "Struct", RF_Public);
         structType->superField = baseStruct;
         structType->friendlyName = structType->name;
         structType->next = scope->children;
@@ -133,7 +135,7 @@ namespace dx::compiler::detail {
             fail("const " + constName.str() + ": Value is not constant");
         }
         std::string value(input + start, static_cast<size_t>(std::min(1024, inputPos - start + 1) - 1));
-        UConst* constant = createField(new UConst(), scope, constName, "Const", 0);
+        UConst* constant = createField(std::make_unique<UConst>(), scope, constName, "Const", 0);
         constant->value = value;
         constant->next = scope->children;
         scope->children = constant;
@@ -328,8 +330,10 @@ namespace dx::compiler::detail {
                 if (!getConstInt(varProperty.arrayDim)) {
                     fail(std::string(thing) + " " + varToken.identifier + ": Bad or missing array size");
                 }
-                if (varProperty.arrayDim <= 1 && varProperty.arrayDim > MaxArraySize) {
-                    fail(std::string(thing) + " " + varToken.identifier + ": Illegal array size");
+                // The original compiler accepted invalid array sizes. Reject them here
+                // because they produce an invalid property layout.
+                if (varProperty.arrayDim <= 0 || varProperty.arrayDim > MaxArraySize) {
+                    fail(std::string(thing) + " " + varToken.identifier + ": Illegal array size " + std::to_string(varProperty.arrayDim));
                 }
             }
             if (!matchSymbol("]")) {
@@ -468,7 +472,12 @@ namespace dx::compiler::detail {
                     fail(compiling->pathName() + " must be within " + compiling->within->pathName() + ", not " + tempClass->pathName());
                 }
             }
-            UClass* expectedWithin = compiling->superClass() ? compiling->superClass()->within : objects::objectClass();
+            // Runtime and intrinsic classes may lack a Within class. Use Object,
+            // the default for classes in the original game.
+            if (!compiling->within) {
+                compiling->within = objects::objectClass();
+            }
+            UClass* expectedWithin = compiling->superClass() && compiling->superClass()->within ? compiling->superClass()->within : objects::objectClass();
             if (!compiling->within->isChildOf(expectedWithin)) {
                 fail("'within': within " + compiling->within->name.str() + " is not a generalization of superclass within '" + expectedWithin->name.str() + "'");
             }
@@ -521,6 +530,8 @@ namespace dx::compiler::detail {
             requireSymbol(";", "'Class'");
             needSemicolon = false;
             compiling->script.clear();
+            compiling->scriptObjectsKnown = false;
+            gc::referencesChanged();
             compiling->children = nullptr;
             compiling->next = nullptr;
             compiling->probeMask = 0;
@@ -807,7 +818,12 @@ namespace dx::compiler::detail {
         std::string signature;
         if (functionFlags & FUNC_Operator) {
             for (char c : functionToken.identifier) {
-                signature += cppTags[c - 32];
+                // Reject characters outside the lookup table before using them as indices.
+                unsigned char code = static_cast<unsigned char>(c);
+                if (code < 32 || code > 127) {
+                    fail("Illegal character in operator name '" + functionToken.identifier + "'");
+                }
+                signature += cppTags[code - 32];
             }
             RetryPoint retry = initRetry();
             if (!matchSymbol(")")) {

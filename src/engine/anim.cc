@@ -44,12 +44,6 @@ namespace dx {
             return actor::TweenRate(a) != 0;
         }
 
-        void updateSimAnim(UObject* a)
-        {
-            float last = 10000.0f * actor::AnimLast(a);
-            actor::SimAnim(a) = { 10000.0f * actor::AnimFrame(a), 5000.0f * actor::AnimRate(a), 1000.0f * actor::TweenRate(a), actor::bAnimLoop(a) ? -last : last };
-        }
-
         void startAnim(UObject* a, Name sequence, float playRate, float tweenTime, bool loop, float minRate)
         {
             UObject* mesh = actor::Mesh(a);
@@ -63,7 +57,6 @@ namespace dx {
                 actor::bAnimFinished(a) = 0;
                 actor::AnimMinRate(a) = minRate != 0 ? minRate * (info.rate / frames) : 0;
                 actor::OldAnimRate(a) = actor::AnimRate(a);
-                updateSimAnim(a);
                 return;
             }
             if (actor::AnimSequence(a).none()) {
@@ -101,7 +94,6 @@ namespace dx {
                 actor::AnimFrame(a) = loop ? 0.0001f : 0.001f;
             }
             actor::OldAnimRate(a) = actor::AnimRate(a);
-            updateSimAnim(a);
         }
 
         void nativePlayAnim(UObject* self, Frame& stack, void*)
@@ -149,7 +141,6 @@ namespace dx {
                 actor::TweenRate(self) = 0;
                 actor::AnimFrame(self) = 0;
             }
-            updateSimAnim(self);
         }
 
         void nativeFinishAnim(UObject* self, Frame& stack, void*)
@@ -254,34 +245,44 @@ namespace dx {
             }
         }
 
-        void updateBlendAnimation(UObject* a, float deltaSeconds)
+        // One pass over the blend slots. A slot that finishes its tween or reaches
+        // its last frame leaves only the time past that point for the slots after
+        // it and for the next pass, as the main animation does.
+        void blendAnimationPass(UObject* a, float& seconds)
         {
             for (int slot = 0; slot < 4; slot++) {
                 if (actor::BlendAnimSequence(a, slot).none()) {
                     continue;
                 }
                 float& frame = actor::BlendAnimFrame(a, slot);
+                float last = actor::BlendAnimLast(a, slot);
+                if (!(frame < last)) {
+                    continue;
+                }
+                float oldFrame = frame;
                 if (frame < 0) {
-                    frame += actor::BlendTweenRate(a, slot) * deltaSeconds;
-                    if (frame >= 0) {
-                        frame = 0;
+                    frame += seconds * actor::BlendTweenRate(a, slot);
+                    if (frame < 0) {
+                        continue;
                     }
+                    float reached = frame;
+                    frame = 0;
+                    seconds = reached * seconds / (reached - oldFrame);
                     continue;
                 }
                 float rate = actor::BlendAnimRate(a, slot);
-                float last = actor::BlendAnimLast(a, slot);
-                if (rate == 0 || frame >= last) {
+                if (rate < 0) {
+                    frame += std::max(actor::BlendAnimMinRate(a, slot), actor::Velocity(a).size() * -rate) * seconds;
+                } else {
+                    frame += seconds * rate;
+                }
+                if (frame < last) {
                     continue;
                 }
-                if (rate > 0) {
-                    frame += rate * deltaSeconds;
-                } else {
-                    frame += std::max(actor::BlendAnimMinRate(a, slot), actor::Velocity(a).size() * -rate) * deltaSeconds;
-                }
-                if (frame >= last) {
-                    frame = last;
-                    actor::BlendAnimRate(a, slot) = 0;
-                }
+                float reached = frame;
+                frame = last;
+                actor::BlendAnimRate(a, slot) = 0;
+                seconds = (reached - last) * seconds / (reached - oldFrame);
             }
         }
 
@@ -353,10 +354,12 @@ namespace dx {
 
     void updateAnimation(UObject* a, float deltaSeconds)
     {
-        updateBlendAnimation(a, deltaSeconds);
         int iterations = 0;
         float seconds = deltaSeconds;
-        while (isAnimating(a) && seconds > 0 && ++iterations <= 4) {
+        // AActor::Tick stops after 4 passes and drops the rest of the tick, so a long tick
+        // that crosses more notifies or loop ends loses time. Steady timing keeps going.
+        const int mainPasses = steadyTiming() ? 64 : 4;
+        while (isAnimating(a) && seconds > 0 && ++iterations <= mainPasses) {
             float& frame = actor::AnimFrame(a);
             float oldFrame = frame;
             if (frame >= 0) {
@@ -434,6 +437,14 @@ namespace dx {
             if (a->destroyed) {
                 return;
             }
+        }
+        // AActor::Tick then runs the blend slots under the
+        // main loop's own condition and counter: only while the main animation
+        // plays, and once for each of the four passes the main loop left unused,
+        // each with the time left. A blink or head turn usually runs three passes
+        // a tick, and none once the main animation stops.
+        while (isAnimating(a) && seconds > 0 && ++iterations <= 4) {
+            blendAnimationPass(a, seconds);
         }
     }
 

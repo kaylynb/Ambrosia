@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "debugui/imgui_setup.h"
 
 namespace dx::editor {
     bool Editor::editableType(const dx::UProperty* property)
@@ -50,7 +51,11 @@ namespace dx::editor {
             history.begin(level, { selected }, label);
         }
         if (ImGui::IsItemDeactivated() && history.recording()) {
-            history.commit();
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
+                history.commit();
+            } else {
+                history.cancel();
+            }
         }
     }
 
@@ -84,7 +89,7 @@ namespace dx::editor {
             if (!ImGui::BeginTable(category.first.c_str(), 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
                 continue;
             }
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(140.0f));
             ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
             for (dx::UProperty* property : category.second) {
                 for (int32_t index = 0; index < property->arrayDim; index++) {
@@ -153,13 +158,30 @@ namespace dx::editor {
             bool editable = editableType(property);
             if (dx::propedit::isColor(property)) {
                 std::array<float, 4> color = dx::propedit::colorValue(property, memory);
-                if (ImGui::ColorEdit4("##color", color.data(), ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_AlphaPreviewHalf)) {
+                bool changed = ImGui::ColorEdit4("##color", color.data(), ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_AlphaPreviewHalf);
+                if (tracked && ImGui::IsItemActivated() && !history.recording()) {
+                    history.begin(level, { object }, "Set " + property->name.str());
+                    colorEditKey = key;
+                }
+                if (changed && colorEditKey == key) {
+                    dx::propedit::setColor(property, memory, color);
+                    brushCache.erase(object);
+                } else if (changed) {
                     std::vector<uint8_t> edited(property->structType->size);
                     property->structType->initValue(edited.data());
                     property->structType->copyValue(edited.data(), memory);
                     dx::propedit::setColor(property, edited.data(), color);
                     apply(property->toText(edited.data()));
                     property->structType->destroyValue(edited.data());
+                }
+                if (colorEditKey == key && ImGui::IsItemDeactivated()) {
+                    if (ImGui::IsItemDeactivatedAfterEdit()) {
+                        history.commit();
+                        status = "set " + property->name.str();
+                    } else {
+                        history.cancel();
+                    }
+                    colorEditKey = nullptr;
                 }
                 ImGui::SameLine();
             }

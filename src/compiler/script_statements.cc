@@ -1,8 +1,9 @@
 #include "compiler/script_parser.h"
+#include "core/gc.h"
 
 #include "core/objects.h"
 #include "core/vm.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 
@@ -90,13 +91,13 @@ namespace dx::compiler::detail {
                         compiling->ignoreMask = ~0ull;
                         compiling->labelTableOffset = MaxWord;
                     } else if (nestType == NestState) {
-                        UState* state = createField(new UState(), outer, thisName, "State", RF_Public);
+                        UState* state = createField(std::make_unique<UState>(), outer, thisName, "State", RF_Public);
                         state->probeMask = 0;
                         state->ignoreMask = ~0ull;
                         state->labelTableOffset = MaxWord;
                         topNest->node = topNode = state;
                     } else {
-                        UFunction* function = createField(new UFunction(), outer, thisName, "Function", RF_Public);
+                        UFunction* function = createField(std::make_unique<UFunction>(), outer, thisName, "Function", RF_Public);
                         function->replicationOffset = MaxWord;
                         topNest->node = topNode = function;
                     }
@@ -747,6 +748,8 @@ namespace dx::compiler::detail {
         }
         pushNest(newNest, node->name, node);
         topNode->script.clear();
+        topNode->scriptObjectsKnown = false;
+        gc::referencesChanged();
         UFunction* topFunction = cast<UFunction>(topNode);
         UFunction* superFunction = topFunction ? cast<UFunction>(topFunction->superField) : nullptr;
         if (topFunction && superFunction) {
@@ -825,6 +828,8 @@ namespace dx::compiler::detail {
         context.log(std::string(pass ? "Compiling " : "Parsing ") + cls->name.str());
         if (pass == 0) {
             cls->script.clear();
+            cls->scriptObjectsKnown = false;
+            gc::referencesChanged();
             cls->dependencies.clear();
             cls->classFlags &= ~CLASS_RecompilerClear;
             if (UClass* parent = cls->superClass()) {
@@ -836,6 +841,8 @@ namespace dx::compiler::detail {
             }
         } else {
             cls->script.clear();
+            cls->scriptObjectsKnown = false;
+            gc::referencesChanged();
             for (UField* child = cls->children; child; child = child->next) {
                 if (child->outer != cls) {
                     break;
@@ -863,6 +870,8 @@ namespace dx::compiler::detail {
                 while (compileStatement()) {
                 }
                 cls->script.clear();
+                cls->scriptObjectsKnown = false;
+                gc::referencesChanged();
                 cls->classFlags |= CLASS_Parsed;
             } else {
                 compileSecondPass(cls);
@@ -899,6 +908,8 @@ namespace dx::compiler::detail {
             context.errorCount++;
             cls->classFlags &= ~(CLASS_Parsed | CLASS_Compiled);
             cls->script.clear();
+            cls->scriptObjectsKnown = false;
+            gc::referencesChanged();
             cls->dependencies.clear();
             return false;
         }

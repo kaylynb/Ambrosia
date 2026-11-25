@@ -122,7 +122,7 @@ namespace dx::editor {
         } else if (existing == componentSelection.end()) {
             componentSelection = { element };
         }
-        status = "selected " + std::to_string(componentSelection.size()) + " " + lower(EditModeNames[editMode]) + (componentSelection.size() == 1 ? "" : "s");
+        status = "selected " + std::to_string(componentSelection.size()) + " " + lowered(EditModeNames[editMode]) + (componentSelection.size() == 1 ? "" : "s");
     }
 
     bool Editor::handleOccluded(const std::vector<dx::Poly>& polys, const dx::Vector& world)
@@ -457,7 +457,8 @@ namespace dx::editor {
         bool usingGizmo = ImGuizmo::IsUsing();
         if (usingGizmo && !componentDragging && !history.recording()) {
             componentDragging = true;
-            history.begin(level, { target, model, model->polys }, extrude ? "Extrude faces" : std::string(GizmoNames[gizmoMode]) + " " + lower(EditModeNames[editMode]) + "s");
+            componentDragTarget = target;
+            history.begin(level, { target, model, model->polys }, extrude ? "Extrude faces" : std::string(GizmoNames[gizmoMode]) + " " + lowered(EditModeNames[editMode]) + "s");
             vertexDragPolys = model->polys->polys;
         }
         std::array<float, 16> effective = componentMatrix;
@@ -576,7 +577,7 @@ namespace dx::editor {
             const std::string& text = modeLabels[static_cast<size_t>(mode)];
             ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(editMode == mode ? ImGuiCol_ButtonActive : ImGuiCol_FrameBg));
             if (ImGui::SmallButton(text.c_str())) {
-                command("editmode " + lower(EditModeNames[mode]));
+                command("editmode " + lowered(EditModeNames[mode]));
             }
             ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) {
@@ -591,7 +592,7 @@ namespace dx::editor {
             ImGui::BeginDisabled(mode == 4 && editMode != 3);
             ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(gizmoMode == mode ? ImGuiCol_ButtonActive : ImGuiCol_FrameBg));
             if (ImGui::SmallButton(text.c_str())) {
-                command("gizmo " + lower(GizmoNames[mode]));
+                command("gizmo " + lowered(GizmoNames[mode]));
             }
             ImGui::PopStyleColor();
             ImGui::EndDisabled();
@@ -600,7 +601,7 @@ namespace dx::editor {
             }
         }
         if (editMode != 0 && !componentSelection.empty()) {
-            std::string what = std::to_string(componentSelection.size()) + " " + lower(EditModeNames[editMode]) + (componentSelection.size() == 1 ? "" : "s") + " selected, Esc to clear";
+            std::string what = std::to_string(componentSelection.size()) + " " + lowered(EditModeNames[editMode]) + (componentSelection.size() == 1 ? "" : "s") + " selected, Esc to clear";
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.9f, 0.5f, 1.0f));
             ImGui::TextWrapped("%s", withIcon(EditModeIcons[editMode], what.c_str()).c_str());
         } else {
@@ -621,17 +622,18 @@ namespace dx::editor {
         const ImGuiKey modeKeys[4] = { ImGuiKey_1, ImGuiKey_2, ImGuiKey_3, ImGuiKey_4 };
         for (int mode = 0; mode < 4; mode++) {
             if (ImGui::IsKeyPressed(modeKeys[mode], false)) {
-                command("editmode " + lower(EditModeNames[mode]));
+                command("editmode " + lowered(EditModeNames[mode]));
             }
         }
         const ImGuiKey gizmoKeys[5] = { ImGuiKey_None, ImGuiKey_G, ImGuiKey_R, ImGuiKey_T, ImGuiKey_X };
         for (int mode = 1; mode < 5; mode++) {
             if (ImGui::IsKeyPressed(gizmoKeys[mode], false)) {
-                command("gizmo " + lower(GizmoNames[mode]));
+                command("gizmo " + lowered(GizmoNames[mode]));
             }
         }
         if (ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !popupWasOpen) {
             if (!componentSelection.empty()) {
+                cancelComponentDrag();
                 componentSelection.clear();
             } else {
                 command("editmode object");
@@ -646,7 +648,7 @@ namespace dx::editor {
         }
         for (int mode = 0; mode < 4; mode++) {
             if (ImGui::MenuItem(withIcon(EditModeIcons[mode], EditModeNames[mode]).c_str(), EditModeKeys[mode], editMode == mode)) {
-                command("editmode " + lower(EditModeNames[mode]));
+                command("editmode " + lowered(EditModeNames[mode]));
             }
         }
         ImGui::Separator();
@@ -656,12 +658,29 @@ namespace dx::editor {
         ImGui::EndMenu();
     }
 
+    void Editor::cancelComponentDrag()
+    {
+        if (!componentDragging) {
+            return;
+        }
+        componentDragging = false;
+        dx::UModel* model = componentDragTarget ? dx::cast<dx::UModel>(dx::actor::Brush(componentDragTarget)) : nullptr;
+        if (model && model->polys) {
+            model->polys->polys = vertexDragPolys;
+            dx::csg::updateBounds(*model);
+        }
+        brushCache.erase(componentDragTarget);
+        componentDragTarget = nullptr;
+        history.cancel();
+    }
+
     bool Editor::componentCommand(const std::string& verb, const std::string& rest)
     {
         if (verb == "editmode") {
             for (int mode = 0; mode < 4; mode++) {
-                if (lower(rest) == lower(EditModeNames[mode])) {
+                if (lowered(rest) == lowered(EditModeNames[mode])) {
                     if (editMode != mode) {
+                        cancelComponentDrag();
                         componentSelection.clear();
                     }
                     editMode = mode;

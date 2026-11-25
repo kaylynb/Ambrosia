@@ -3,10 +3,11 @@
 #include "compiler/script_compiler.h"
 #include "compiler/script_model.h"
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -83,7 +84,7 @@ namespace dx::compiler {
 
         constexpr int MaxFuncParms = 16;
 
-        constexpr int MaxArraySize = 255;
+        constexpr int MaxArraySize = 2048;
 
         constexpr int NameSize = 64;
 
@@ -510,14 +511,16 @@ namespace dx::compiler {
         void importDefaults(PackageCompiler::Impl& context, UClass* cls, const std::string& text);
 
         template <typename T>
-        T* createField(T* field, UObject* outer, Name name, const char* className, uint32_t flags)
+        T* createField(std::unique_ptr<T> made, UObject* outer, Name name, const char* className, uint32_t flags)
         {
+            T* field = made.get();
             field->name = name;
             field->outer = outer;
             field->flags = flags;
             field->cls = className ? intrinsic(className) : objects::classClass();
             field->loaded = true;
-            objects::registerObject(field);
+            // The object table owns it from here.
+            objects::registerObject(made.release());
             return field;
         }
 
@@ -547,6 +550,30 @@ namespace dx::compiler {
             bool gotAffector = false;
             int pass = 0;
             int nestLevel = 0;
+            // Bounds the parser's own recursion (nested expressions and structs); the shipped scripts nest far less.
+            static constexpr int MaxRecursionDepth = 256;
+            int recursionDepth = 0;
+
+            struct RecursionGuard {
+                RecursionGuard(ScriptCompiler& compiler, const char* thing)
+                    : owner(compiler)
+                {
+                    if (owner.recursionDepth >= MaxRecursionDepth) {
+                        fail(std::string(thing) + " nested too deeply (more than " + std::to_string(MaxRecursionDepth) + " levels)");
+                    }
+                    owner.recursionDepth++;
+                }
+
+                ~RecursionGuard()
+                {
+                    owner.recursionDepth--;
+                }
+
+                RecursionGuard(const RecursionGuard&) = delete;
+                RecursionGuard& operator=(const RecursionGuard&) = delete;
+                ScriptCompiler& owner;
+            };
+
             NestInfo* topNest = nullptr;
             UStruct* topNode = nullptr;
             NestInfo nest[MaxNestLevels];

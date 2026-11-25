@@ -1,6 +1,7 @@
 #include "render/procedural.h"
 
 #include "core/objects.h"
+#include "core/random.h"
 #include "engine/mesh.h"
 #include "engine/props_engine.h"
 #include "engine/props_fire.h"
@@ -153,6 +154,7 @@ namespace dx {
             uint8_t wave[1536] = {};
             uint8_t randoms[512] = {};
             uint32_t randomIndex = 0;
+            uint32_t seenGeneration = 0;
 
             FractalTables()
             {
@@ -165,13 +167,22 @@ namespace dx {
                     lightPhase[t] = u8(std::clamp(phase[t] + LightPhaseBias, 0, 255));
                     signedPhase[t] = u8(-128 + s8(phase[t]));
                 }
-                uint32_t seed = 1;
+                for (int32_t t = 0; t < 1536; t++) {
+                    wave[t] = u8(std::clamp((t / 2 - 256) + ((t - 512) < 256 ? 1 : 0), 0, 255));
+                }
+            }
+
+            // The table is filled with the C runtime's rand(), here the same
+            // generator started from the fire stream's seed, and refilled whenever
+            // the streams are seeded again.
+            void fillRandoms()
+            {
+                seenGeneration = random::generation();
+                randomIndex = 0;
+                uint32_t seed = random::seedOf(random::Stream::FireTable);
                 for (int32_t t = 0; t < 512; t++) {
                     seed = seed * 214013u + 2531011u;
                     randoms[t] = static_cast<uint8_t>((seed >> 16) & 0x7fffu & 255u);
-                }
-                for (int32_t t = 0; t < 1536; t++) {
-                    wave[t] = u8(std::clamp((t / 2 - 256) + ((t - 512) < 256 ? 1 : 0), 0, 255));
                 }
             }
 
@@ -182,6 +193,9 @@ namespace dx {
 
             uint8_t speedRand()
             {
+                if (seenGeneration != random::generation()) {
+                    fillRandoms();
+                }
                 uint32_t source = (randomIndex + 128) & 0xfc;
                 uint32_t dest = (randomIndex + 4) & 0xfc;
                 uint32_t value = word(source);
@@ -509,9 +523,22 @@ namespace dx {
             }
             float maxFrameRate = texture::MaxFrameRate(texture);
             float minFrameRate = texture::MinFrameRate(texture);
-            if (maxFrameRate == 0.0f && constantRate > 0.0f) {
-                maxFrameRate = constantRate;
-                minFrameRate = constantRate;
+            if (constantRate > 0.0f) {
+                // Catch up after long frames so animation speed stays constant. Keep the
+                // texture's own rate if it has one; otherwise use the steady rate.
+                float rate = maxFrameRate == 0.0f ? constantRate : std::clamp(maxFrameRate, 0.01f, 100.0f);
+                float step = 1.0f / rate;
+                accumulator += delta;
+                for (int steps = 0; accumulator >= step; steps++) {
+                    if (steps == steadyCatchUp) {
+                        accumulator = 0;
+                        break;
+                    }
+                    constantTimeTick();
+                    accumulator -= step;
+                    ticked = true;
+                }
+                return ticked;
             }
             if (maxFrameRate == 0.0f) {
                 constantTimeTick();
@@ -1470,6 +1497,22 @@ namespace dx {
     void ProceduralTextures::reset(UTexture* texture)
     {
         states.erase(texture);
+    }
+
+    void ProceduralTextures::objectsReleased(const gc::ReleasedSet& released)
+    {
+        std::erase_if(states, [&](const auto& entry) {
+            const ProceduralState* state = entry.second.get();
+            return released.count(entry.first) || (state && (released.count(state->texture) || released.count(state->palette)));
+        });
+    }
+
+    bool ProceduralTextures::holds(const UObject* object) const
+    {
+        return std::any_of(states.begin(), states.end(), [&](const auto& entry) {
+            const ProceduralState* state = entry.second.get();
+            return entry.first == object || (state && (state->texture == object || state->palette == object));
+        });
     }
 
     void ProceduralTextures::setConstantRate(float rate)

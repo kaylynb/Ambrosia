@@ -1,0 +1,18 @@
+# Normalize text in Git and check it out as LF, regardless of core.autocrlf.
+# Binary files are detected automatically and are not converted.
+* text=auto eol=lf
+
+# Windows command scripts and Visual Studio files use CRLF on every platform.
+*.bat text eol=crlf
+*.sln text eol=crlf
+*.vcproj text eol=crlf
+*.vcxproj text eol=crlf
+*.vcxproj.filters text eol=crlf
+*.props text eol=crlf
+
+# Written by `ucc genprops` from src/engine/props_bindings.txt; edit that list, not these.
+src/engine/props_consys.* linguist-generated=true
+src/engine/props_deusex.* linguist-generated=true
+src/engine/props_engine.* linguist-generated=true
+src/engine/props_extension.* linguist-generated=true
+src/engine/props_fire.* linguist-generated=true

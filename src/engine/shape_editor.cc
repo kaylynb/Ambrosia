@@ -1,5 +1,6 @@
 #include "engine/shape_editor.h"
 
+#include "core/files.h"
 #include "engine/bsp.h"
 #include "engine/builder_mesh.h"
 
@@ -241,7 +242,7 @@ namespace dx {
             }
             for (size_t i = 0; i < n; i++) {
                 if (samePoint(polygon[i], polygon[(i + 1) % n])) {
-                    return failWith(error, "Two neighbouring vertices of a shape are at the same place");
+                    return failWith(error, "Two neighboring vertices of a shape are at the same place");
                 }
                 for (size_t j = i + 2; j < n; j++) {
                     if (i == 0 && j == n - 1) {
@@ -454,11 +455,11 @@ namespace dx {
 
         bool load(Document& document, const std::filesystem::path& file, std::string* error)
         {
-            std::ifstream in(file, std::ios::binary);
-            if (!in) {
+            std::optional<std::string> contents = files::readFile(file);
+            if (!contents) {
                 return failWith(error, "Cannot open " + file.string());
             }
-            std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            std::vector<uint8_t> bytes(contents->begin(), contents->end());
             size_t at = 0;
             bool truncated = false;
             auto next = [&](void* out) {

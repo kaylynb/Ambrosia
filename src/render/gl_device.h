@@ -6,84 +6,86 @@
 #include "render/texture_cache.h"
 
 #include <memory>
-#include <unordered_map>
 
 namespace dx {
-    class GLRenderDevice : public RenderDevice {
+    class GLRenderDevice {
     public:
         GLRenderDevice();
-        ~GLRenderDevice() override;
+        ~GLRenderDevice();
         GLRenderDevice(const GLRenderDevice&) = delete;
         GLRenderDevice& operator=(const GLRenderDevice&) = delete;
 
-        bool drawingToWindow() override;
-        void bindGammaTarget(int width, int height) override;
-        void resolveGamma(int width, int height, float exponent) override;
-        void applyGamma(int width, int height, float exponent) override;
-        void beginScene(int width, int height, int samples, OcclusionQuality ambientOcclusion) override;
-        void endScene(int width, int height, bool fxaa) override;
-        void beginOcclusion() override;
-        void setOcclusionSource(OcclusionSource source) override;
-        void applyOcclusion(float nearPlane, float farPlane, float tanHalfWidth, float tanHalfHeight) override;
-        void readPixels(int width, int height, uint8_t* rgba) override;
+        bool drawingToWindow();
+        void bindGammaTarget(int width, int height);
+        void resolveGamma(int width, int height, float exponent);
+        void applyGamma(int width, int height, float exponent);
+        void keepFrame(int width, int height);
+        bool readKeptFrame(std::vector<uint8_t>& rgba, int& width, int& height);
+        void beginScene(int width, int height, int samples, OcclusionQuality ambientOcclusion);
+        void endScene(int width, int height, bool fxaa);
+        void beginOcclusion();
+        void setOcclusionSource(OcclusionSource source);
+        void applyOcclusion(float nearPlane, float farPlane, float tanHalfWidth, float tanHalfHeight);
+        void readPixels(int width, int height, uint8_t* rgba);
 
-        void setViewport(int x, int y, int width, int height) override;
-        void enableScissor(int x, int y, int width, int height) override;
-        void disableScissor() override;
-        void clear(bool color, bool depth, float depthValue) override;
-        void setDepthTest(bool enabled) override;
-        void setDepthWrite(bool enabled) override;
-        void setDepthFunc(DepthFunc func) override;
-        void setDepthRange(float nearValue, float farValue) override;
-        void setColorWrite(bool enabled) override;
-        void setCulling(bool enabled) override;
-        void setFrontFace(bool clockwise) override;
-        void setWireframe(bool enabled) override;
-        void setPolygonOffset(bool enabled, float factor, float units) override;
-        void setBlend(BlendMode mode) override;
-        void setClipPlanes(const float* planes, int32_t count) override;
+        void setViewport(int x, int y, int width, int height);
+        void enableScissor(int x, int y, int width, int height);
+        void disableScissor();
+        void clear(bool color, bool depth, float depthValue);
+        void setDepthTest(bool enabled);
+        void setDepthWrite(bool enabled);
+        void setDepthFunc(DepthFunc func);
+        void setDepthRange(float nearValue, float farValue);
+        void setColorWrite(bool enabled);
+        void setCulling(bool enabled);
+        void setFrontFace(bool clockwise);
+        void setWireframe(bool enabled);
+        void setPolygonOffset(bool enabled, float factor, float units);
+        void setBlend(BlendMode mode);
+        void setClipPlanes(const float* planes, int32_t count);
 
-        void useShader() override;
-        void setViewProj(const Mat4& matrix) override;
-        void setFlags(int32_t flags) override;
-        void setQuality(bool smoothLightmap, float detailDistance) override;
-        void setPan(float u, float v) override;
-        void setScale(float u, float v) override;
-        void setTint(float r, float g, float b, float a) override;
-        void setEye(const Vector& eye, const Vector& forward) override;
-        void setDynamicLights(const std::vector<DynamicLight>& lights) override;
-        void bindTexture(uint32_t texture) override;
-        void bindLightmap(uint32_t texture) override;
+        void useShader();
+        void setViewProj(const Mat4& matrix);
+        void setFlags(int32_t flags);
+        void setQuality(bool smoothLightmap, float detailDistance);
+        void setPan(float u, float v);
+        void setScale(float u, float v);
+        void setTint(float r, float g, float b, float a);
+        void setEye(const Vector& eye, const Vector& forward);
+        void setDynamicLights(const std::vector<DynamicLight>& lights);
+        void bindTexture(uint32_t texture);
+        void bindLightmap(uint32_t texture);
 
-        void draw(const std::vector<GLVertex>& vertices, Primitive primitive) override;
-        void upload(const std::vector<GLVertex>& vertices) override;
-        void drawRange(int32_t first, int32_t count) override;
-        uint32_t createStatic(const std::vector<GLVertex>& vertices) override;
-        void deleteStatic(uint32_t geometry) override;
-        void bindStatic(uint32_t geometry) override;
-        void drawStatic(uint32_t geometry, int32_t first, int32_t count) override;
-        void drawStaticRanges(uint32_t geometry, const int32_t* firsts, const int32_t* counts, int32_t ranges) override;
+        void draw(const std::vector<GLVertex>& vertices, Primitive primitive);
+        void upload(const std::vector<GLVertex>& vertices);
+        void drawRange(int32_t first, int32_t count);
+        StaticGeometry createStatic(const std::vector<GLVertex>& vertices);
+        void bindStatic(uint32_t geometry);
+        void drawStatic(uint32_t geometry, int32_t first, int32_t count);
+        void drawStaticRanges(uint32_t geometry, const int32_t* firsts, const int32_t* counts, int32_t ranges);
 
-        uint32_t createQuery() override;
-        void deleteQuery(uint32_t query) override;
-        void beginQuery(uint32_t query) override;
-        void endQuery() override;
-        bool queryResult(uint32_t query, bool& visible) override;
+        QueryHandle createQuery();
+        void beginQuery(uint32_t query);
+        void endQuery();
+        bool queryResult(uint32_t query, bool& visible);
 
-        void beginTextureFrame(double time) override;
-        UTexture* animated(UTexture* texture) override;
-        const GLTextureInfo* texture(UTexture* texture) override;
-        uint32_t whiteTexture() override;
-        void setTextureOptions(float anisotropy, bool trilinear, float rate) override;
-        void clearTextures() override;
+        void beginTextureFrame(double time);
+        UTexture* animated(UTexture* texture);
+        const GLTextureInfo* texture(UTexture* texture);
+        uint32_t whiteTexture();
+        void setTextureOptions(float anisotropy, bool trilinear, float rate);
+        void clearTextures();
+        uint64_t textureGeneration() const;
+        bool holdsTexture(const UObject* texture) const;
 
-        uint32_t createLightmap(int32_t size, const uint8_t* rgba) override;
-        void updateLightmap(uint32_t texture, int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t* rgba) override;
-        void deleteLightmaps(const std::vector<uint32_t>& ids) override;
+        TextureHandle createLightmap(int32_t size, const uint8_t* rgba);
+        void updateLightmap(uint32_t texture, int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t* rgba);
+        // Deletes every page in one call and empties the list.
+        void deleteLightmaps(std::vector<TextureHandle>& pages);
 
-        Canvas2D& canvas() override;
-        void beginCanvas(int width, int height) override;
-        void flushCanvas() override;
+        Canvas2D& canvas();
+        void beginCanvas(int width, int height);
+        void flushCanvas();
 
     private:
         std::unique_ptr<UberShader> shader;
@@ -92,7 +94,6 @@ namespace dx {
         std::unique_ptr<OcclusionPass> occlusionPass;
         std::unique_ptr<TextureCache> textures;
         std::unique_ptr<GLCanvas> canvasImpl;
-        std::unordered_map<uint32_t, uint32_t> staticBuffers;
         int sceneWidth = 0;
         OcclusionQuality occlusionQuality = OcclusionQuality::Off;
         int sceneHeight = 0;

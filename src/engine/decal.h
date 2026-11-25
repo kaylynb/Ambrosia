@@ -20,6 +20,7 @@ namespace dx {
 
     struct DecalRegistry {
         UModel* model = nullptr;
+        uint32_t revision = 0;
         std::vector<std::vector<int32_t>> surfNodes;
         std::unordered_map<UObject*, std::vector<DecalPiece>> pieces;
     };

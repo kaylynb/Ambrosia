@@ -1,10 +1,13 @@
 #include "audio/audio.h"
+#include "test_paths.h"
 #include "core/objects.h"
 #include "core/vm.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/props_engine.h"
 #include "engine/resources.h"
 #include "engine/world.h"
+#include "fixtures.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -14,19 +17,10 @@
 #include <vector>
 
 namespace {
-    struct IslandWorld {
-        dx::World world;
-
+    struct IslandWorld : dx::test::LoadedMap {
         IslandWorld()
+            : LoadedMap("01_NYC_UNATCOIsland")
         {
-            dx::engine::initialize(DEUSEX_GAME_DATA);
-            dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-            REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
-        }
-
-        ~IslandWorld()
-        {
-            dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
         }
     };
 
@@ -128,7 +122,7 @@ namespace {
         if (recordSpawnClass) {
             dx::UClass* cls = dx::cast<dx::UClass>(recordSpawnClass);
             recordSpawnClass = nullptr;
-            dx::World::current->spawn(cls, nullptr, dx::Name(), dx::actor::Location(self), {}, nullptr, true);
+            dx::World::active().spawn(cls, nullptr, dx::Name(), dx::actor::Location(self), {}, nullptr, true);
         }
     }
 
@@ -176,7 +170,7 @@ namespace {
 TEST_CASE("PlaySound defaults to SLOT_Misc and an unset sound radius of 800 is heard within 800 over root 1.3", "[data]")
 {
     IslandWorld island;
-    REQUIRE(dx::audio::initializeOffline(44100));
+    dx::test::OfflineAudio audio;
     dx::UObject* player = island.world.player();
     REQUIRE(player != nullptr);
     dx::Vector origin = dx::actor::Location(player);
@@ -186,20 +180,20 @@ TEST_CASE("PlaySound defaults to SLOT_Misc and an unset sound radius of 800 is h
     dx::UObject* nearSwitch = spawnClass(island.world, "DeusEx.Switch1", near);
     dx::UObject* farSwitch = spawnClass(island.world, "DeusEx.Switch1", far);
     REQUIRE(dx::actor::TransientSoundRadius(nearSwitch) == 0.0f);
-    dx::audio::update(origin, {}, 0.0f);
+    dx::audio::update(&island.world, origin, {}, 0.0f);
     frob(nearSwitch, player);
     frob(farSwitch, player);
     std::vector<dx::audio::VoiceStatus> heard = voicesOf(nearSwitch);
     REQUIRE(heard.size() == 1);
     CHECK(heard[0].slot == 1);
     CHECK(voicesOf(farSwitch).empty());
-    dx::audio::shutdown();
+    audio.shutdown();
 }
 
 TEST_CASE("an obstructed PlaySound is heard within 0.6 of the hearing range at 0.35 volume", "[data]")
 {
     IslandWorld island;
-    REQUIRE(dx::audio::initializeOffline(44100));
+    dx::test::OfflineAudio audio;
     dx::UObject* player = island.world.player();
     REQUIRE(player != nullptr);
     dx::Vector origin = dx::actor::Location(player);
@@ -210,7 +204,7 @@ TEST_CASE("an obstructed PlaySound is heard within 0.6 of the hearing range at 0
     dx::UObject* insideSwitch = spawnClass(island.world, "DeusEx.Switch1", inside);
     dx::UObject* outsideSwitch = spawnClass(island.world, "DeusEx.Switch1", outside);
     dx::UObject* reference = spawnClass(island.world, "DeusEx.Switch1", inside);
-    dx::audio::update(origin, {}, 0.0f);
+    dx::audio::update(&island.world, origin, {}, 0.0f);
     frob(insideSwitch, player);
     frob(outsideSwitch, player);
     CHECK(voicesOf(outsideSwitch).empty());
@@ -224,13 +218,13 @@ TEST_CASE("an obstructed PlaySound is heard within 0.6 of the hearing range at 0
     REQUIRE(expected.size() == 1);
     CHECK(heard[0].volume == expected[0].volume);
     CHECK(heard[0].volume > 0);
-    dx::audio::shutdown();
+    audio.shutdown();
 }
 
 TEST_CASE("ClientHearSound scales volume and pitch by a hundredth and takes slot and no override from the id", "[data]")
 {
     IslandWorld island;
-    REQUIRE(dx::audio::initializeOffline(44100));
+    dx::test::OfflineAudio audio;
     dx::UObject* player = island.world.player();
     REQUIRE(player != nullptr);
     dx::Vector origin = dx::actor::Location(player);
@@ -240,7 +234,7 @@ TEST_CASE("ClientHearSound scales volume and pitch by a hundredth and takes slot
     dx::UObject* sound = dx::objects::loadObject("DeusExSounds.Generic.Switch4ClickOn", nullptr);
     dx::objects::flushLoads();
     REQUIRE(sound != nullptr);
-    dx::audio::update(origin, {}, 0.0f);
+    dx::audio::update(&island.world, origin, {}, 0.0f);
     const int32_t id = 7 * 16 + 3 * 2;
     {
         dx::vm::Call call(player, dx::Name("ClientHearSound"));
@@ -259,7 +253,7 @@ TEST_CASE("ClientHearSound scales volume and pitch by a hundredth and takes slot
         call.obj(source).i(id + 1).obj(sound).v(location).v({ 50, 500, 150 }).run();
     }
     CHECK(voicesOf(source).size() == 1);
-    dx::audio::shutdown();
+    audio.shutdown();
 }
 
 TEST_CASE("RandomBiasedRotation keeps the central rotation at full bias and spreads pitch over a quarter turn without masking", "[data]")
@@ -422,7 +416,7 @@ TEST_CASE("TraceActors and TraceTexture ignore the class argument and report lev
     CHECK(contains(runIterator(tracer, traceActors), island.world.levelInfo));
 }
 
-TEST_CASE("colour operators wrap each channel to a byte and keep the alpha of the colour operand", "[data]")
+TEST_CASE("color operators wrap each channel to a byte and keep the alpha of the color operand", "[data]")
 {
     IslandWorld island;
     dx::UObject* player = island.world.player();
@@ -590,19 +584,19 @@ TEST_CASE("FastTrace only tests world geometry and ignores movers", "[data]")
     CHECK(*reinterpret_cast<uint32_t*>(call.returnValue()) != 0);
 }
 
-TEST_CASE("travelling twice keeps a single NanoKeyRing in the inventory chain", "[data]")
+TEST_CASE("traveling twice keeps a single NanoKeyRing in the inventory chain", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     const char* maps[] = { "01_NYC_UNATCOIsland", "01_NYC_UNATCOHQ", "01_NYC_UNATCOIsland" };
     for (const char* map : maps) {
         dx::objects::unloadPackage(dx::Name(map));
     }
-    std::vector<dx::TravelActor> travel;
+    dx::PendingTravel travel;
     std::vector<int> keyRings;
     std::vector<int> pistols;
     for (const char* map : maps) {
         dx::World world;
-        world.incomingTravel = std::move(travel);
+        world.incomingTravel = travel.take();
         REQUIRE(world.loadMap(map));
         for (int i = 0; i < 30; i++) {
             world.tick(1.0f / 30.0f);
@@ -629,7 +623,6 @@ TEST_CASE("travelling twice keeps a single NanoKeyRing in the inventory chain", 
         travel = world.collectTravel();
         dx::objects::unloadPackage(dx::Name(map));
     }
-    dx::World::releaseTravel(travel);
     CHECK(keyRings == std::vector<int> { 1, 1, 1 });
     CHECK(pistols == std::vector<int> { 1, 1, 1 });
 }

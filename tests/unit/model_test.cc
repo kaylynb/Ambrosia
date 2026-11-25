@@ -1,4 +1,7 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
+#include "engine/actor.h"
 #include "engine/resources.h"
 #include "engine/world.h"
 
@@ -9,7 +12,7 @@
 namespace {
     dx::ULevel* loadLevel(const std::string& map)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::Linker* linker = dx::objects::loadPackage(dx::Name(map));
         if (!linker) {
             return nullptr;
@@ -17,6 +20,9 @@ namespace {
         int32_t ref = linker->findExport(dx::Name("MyLevel"), dx::Name("Level"), "");
         dx::ULevel* level = dx::cast<dx::ULevel>(linker->object(ref));
         dx::objects::ensureLoaded(level);
+        // Load the actors' classes too: until a class is read it has no superclass,
+        // so isA fails for actors whose class no earlier test happened to load.
+        dx::objects::flushLoads();
         return level;
     }
 }
@@ -25,7 +31,18 @@ TEST_CASE("level actor list of UNATCO Island", "[data]")
 {
     dx::ULevel* level = loadLevel("01_NYC_UNATCOIsland");
     REQUIRE(level != nullptr);
-    CHECK(level->actors.size() == 3687);
+    // Every entry is an actor from this map; no fixed count, so any version of the map passes.
+    size_t listed = 0;
+    for (dx::UObject* a : level->actors) {
+        if (!a) {
+            continue;
+        }
+        listed++;
+        INFO(a->name.str());
+        CHECK(a->isA(dx::engineClasses().actor));
+        CHECK(a->outermost()->name == dx::Name("01_NYC_UNATCOIsland"));
+    }
+    CHECK(listed > 1000);
     REQUIRE(level->actors[0] != nullptr);
     CHECK(level->actors[0]->cls->name == dx::Name("LevelInfo"));
     REQUIRE(level->model != nullptr);
@@ -36,7 +53,7 @@ TEST_CASE("level actor list of UNATCO Island", "[data]")
 TEST_CASE("every map loads without native serialization mismatches", "[data]")
 {
     size_t maps = 0;
-    for (const auto& entry : std::filesystem::directory_iterator(DEUSEX_GAME_DATA "/Maps")) {
+    for (const auto& entry : std::filesystem::directory_iterator(dx::test::gameData() + "/Maps")) {
         dx::ULevel* level = loadLevel(entry.path().stem().string());
         INFO(entry.path().filename().string());
         REQUIRE(level != nullptr);

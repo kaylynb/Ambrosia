@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "debugui/imgui_setup.h"
 
 namespace dx::editor {
     void Editor::rebuildWindow()
@@ -6,7 +7,7 @@ namespace dx::editor {
         if (!showRebuild) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(360, 0), ImGuiCond_Appearing);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(360), debugui::scaled(0)), ImGuiCond_Appearing);
         if (!ImGui::Begin("Rebuild", &showRebuild)) {
             ImGui::End();
             return;
@@ -102,8 +103,13 @@ namespace dx::editor {
         }
         captureRegions();
         refreshActors();
+        if (action != "show" && action != "hide") {
+            cancelComponentDrag();
+            history.clear();
+        }
+        levelChanged = true;
         status = "paths " + action + ": " + std::to_string(count);
-        std::fprintf(stderr, "%s\n", status.c_str());
+        dx::log::info("Log", "{}", status);
         return true;
     }
 }

@@ -1,5 +1,7 @@
 #include "render/gl_device.h"
 
+#include "render/render_debug.h"
+
 #include <glad/gl.h>
 
 namespace dx {
@@ -34,6 +36,16 @@ namespace dx {
     void GLRenderDevice::applyGamma(int width, int height, float exponent)
     {
         gammaPass->apply(width, height, exponent);
+    }
+
+    void GLRenderDevice::keepFrame(int width, int height)
+    {
+        gammaPass->keep(width, height);
+    }
+
+    bool GLRenderDevice::readKeptFrame(std::vector<uint8_t>& rgba, int& width, int& height)
+    {
+        return gammaPass->read(rgba, width, height);
     }
 
     void GLRenderDevice::beginScene(int width, int height, int samples, OcclusionQuality ambientOcclusion)
@@ -181,11 +193,7 @@ namespace dx {
 
     void GLRenderDevice::setWireframe(bool enabled)
     {
-#ifndef __EMSCRIPTEN__
         glPolygonMode(GL_FRONT_AND_BACK, enabled ? GL_LINE : GL_FILL);
-#else
-        static_cast<void>(enabled);
-#endif
     }
 
     void GLRenderDevice::setPolygonOffset(bool enabled, float factor, float units)
@@ -206,7 +214,6 @@ namespace dx {
 
     void GLRenderDevice::setClipPlanes(const float* planes, int32_t count)
     {
-#ifndef __EMSCRIPTEN__
         for (int32_t i = 0; i < 8; i++) {
             if (i < count) {
                 glEnable(static_cast<GLenum>(GL_CLIP_DISTANCE0 + i));
@@ -214,7 +221,6 @@ namespace dx {
                 glDisable(static_cast<GLenum>(GL_CLIP_DISTANCE0 + i));
             }
         }
-#endif
         shader->setClipPlanes(planes, count);
     }
 
@@ -288,23 +294,9 @@ namespace dx {
         shader->drawRange(first, count);
     }
 
-    uint32_t GLRenderDevice::createStatic(const std::vector<GLVertex>& vertices)
+    StaticGeometry GLRenderDevice::createStatic(const std::vector<GLVertex>& vertices)
     {
-        uint32_t buffer = 0;
-        uint32_t vao = shader->createStatic(vertices, buffer);
-        staticBuffers[vao] = buffer;
-        return vao;
-    }
-
-    void GLRenderDevice::deleteStatic(uint32_t geometry)
-    {
-        auto found = staticBuffers.find(geometry);
-        if (found == staticBuffers.end()) {
-            return;
-        }
-        glDeleteVertexArrays(1, &found->first);
-        glDeleteBuffers(1, &found->second);
-        staticBuffers.erase(found);
+        return shader->createStatic(vertices);
     }
 
     void GLRenderDevice::bindStatic(uint32_t geometry)
@@ -322,16 +314,9 @@ namespace dx {
         shader->drawStaticRanges(geometry, firsts, counts, ranges);
     }
 
-    uint32_t GLRenderDevice::createQuery()
+    QueryHandle GLRenderDevice::createQuery()
     {
-        GLuint query = 0;
-        glGenQueries(1, &query);
-        return query;
-    }
-
-    void GLRenderDevice::deleteQuery(uint32_t query)
-    {
-        glDeleteQueries(1, &query);
+        return gl::createQuery();
     }
 
     void GLRenderDevice::beginQuery(uint32_t query)
@@ -388,31 +373,48 @@ namespace dx {
         textures->clear();
     }
 
-    uint32_t GLRenderDevice::createLightmap(int32_t size, const uint8_t* rgba)
+    uint64_t GLRenderDevice::textureGeneration() const
     {
-        GLuint id = 0;
-        glGenTextures(1, &id);
-        glBindTexture(GL_TEXTURE_2D, id);
+        return textures->generation();
+    }
+
+    bool GLRenderDevice::holdsTexture(const UObject* texture) const
+    {
+        return textures->holds(texture);
+    }
+
+    TextureHandle GLRenderDevice::createLightmap(int32_t size, const uint8_t* rgba)
+    {
+        TextureHandle page = gl::createTexture();
+        glBindTexture(GL_TEXTURE_2D, page.get());
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        return id;
+        return page;
     }
 
     void GLRenderDevice::updateLightmap(uint32_t texture, int32_t x, int32_t y, int32_t width, int32_t height, const uint8_t* rgba)
     {
+        renderCounters.lightmapUpdates++;
         glBindTexture(GL_TEXTURE_2D, texture);
         glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
     }
 
-    void GLRenderDevice::deleteLightmaps(const std::vector<uint32_t>& ids)
+    void GLRenderDevice::deleteLightmaps(std::vector<TextureHandle>& pages)
     {
-        if (!ids.empty()) {
-            glDeleteTextures(static_cast<GLsizei>(ids.size()), ids.data());
+        if (pages.empty()) {
+            return;
         }
+        std::vector<GLuint> ids;
+        ids.reserve(pages.size());
+        for (TextureHandle& page : pages) {
+            ids.push_back(page.release());
+        }
+        pages.clear();
+        glDeleteTextures(static_cast<GLsizei>(ids.size()), ids.data());
     }
 
     Canvas2D& GLRenderDevice::canvas()

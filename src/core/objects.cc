@@ -1,15 +1,20 @@
 #include "core/objects.h"
 
 #include "core/config.h"
+#include "core/gc.h"
+#include "core/log.h"
+#include "core/profile.h"
+#include "core/scoped_value.h"
+#include "core/text.h"
 #include "core/vm.h"
-#include "engine/reader.h"
+#include "core/reader.h"
 
 #include <algorithm>
-#include <cctype>
-#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <typeinfo>
 #include <unordered_map>
@@ -26,6 +31,12 @@ namespace dx {
             std::unordered_map<Name, ObjectFactory> factories;
             std::unordered_map<Name, UClass*> intrinsics;
             std::vector<UObject*> table;
+            // The generation each slot's next handle gets, and the freed slots waiting for reuse,
+            // oldest first.
+            std::vector<uint16_t> generations;
+            std::deque<uint32_t> freeSlots;
+            bool forceReuse = false;
+            uint32_t slotLimit = objects::HandleSlotMask + 1;
             std::deque<UObject*> pending;
             std::unordered_map<Name, uint32_t> nameCounters;
             std::unordered_set<Name> usedNames;
@@ -41,19 +52,13 @@ namespace dx {
             UClass* classClassPtr = nullptr;
         };
 
+        // Never destroyed, as the objects it holds are not: freeing them at exit would only
+        // cost time, and a static destructor here would run before LeakSanitizer looks, leaving
+        // every live object unreachable and reported as leaked.
         Registry& registry()
         {
-            static Registry instance;
-            return instance;
-        }
-
-        std::string lower(std::string_view text)
-        {
-            std::string result(text);
-            for (char& c : result) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
-            return result;
+            static Registry* instance = new Registry;
+            return *instance;
         }
 
         const std::unordered_set<std::string>& engineIntrinsics()
@@ -120,7 +125,7 @@ namespace dx {
 
         UObject* makeIntrinsicInstance(Name typeName)
         {
-            std::string key = lower(typeName.str());
+            std::string key = lowered(typeName.str());
             if (key == "function") {
                 return new UFunction();
             }
@@ -201,7 +206,7 @@ namespace dx {
 
         bool isKnownType(Name typeName)
         {
-            if (intrinsicSupers().count(lower(typeName.str()))) {
+            if (intrinsicSupers().count(lowered(typeName.str()))) {
                 return true;
             }
             return registry().factories.count(typeName) != 0;
@@ -280,7 +285,7 @@ namespace dx {
     {
         const auto& table = package->exports();
         for (size_t i = 0; i < table.size(); i++) {
-            if (names[static_cast<size_t>(table[i].name)] != objectName) {
+            if (name(table[i].name) != objectName) {
                 continue;
             }
             int32_t ref = static_cast<int32_t>(i + 1);
@@ -298,9 +303,41 @@ namespace dx {
         return 0;
     }
 
+    void Linker::forget(const std::unordered_set<const UObject*>& dead)
+    {
+        for (UObject*& slot : exports) {
+            if (slot && dead.count(slot)) {
+                slot = nullptr;
+            }
+        }
+        for (size_t i = 0; i < imports.size(); i++) {
+            if (imports[i] && dead.count(imports[i])) {
+                imports[i] = nullptr;
+                importResolved[i] = false;
+            }
+        }
+        if (packageObject && dead.count(packageObject)) {
+            packageObject = nullptr;
+        }
+    }
+
+    bool Linker::forgetExport(const UObject* object)
+    {
+        size_t index = static_cast<size_t>(object->exportRef - 1);
+        if (object->exportRef <= 0 || index >= exports.size() || exports[index] != object) {
+            return false;
+        }
+        exports[index] = nullptr;
+        return true;
+    }
+
     void Linker::rebind(int32_t ref, UObject* object)
     {
         exports.at(static_cast<size_t>(ref - 1)) = object;
+        if (object) {
+            object->inLinkerTable = true;
+            object->linkerShared = true;
+        }
     }
 
     UObject* Linker::object(int32_t ref)
@@ -329,6 +366,10 @@ namespace dx {
         if (!importResolved[index]) {
             importResolved[index] = true;
             imports[index] = resolveImport(ref);
+            if (imports[index]) {
+                imports[index]->inLinkerTable = true;
+                imports[index]->linkerShared = true;
+            }
         }
         return imports[index];
     }
@@ -336,25 +377,34 @@ namespace dx {
     UObject* Linker::createExport(int32_t ref)
     {
         const ExportEntry& entry = package->exportAt(ref);
+        // Read before the object is made: a bad name index throws, and nothing would own it yet.
+        Name exportName = name(entry.name);
+        // A save may contain instances of mod classes that are no longer installed.
+        // Leave every reference to such an instance None, including the level's actor
+        // slot. A plain Object has neither its Actor layout nor its script methods.
+        if (savedGame && entry.classRef < 0 && !object(entry.classRef)) {
+            return nullptr;
+        }
         UObject* result;
         if (entry.classRef == 0) {
             result = new UClass();
         } else {
             result = makeInstance(nativeTypeOf(this, entry.classRef));
         }
-        result->name = names[static_cast<size_t>(entry.name)];
+        result->name = exportName;
         registry().usedNames.insert(result->name);
         result->flags = entry.flags;
         result->linker = this;
         result->exportRef = ref;
         result->loaded = false;
         exports[static_cast<size_t>(ref - 1)] = result;
+        result->inLinkerTable = true;
         objects::registerObject(result);
         result->outer = entry.outer != 0 ? object(entry.outer) : packageObject;
         if (entry.classRef != 0) {
             result->cls = cast<UClass>(object(entry.classRef));
             if (!result->cls) {
-                std::fprintf(stderr, "warning: missing class for %s\n", result->pathName().c_str());
+                log::warn("DevLoad", "missing class for {}", result->pathName());
                 result->cls = objects::objectClass();
             }
         } else {
@@ -367,8 +417,8 @@ namespace dx {
     UObject* Linker::resolveImport(int32_t ref)
     {
         const ImportEntry& entry = package->importAt(ref);
-        Name objectName = names[static_cast<size_t>(entry.name)];
-        Name className = names[static_cast<size_t>(entry.className)];
+        Name objectName = name(entry.name);
+        Name className = name(entry.className);
         if (entry.outer == 0) {
             objects::loadPackage(objectName);
             return objects::packageObject(objectName);
@@ -380,49 +430,45 @@ namespace dx {
         Name rootName(package->objectName(root));
         Linker* other = objects::loadPackage(rootName);
         if (!other) {
-            std::fprintf(stderr, "warning: package %s not found for %s\n", rootName.c_str(), objectName.c_str());
+            log::warn("DevLoad", "package {} not found for {}", rootName.str(), objectName.str());
             return nullptr;
         }
         std::string group = package->groupOf(ref);
         int32_t found = other->findExport(objectName, className, group);
         if (found == 0 && className == Name("Class")) {
+            if (savedGame && !objects::isIntrinsicClassName(objectName.str())) {
+                UClass* live = objects::findClass(rootName.str() + "." + objectName.str());
+                if (live && live->outermost()->name == rootName) {
+                    return live;
+                }
+                log::warn("DevLoad", "saved class {}.{} is not installed; skipping its instances", rootName.str(), objectName.str());
+                return nullptr;
+            }
             return objects::intrinsicClass(objectName);
         }
         if (found == 0) {
             found = other->findExport(objectName, className, "*");
         }
         if (found == 0) {
-            std::fprintf(stderr, "warning: cannot resolve %s %s.%s.%s\n", className.c_str(), rootName.c_str(), group.c_str(), objectName.c_str());
+            log::warn("DevLoad", "cannot resolve {} {}.{}.{}", className.str(), rootName.str(), group, objectName.str());
             return nullptr;
         }
         return other->object(found);
     }
 
     namespace objects {
-        int32_t legacyLatentAction(int32_t action)
-        {
-            switch (action) {
-            case 256:
-                return 384;
-            case 261:
-                return 385;
-            case 301:
-                return 302;
-            case 500:
-            case 502:
-            case 504:
-            case 506:
-            case 508:
-            case 510:
-            case 527:
-                return action + 1;
-            default:
-                return action;
+        void allocateData(UObject* object);
+        void setData(UObject* object, UClass* layout, const UObject* defaults);
+        void finishBootstrap();
+
+        namespace {
+            // For log lines: path::string() throws on Windows for names outside the narrow code page.
+            std::string displayPath(const std::filesystem::path& path)
+            {
+                std::u8string text = path.u8string();
+                return std::string(text.begin(), text.end());
             }
         }
-
-        void allocateData(UObject* object);
-        void finishBootstrap();
 
         void initialize(const std::filesystem::path& gameRoot)
         {
@@ -430,6 +476,7 @@ namespace dx {
             reg.root = gameRoot;
             if (reg.table.empty()) {
                 reg.table.push_back(nullptr);
+                reg.generations.push_back(0);
             }
             const char* folders[] = { "System", "Textures", "Sounds", "Music", "Maps" };
             const char* extensions[] = { ".u", ".utx", ".uax", ".umx", ".dx", ".unr" };
@@ -442,11 +489,31 @@ namespace dx {
                 directories.push_back(user / folder);
             }
             for (const std::filesystem::path& directory : directories) {
-                if (!std::filesystem::is_directory(directory)) {
+                std::error_code error;
+                if (!std::filesystem::is_directory(directory, error)) {
                     continue;
                 }
-                for (const auto& item : std::filesystem::directory_iterator(directory)) {
-                    std::string extension = lower(item.path().extension().string());
+                std::filesystem::directory_iterator items(directory, error);
+                if (error) {
+                    log::warn("DevLoad", "cannot list {}: {}", displayPath(directory), error.message());
+                    continue;
+                }
+                for (auto end = std::filesystem::directory_iterator(); items != end; items.increment(error)) {
+                    if (error) {
+                        log::warn("DevLoad", "stopped listing {}: {}", displayPath(directory), error.message());
+                        break;
+                    }
+                    const std::filesystem::directory_entry& item = *items;
+                    std::string extension;
+                    std::string stem;
+                    try {
+                        extension = lowered(item.path().extension().string());
+                        stem = lowered(item.path().stem().string());
+                    } catch (const std::exception&) {
+                        // path::string() throws for a name the narrow encoding cannot represent.
+                        log::warn("DevLoad", "skipping a file in {} whose name cannot be converted", displayPath(directory));
+                        continue;
+                    }
                     bool known = false;
                     for (const char* candidate : extensions) {
                         if (extension == candidate) {
@@ -454,9 +521,9 @@ namespace dx {
                         }
                     }
                     if (known && directory.parent_path() == user) {
-                        reg.paths[lower(item.path().stem().string())] = item.path();
+                        reg.paths[stem] = item.path();
                     } else if (known) {
-                        reg.paths.emplace(lower(item.path().stem().string()), item.path());
+                        reg.paths.emplace(stem, item.path());
                     }
                 }
             }
@@ -483,6 +550,8 @@ namespace dx {
             auto linker = reg.linkers.find(packageName);
             if (linker != reg.linkers.end()) {
                 linker->second->packageObject = object;
+                object->inLinkerTable = true;
+                object->linkerShared = true;
             }
             object->cls = intrinsicClass(Name("Package"));
             if (reg.bootstrapping) {
@@ -491,6 +560,13 @@ namespace dx {
                 allocateData(object);
             }
             return object;
+        }
+
+        UObject* findPackageObject(Name packageName)
+        {
+            Registry& reg = registry();
+            auto it = reg.packageObjects.find(packageName);
+            return it != reg.packageObjects.end() ? it->second : nullptr;
         }
 
         void unloadPackage(Name packageName)
@@ -503,6 +579,123 @@ namespace dx {
             reg.retired.push_back(std::move(it->second));
             reg.linkers.erase(it);
             reg.packageObjects.erase(packageName);
+        }
+
+        std::vector<UObject*> unloadedPackages(bool levelsOnly)
+        {
+            std::vector<UObject*> result;
+            for (const std::unique_ptr<Linker>& linker : registry().retired) {
+                if (linker->packageObject && (!levelsOnly || linker->findExport(Name("MyLevel"), Name("Level"), "") != 0)) {
+                    result.push_back(linker->packageObject);
+                }
+            }
+            return result;
+        }
+
+        bool isLoadedLinker(const Linker* linker)
+        {
+            auto it = registry().linkers.find(linker->packageName);
+            return it != registry().linkers.end() && it->second.get() == linker;
+        }
+
+        void releaseObjects(const std::vector<UObject*>& given, const std::vector<UObject*>& packages, bool reuseSlots)
+        {
+            Registry& reg = registry();
+            std::vector<UObject*> objects;
+            std::unordered_set<const UObject*> dead;
+            for (UObject* object : given) {
+                if (object && dead.insert(object).second) {
+                    objects.push_back(object);
+                }
+            }
+            // A class deletes its default object, so the default object goes with it here.
+            for (size_t i = 0; i < objects.size(); i++) {
+                if (UClass* cls = cast<UClass>(objects[i])) {
+                    if (cls->defaultObject && dead.insert(cls->defaultObject).second) {
+                        objects.push_back(cls->defaultObject);
+                    }
+                    cls->defaultObject = nullptr;
+                }
+            }
+            std::unordered_set<const UObject*> released(packages.begin(), packages.end());
+            std::unordered_set<const Linker*> linkers;
+            for (auto it = reg.retired.begin(); it != reg.retired.end();) {
+                if (released.count((*it)->packageObject)) {
+                    linkers.insert(it->get());
+                }
+                ++it;
+            }
+            for (const auto& [name, linker] : reg.linkers) {
+                if (released.count(linker->packageObject)) {
+                    linkers.insert(linker.get());
+                }
+            }
+            std::erase_if(reg.pending, [&](UObject* object) { return dead.count(object) != 0; });
+            std::erase_if(reg.deferredData, [&](UObject* object) { return dead.count(object) != 0; });
+            for (UObject* object : objects) {
+                uint32_t slot = handleSlot(object->handle);
+                if (slot < reg.table.size() && reg.table[slot] == object) {
+                    reg.table[slot] = nullptr;
+                    // Reused with the next generation, unless that would wrap around.
+                    if ((reuseSlots || reg.forceReuse) && !reg.editorMode && reg.generations[slot] + 1u < HandleGenerations) {
+                        reg.generations[slot]++;
+                        reg.freeSlots.push_back(slot);
+                    }
+                }
+            }
+            if (!linkers.empty()) {
+                for (UObject* object : reg.table) {
+                    if (object && object->linker && linkers.count(object->linker)) {
+                        object->linker = nullptr;
+                        object->exportRef = 0;
+                    }
+                }
+            }
+            // Linkers that stay may have loaded or imported a dead object. Every object placed in
+            // a linker's tables is marked, so the others need no search. One that is only its own
+            // linker's export, such as an actor of the map, is cleared from that slot alone;
+            // anything imported or shared means looking through every linker.
+            bool inTables = false;
+            for (UObject* object : objects) {
+                if (!object->inLinkerTable) {
+                    continue;
+                }
+                if (object->linkerShared || !object->linker || object->exportRef <= 0 || !object->linker->forgetExport(object)) {
+                    inTables = true;
+                    break;
+                }
+            }
+            if (inTables) {
+                for (const auto& [name, linker] : reg.linkers) {
+                    if (!linkers.count(linker.get())) {
+                        linker->forget(dead);
+                    }
+                }
+                for (const std::unique_ptr<Linker>& linker : reg.retired) {
+                    if (!linkers.count(linker.get())) {
+                        linker->forget(dead);
+                    }
+                }
+            }
+            if (std::any_of(objects.begin(), objects.end(), [](const UObject* object) { return cast<UClass>(object) != nullptr; })) {
+                std::erase_if(reg.intrinsics, [&](const auto& entry) { return dead.count(entry.second) != 0; });
+            }
+            // Property values are torn down while every class and property they need is still
+            // there; then the objects themselves go.
+            for (UObject* object : objects) {
+                if (object->data && object->cls) {
+                    object->cls->destroyValue(object->data);
+                }
+                freeObjectData(object->data);
+                object->data = nullptr;
+            }
+            for (UObject* object : objects) {
+                delete object;
+            }
+            gc::objectsReleased();
+            std::erase_if(reg.packageObjects, [&](const auto& entry) { return released.count(entry.second) != 0 || dead.count(entry.second) != 0; });
+            std::erase_if(reg.linkers, [&](const auto& entry) { return linkers.count(entry.second.get()) != 0; });
+            std::erase_if(reg.retired, [&](const std::unique_ptr<Linker>& linker) { return linkers.count(linker.get()) != 0; });
         }
 
         Linker* findLinker(Name packageName)
@@ -521,7 +714,7 @@ namespace dx {
             if (it != reg.linkers.end()) {
                 return it->second.get();
             }
-            auto path = reg.paths.find(lower(packageName.str()));
+            auto path = reg.paths.find(lowered(packageName.str()));
             if (path == reg.paths.end()) {
                 return nullptr;
             }
@@ -529,6 +722,8 @@ namespace dx {
             Linker* result = linker.get();
             reg.linkers.emplace(packageName, std::move(linker));
             result->packageObject = packageObject(packageName);
+            result->packageObject->inLinkerTable = true;
+            result->packageObject->linkerShared = true;
             return result;
         }
 
@@ -536,10 +731,17 @@ namespace dx {
         {
             Registry& reg = registry();
             if (path.empty()) {
-                reg.paths.erase(lower(packageName.str()));
+                reg.paths.erase(lowered(packageName.str()));
             } else {
-                reg.paths[lower(packageName.str())] = path;
+                reg.paths[lowered(packageName.str())] = path;
             }
+        }
+
+        std::filesystem::path packageFile(Name packageName)
+        {
+            Registry& reg = registry();
+            auto path = reg.paths.find(lowered(packageName.str()));
+            return path == reg.paths.end() ? std::filesystem::path() : path->second;
         }
 
         Linker* loadPackageFile(Name packageName, const std::filesystem::path& path, bool savedGame)
@@ -551,6 +753,8 @@ namespace dx {
             result->savedGame = savedGame;
             reg.linkers.emplace(packageName, std::move(linker));
             result->packageObject = packageObject(packageName);
+            result->packageObject->inLinkerTable = true;
+            result->packageObject->linkerShared = true;
             return result;
         }
 
@@ -579,22 +783,64 @@ namespace dx {
             Registry& reg = registry();
             if (reg.table.empty()) {
                 reg.table.push_back(nullptr);
+                reg.generations.push_back(0);
             }
-            object->handle = static_cast<uint32_t>(reg.table.size());
-            reg.table.push_back(object);
+            uint32_t slot = 0;
+            // A collection walks the table in order and expects what it loads to come after.
+            if (!reg.editorMode && !reg.freeSlots.empty() && !gc::isCollecting()) {
+                slot = reg.freeSlots.front();
+                reg.freeSlots.pop_front();
+            } else {
+                if (reg.table.size() >= reg.slotLimit) {
+                    log::error("Critical", "fatal: the object table is full: {} objects. A handle has room for {}.", reg.table.size(), reg.slotLimit);
+                    log::flush();
+                    std::abort();
+                }
+                slot = static_cast<uint32_t>(reg.table.size());
+                reg.table.push_back(nullptr);
+                reg.generations.push_back(0);
+            }
+            object->handle = slot | (static_cast<uint32_t>(reg.generations[slot]) << HandleSlotBits);
+            reg.table[slot] = object;
+            gc::objectRegistered(object);
         }
 
-        UObject* fromHandle(uint32_t handle)
+        UObject* atHandle(uint32_t handle)
         {
             Registry& reg = registry();
-            if (handle == 0 || handle >= reg.table.size()) {
+            uint32_t slot = handleSlot(handle);
+            if (slot == 0 || slot >= reg.table.size()) {
                 return nullptr;
             }
-            UObject* object = reg.table[handle];
-            if (object && !object->loaded) {
+            UObject* object = reg.table[slot];
+            return object && object->handle == handle ? object : nullptr;
+        }
+
+        UObject* fromHandle(uint32_t handle, const UObject* from)
+        {
+            UObject* object = atHandle(handle);
+            if (!object) {
+                uint32_t slot = handleSlot(handle);
+                Registry& reg = registry();
+                if (slot != 0 && slot < reg.table.size() && reg.table[slot]) {
+                    log::warn("DevGarbage", "{} names a deleted object (handle {:08x}; slot {} now holds {})", from ? from->pathName() : std::string("a handle"), handle, slot, reg.table[slot]->pathName());
+                }
+                return nullptr;
+            }
+            if (!object->loaded) {
                 ensureLoaded(object);
             }
             return object;
+        }
+
+        void forceSlotReuse(bool force)
+        {
+            registry().forceReuse = force;
+        }
+
+        void setSlotLimit(uint32_t slots)
+        {
+            registry().slotLimit = std::min(slots, HandleSlotMask + 1);
         }
 
         const std::vector<UObject*>& all()
@@ -609,6 +855,7 @@ namespace dx {
 
         void flushLoads()
         {
+            DX_ZONE_NAMED("Load queued objects");
             Registry& reg = registry();
             while (!reg.pending.empty()) {
                 UObject* object = reg.pending.front();
@@ -617,44 +864,49 @@ namespace dx {
             }
         }
 
+        void loadAllExports(Linker* linker)
+        {
+            for (size_t i = 0; i < linker->file().exports().size(); i++) {
+                ensureLoaded(linker->object(static_cast<int32_t>(i + 1)));
+            }
+            flushLoads();
+        }
+
         void ensureLoaded(UObject* object)
         {
             if (!object || object->loaded) {
                 return;
             }
+            DX_TIME("Object loading");
             object->loaded = true;
-            Linker& linker = *object->linker;
-            const ExportEntry& entry = linker.file().exportAt(object->exportRef);
-            UClass* asClass = cast<UClass>(object);
-            UClass* cls = object->cls;
-            if (cls && !registry().bootstrapping) {
-                ensureLoaded(cls);
-                cls->linkClass();
-                object->data = new uint8_t[std::max<size_t>(cls->size, 1)];
-                cls->initValue(object->data);
-                if (cls->defaultObject) {
-                    cls->copyValue(object->data, cls->defaultObject->data);
+            try {
+                Linker& linker = *object->linker;
+                const ExportEntry& entry = linker.file().exportAt(object->exportRef);
+                UClass* asClass = cast<UClass>(object);
+                UClass* cls = object->cls;
+                if (cls && !registry().bootstrapping) {
+                    ensureLoaded(cls);
+                    cls->linkClass();
+                    setData(object, cls, cls->defaultObject);
+                } else if (!asClass) {
+                    registry().deferredData.push_back(object);
                 }
-            } else if (!asClass) {
-                registry().deferredData.push_back(object);
-            }
-            if (entry.size > 0) {
-                Reader reader(linker.file().data(), static_cast<size_t>(entry.offset));
-                int32_t stackNode = 0;
-                int32_t stackState = 0;
-                int32_t stackOffset = -1;
-                uint64_t probeMask = 0;
-                int32_t latentAction = 0;
-                if (entry.flags & RF_HasStackFlag) {
-                    stackNode = reader.index();
-                    stackState = reader.index();
-                    probeMask = reader.u64();
-                    latentAction = reader.i32();
-                    if (stackNode != 0) {
-                        stackOffset = reader.index();
+                if (entry.size > 0) {
+                    Reader reader(linker.file().data(), static_cast<size_t>(entry.offset));
+                    int32_t stackNode = 0;
+                    int32_t stackState = 0;
+                    int32_t stackOffset = -1;
+                    uint64_t probeMask = 0;
+                    int32_t latentAction = 0;
+                    if (entry.flags & RF_HasStackFlag) {
+                        stackNode = reader.index();
+                        stackState = reader.index();
+                        probeMask = reader.u64();
+                        latentAction = reader.i32();
+                        if (stackNode != 0) {
+                            stackOffset = reader.index();
+                        }
                     }
-                }
-                try {
                     if (!asClass) {
                         readTaggedProperties(object->data ? cls : nullptr, object->data, reader, linker);
                     }
@@ -663,23 +915,40 @@ namespace dx {
                     if (reader.tell() != end && typeid(*object) != typeid(UObject)) {
                         registry().loadMismatches.push_back(object->fullName() + " consumed " + std::to_string(reader.tell() - static_cast<size_t>(entry.offset)) + " of " + std::to_string(entry.size));
                     }
-                } catch (const std::exception& error) {
-                    std::fprintf(stderr, "warning: failed loading %s: %s\n", object->fullName().c_str(), error.what());
-                }
-                if (stackState != 0) {
-                    UState* state = cast<UState>(linker.object(stackState));
-                    UStruct* node = cast<UStruct>(linker.object(stackNode));
-                    vm::restoreState(object, state, node, stackOffset, probeMask);
-                    if (linker.savedGame && object->stateFrame) {
-                        object->stateFrame->latentAction = legacyLatentAction(latentAction);
-                        UState* frameState = object->stateFrame->state;
-                        uint64_t base = frameState ? (frameState->probeMask | cls->probeMask) & frameState->ignoreMask : cls->probeMask & cls->ignoreMask;
-                        object->stateFrame->disabledProbes = base & ~probeMask;
+                    if (stackState != 0) {
+                        UState* state = cast<UState>(linker.object(stackState));
+                        UStruct* node = cast<UStruct>(linker.object(stackNode));
+                        vm::restoreState(object, state, node, stackOffset, probeMask);
+                        if (linker.savedGame && object->stateFrame) {
+                            object->stateFrame->latentAction = latentAction;
+                            UState* frameState = object->stateFrame->state;
+                            uint64_t base = frameState ? (frameState->probeMask | cls->probeMask) & frameState->ignoreMask : cls->probeMask & cls->ignoreMask;
+                            object->stateFrame->disabledProbes = base & ~probeMask;
+                        }
                     }
                 }
+                syncObjectProperties(object);
+                object->postLoad();
+            } catch (const std::exception& error) {
+                object->loadFailed = true;
+                log::warn("DevLoad", "failed loading {}: {}", object->fullName(), error.what());
             }
-            syncObjectProperties(object);
-            object->postLoad();
+        }
+
+        // A fresh property block for the object, laid out by layout and copied from defaults
+        // unless the object is those defaults. A block it already had is torn down first, by the
+        // class that built it.
+        void setData(UObject* object, UClass* layout, const UObject* defaults)
+        {
+            if (object->data && object->cls) {
+                object->cls->destroyValue(object->data);
+            }
+            freeObjectData(object->data);
+            object->data = allocateObjectData(layout->size);
+            layout->initValue(object->data);
+            if (defaults && defaults != object && defaults->data) {
+                layout->copyValue(object->data, defaults->data);
+            }
         }
 
         void allocateData(UObject* object)
@@ -692,12 +961,7 @@ namespace dx {
                 ensureLoaded(cls);
                 cls->linkClass();
             }
-            delete[] object->data;
-            object->data = new uint8_t[std::max<size_t>(cls->size, 1)];
-            cls->initValue(object->data);
-            if (cls->defaultObject && cls->defaultObject != object) {
-                cls->copyValue(object->data, cls->defaultObject->data);
-            }
+            setData(object, cls, cls->defaultObject);
             syncObjectProperties(object);
         }
 
@@ -744,19 +1008,23 @@ namespace dx {
                 }
                 return cast<UClass>(core->object(core->findExport(Name("Object"), Name("Class"), "")));
             }
-            reg.bootstrapping = true;
-            Linker* core = loadPackage(Name("Core"));
-            if (!core) {
-                throw std::runtime_error("Core package not found. Copy the Deus Ex game files into a game-data directory next to the executable, or set DEUSEX_GAME_DATA to their location.");
+            UClass* object = nullptr;
+            {
+                // Cleared however it ends, so a missing Core is tried again (and reported again)
+                // rather than leaving every later call to take the bootstrapping path.
+                ScopedValue<bool> bootstrapping(reg.bootstrapping, true);
+                Linker* core = loadPackage(Name("Core"));
+                if (!core) {
+                    throw std::runtime_error("Core package not found");
+                }
+                object = cast<UClass>(core->object(core->findExport(Name("Object"), Name("Class"), "")));
+                ensureLoaded(object);
+                reg.objectClassPtr = object;
+                reg.nameProperty = object->findProperty(Name("Name"));
+                reg.classProperty = object->findProperty(Name("Class"));
+                reg.outerProperty = object->findProperty(Name("Outer"));
+                reg.flagsProperty = object->findProperty(Name("ObjectFlags"));
             }
-            UClass* object = cast<UClass>(core->object(core->findExport(Name("Object"), Name("Class"), "")));
-            ensureLoaded(object);
-            reg.objectClassPtr = object;
-            reg.nameProperty = object->findProperty(Name("Name"));
-            reg.classProperty = object->findProperty(Name("Class"));
-            reg.outerProperty = object->findProperty(Name("Outer"));
-            reg.flagsProperty = object->findProperty(Name("ObjectFlags"));
-            reg.bootstrapping = false;
             finishBootstrap();
             return object;
         }
@@ -772,7 +1040,7 @@ namespace dx {
 
         bool isIntrinsicClassName(std::string_view className)
         {
-            std::string key = lower(className);
+            std::string key = lowered(className);
             return engineIntrinsics().count(key) || editorIntrinsics().count(key) || intrinsicSupers().count(key);
         }
 
@@ -798,15 +1066,15 @@ namespace dx {
             cls->loaded = true;
             reg.intrinsics.emplace(className, cls);
             registerObject(cls);
-            if (engineIntrinsics().count(lower(className.str()))) {
+            if (engineIntrinsics().count(lowered(className.str()))) {
                 cls->outer = packageObject(Name("Engine"));
-            } else if (editorIntrinsics().count(lower(className.str()))) {
+            } else if (editorIntrinsics().count(lowered(className.str()))) {
                 cls->outer = packageObject(Name("Editor"));
             } else {
                 Linker* core = findLinker(Name("Core"));
                 cls->outer = core ? core->packageObject : nullptr;
             }
-            auto super = intrinsicSupers().find(lower(className.str()));
+            auto super = intrinsicSupers().find(lowered(className.str()));
             UClass* parent = nullptr;
             if (super != intrinsicSupers().end()) {
                 parent = findClass(super->second);
@@ -863,7 +1131,7 @@ namespace dx {
             if (intrinsic != registry().intrinsics.end()) {
                 return intrinsic->second;
             }
-            if (intrinsicSupers().count(lower(text))) {
+            if (intrinsicSupers().count(lowered(text))) {
                 return intrinsicClass(className);
             }
             for (auto& [packageName, linker] : registry().linkers) {
@@ -919,7 +1187,7 @@ namespace dx {
             }
             UObject* object = linker->object(ref);
             ensureLoaded(object);
-            if (cls && !object->isA(cls) && !className.none()) {
+            if (cls && (!object || !object->isA(cls)) && !className.none()) {
                 const Package& file = linker->file();
                 for (size_t i = 0; i < file.exports().size(); i++) {
                     int32_t other = static_cast<int32_t>(i + 1);
@@ -978,16 +1246,22 @@ namespace dx {
         UObject* newObject(UClass* cls, UObject* outer, Name objectName, uint32_t flags)
         {
             ensureLoaded(cls);
+            for (const UClass* current = cls; current; current = current->superClass()) {
+                if (current->loadFailed) {
+                    log::error("DevLoad", "cannot create an object of class {}: {} failed to load", cls->pathName(), current->pathName());
+                    return nullptr;
+                }
+            }
             cls->linkClass();
-            UObject* object = createNative(cls);
+            // Owned here until the table takes it, as making its data can throw.
+            std::unique_ptr<UObject> made(createNative(cls));
+            UObject* object = made.get();
             object->cls = cls;
             object->outer = outer;
             object->name = objectName.none() ? uniqueName(cls) : objectName;
             object->flags = flags;
-            object->data = new uint8_t[std::max<size_t>(cls->size, 1)];
-            cls->initValue(object->data);
-            cls->copyValue(object->data, cls->defaultObject->data);
-            registerObject(object);
+            setData(object, cls, cls->defaultObject);
+            registerObject(made.release());
             syncObjectProperties(object);
             return object;
         }
@@ -1006,8 +1280,7 @@ namespace dx {
             cls->classFlags = parent->classFlags;
             cls->within = parent->within;
             cls->configName = parent->configName;
-            cls->data = new uint8_t[std::max<size_t>(cls->cls->size, 1)];
-            cls->cls->initValue(cls->data);
+            setData(cls, cls->cls, nullptr);
             registerObject(cls);
             syncObjectProperties(cls);
             cls->linkClass();
@@ -1027,6 +1300,48 @@ namespace dx {
         uint64_t destroyCount()
         {
             return destroyedObjects;
+        }
+
+        namespace {
+            // The size is kept in front of the data, a whole alignment unit so the data stays as
+            // aligned as new[] makes it.
+            constexpr size_t DataHeader = __STDCPP_DEFAULT_NEW_ALIGNMENT__ > sizeof(size_t) ? __STDCPP_DEFAULT_NEW_ALIGNMENT__ : sizeof(size_t);
+        }
+
+        uint8_t* allocateObjectData(size_t size)
+        {
+            size = std::max<size_t>(size, 1);
+            uint8_t* block = new uint8_t[DataHeader + size];
+            std::memcpy(block, &size, sizeof(size));
+            gc::dataAllocated(size);
+            return block + DataHeader;
+        }
+
+        void freeObjectData(uint8_t* data)
+        {
+            if (!data) {
+                return;
+            }
+            uint8_t* block = data - DataHeader;
+            size_t size = 0;
+            std::memcpy(&size, block, sizeof(size));
+            gc::dataFreed(size);
+            delete[] block;
+        }
+
+        LinkerStats linkerStats()
+        {
+            Registry& reg = registry();
+            LinkerStats stats;
+            for (const auto& [name, linker] : reg.linkers) {
+                stats.loaded++;
+                stats.loadedBytes += linker->file().data().size();
+            }
+            for (const std::unique_ptr<Linker>& linker : reg.retired) {
+                stats.retired++;
+                stats.retiredBytes += linker->file().data().size();
+            }
+            return stats;
         }
 
         void syncObjectProperties(UObject* object)
@@ -1113,49 +1428,13 @@ namespace dx {
                 if (tagType == PropertyType::Struct) {
                     structName = linker.readName(reader);
                 }
-                size_t size = 0;
-                switch ((info >> 4) & 0x07) {
-                case 0:
-                    size = 1;
-                    break;
-                case 1:
-                    size = 2;
-                    break;
-                case 2:
-                    size = 4;
-                    break;
-                case 3:
-                    size = 12;
-                    break;
-                case 4:
-                    size = 16;
-                    break;
-                case 5:
-                    size = reader.u8();
-                    break;
-                case 6:
-                    size = static_cast<uint16_t>(reader.i16());
-                    break;
-                default:
-                    size = reader.u32();
-                    break;
-                }
+                size_t size = readTagSize(reader, info);
                 int32_t arrayIndex = 0;
                 bool infoBit = (info & 0x80) != 0;
                 if (tagType == PropertyType::Bool) {
                     size = 0;
                 } else if (infoBit) {
-                    uint8_t byte1 = reader.u8();
-                    if ((byte1 & 0xc0) == 0xc0) {
-                        uint8_t byte2 = reader.u8();
-                        uint8_t byte3 = reader.u8();
-                        uint8_t byte4 = reader.u8();
-                        arrayIndex = ((byte1 & 0x3f) << 24) | (byte2 << 16) | (byte3 << 8) | byte4;
-                    } else if (byte1 & 0x80) {
-                        arrayIndex = ((byte1 & 0x7f) << 8) | reader.u8();
-                    } else {
-                        arrayIndex = byte1;
-                    }
+                    arrayIndex = readTagArrayIndex(reader);
                 }
                 size_t start = reader.tell();
 
@@ -1217,6 +1496,9 @@ namespace dx {
                         break;
                     case PropertyType::String:
                         if (property->type == PropType::Str || property->type == PropType::String) {
+                            if (size > reader.remaining()) {
+                                throw std::runtime_error("string property past end of package data");
+                            }
                             std::string text(size, '\0');
                             reader.bytes(text.data(), size);
                             text.resize(std::strlen(text.c_str()));
@@ -1235,7 +1517,8 @@ namespace dx {
                     case PropertyType::FixedArray:
                         break;
                     }
-                } catch (const std::exception&) {
+                } catch (const std::exception& error) {
+                    log::warn("DevLoad", "failed reading property {} of {}: {}", propertyName.str(), structType->pathName(), error.what());
                 }
                 reader.seek(start + size);
             }

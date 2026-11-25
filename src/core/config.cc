@@ -1,15 +1,21 @@
 #include "core/config.h"
 
+#include "core/files.h"
+#include "core/log.h"
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/package.h"
+#include "core/platform.h"
+#include "core/settings.h"
+#include "core/text.h"
 
-#include <SDL_filesystem.h>
-#include <SDL_stdinc.h>
+#include <SDL3/SDL_stdinc.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <unordered_map>
 
@@ -26,15 +32,6 @@ namespace dx {
                 end--;
             }
             return std::string(text.substr(begin, end - begin));
-        }
-
-        std::string lower(std::string_view text)
-        {
-            std::string result(text);
-            for (char& c : result) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
-            return result;
         }
 
         struct ConfigState {
@@ -105,11 +102,11 @@ namespace dx {
     bool Ini::load(const std::filesystem::path& filePath)
     {
         path = filePath;
-        std::ifstream file(filePath, std::ios::binary);
-        if (!file) {
+        std::optional<std::string> read = files::readFile(filePath);
+        if (!read) {
             return false;
         }
-        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        std::string content = std::move(*read);
         if (content.size() >= 2 && static_cast<uint8_t>(content[0]) == 0xff && static_cast<uint8_t>(content[1]) == 0xfe) {
             std::string narrow;
             for (size_t i = 2; i + 1 < content.size(); i += 2) {
@@ -155,16 +152,44 @@ namespace dx {
 
     bool Ini::save() const
     {
-        std::ofstream file(path, std::ios::binary);
-        if (!file) {
-            return false;
-        }
-        for (const Section& section : sections) {
-            file << "[" << section.name << "]\r\n";
-            for (const auto& [key, value] : section.entries) {
-                file << key << "=" << value << "\r\n";
+        std::filesystem::path temporary = path;
+        temporary += ".tmp";
+        {
+            std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
+            if (!file) {
+                return false;
             }
-            file << "\r\n";
+            for (const Section& section : sections) {
+                if (leaveOut && leaveOut(section.name, {})) {
+                    continue;
+                }
+                std::vector<const std::pair<std::string, std::string>*> kept;
+                for (const auto& entry : section.entries) {
+                    if (!leaveOut || !leaveOut(section.name, entry.first)) {
+                        kept.push_back(&entry);
+                    }
+                }
+                if (kept.empty() && !section.entries.empty()) {
+                    continue;
+                }
+                file << "[" << section.name << "]\r\n";
+                for (const auto* entry : kept) {
+                    file << entry->first << "=" << entry->second << "\r\n";
+                }
+                file << "\r\n";
+            }
+            file.close();
+            if (!file) {
+                std::error_code ignored;
+                std::filesystem::remove(temporary, ignored);
+                return false;
+            }
+        }
+        std::error_code error;
+        files::replace(temporary, path, error);
+        if (error) {
+            std::filesystem::remove(temporary, error);
+            return false;
         }
         return true;
     }
@@ -239,89 +264,33 @@ namespace dx {
     }
 
     namespace config {
-        std::filesystem::path fromUtf8(char* text)
+        std::filesystem::path findGameRoot()
         {
-            std::filesystem::path path(std::u8string(reinterpret_cast<const char8_t*>(text)));
-            SDL_free(text);
-            return path;
-        }
-
-        std::vector<std::filesystem::path> steamRoots()
-        {
-            std::vector<std::filesystem::path> roots;
-#ifdef _WIN32
-            for (const char* variable : { "ProgramFiles(x86)", "ProgramFiles" }) {
-                if (const char* value = std::getenv(variable)) {
-                    roots.push_back(std::filesystem::path(value) / "Steam");
-                }
-            }
-#else
-            if (const char* home = std::getenv("HOME")) {
-                std::filesystem::path base(home);
-                roots.push_back(base / "Library" / "Application Support" / "Steam");
-                roots.push_back(base / ".steam" / "steam");
-                roots.push_back(base / ".local" / "share" / "Steam");
-                roots.push_back(base / ".var" / "app" / "com.valvesoftware.Steam" / ".local" / "share" / "Steam");
-            }
-#endif
-            return roots;
-        }
-
-        std::vector<std::filesystem::path> steamLibraries(const std::filesystem::path& root)
-        {
-            std::vector<std::filesystem::path> libraries { root };
-            std::ifstream file(root / "steamapps" / "libraryfolders.vdf");
-            std::string line;
-            while (std::getline(file, line)) {
-                std::istringstream stream(line);
-                std::string key;
-                std::string value;
-                if (stream >> std::quoted(key) >> std::quoted(value) && key == "path") {
-                    libraries.emplace_back(value);
-                }
-            }
-            return libraries;
-        }
-
-        std::filesystem::path findGameRoot(const std::filesystem::path& fallback)
-        {
-            std::vector<std::filesystem::path> candidates;
-            if (const char* value = std::getenv("DEUSEX_GAME_DATA")) {
-                candidates.emplace_back(value);
-            }
-            if (const char* value = std::getenv("APPIMAGE")) {
-                candidates.push_back(std::filesystem::path(value).parent_path() / "game-data");
-            }
-            if (char* base = SDL_GetBasePath()) {
-                candidates.push_back(fromUtf8(base) / "game-data");
-            }
-            for (const std::filesystem::path& root : steamRoots()) {
-                for (const std::filesystem::path& library : steamLibraries(root)) {
-                    candidates.push_back(library / "steamapps" / "common" / "Deus Ex");
-                }
-            }
-            for (const std::filesystem::path& candidate : candidates) {
+            std::filesystem::path found;
+            for (const std::filesystem::path& candidate : platform::gameDataCandidates()) {
                 std::error_code error;
                 if (std::filesystem::is_regular_file(candidate / "System" / "DeusEx.u", error)) {
-                    return candidate;
+                    found = candidate;
+                    break;
                 }
             }
-            return fallback;
+            // Said once per folder, so the log shows which copy of the game was read.
+            static std::mutex mutex;
+            static std::filesystem::path said;
+            std::lock_guard lock(mutex);
+            if (!found.empty() && found != said) {
+                said = found;
+                log::info("Config", "game data: {}", found.string());
+            }
+            return found;
         }
 
         std::filesystem::path userDirectory()
         {
+            // $XDG_DATA_HOME/ambrosia when it is set, on every platform, so tests can isolate their
+            // user data; otherwise the platform's own place (platform::userDataDirectory).
             const char* xdg = std::getenv("XDG_DATA_HOME");
-#ifdef _WIN32
-            if (!xdg) {
-                if (char* pref = SDL_GetPrefPath("", "deusex")) {
-                    return fromUtf8(pref);
-                }
-            }
-#endif
-            const char* home = std::getenv("HOME");
-            std::filesystem::path base = xdg ? std::filesystem::path(xdg) : (home ? std::filesystem::path(home) / ".local" / "share" : std::filesystem::temp_directory_path());
-            std::filesystem::path directory = base / "deusex";
+            std::filesystem::path directory = xdg && *xdg ? std::filesystem::path(xdg) / "ambrosia" : platform::userDataDirectory();
             std::error_code error;
             std::filesystem::create_directories(directory, error);
             return directory;
@@ -342,6 +311,9 @@ namespace dx {
             std::filesystem::path userDir = userDirectory();
             loadPreferred(s.system, userDir / "DeusEx.ini", systemDirectory / "DeusEx.ini", systemDirectory / "Default.ini");
             loadPreferred(s.user, userDir / "User.ini", systemDirectory / "User.ini", systemDirectory / "DefUser.ini");
+            // What Ambrosia writes leaves out the keys and sections nothing reads (settings.h).
+            s.system.leaveOut = [](std::string_view section, std::string_view key) { return settings::leftOut(settings::File::System, section, key); };
+            s.user.leaveOut = [](std::string_view section, std::string_view key) { return settings::leftOut(settings::File::User, section, key); };
         }
 
         Ini& system()
@@ -362,7 +334,7 @@ namespace dx {
             if (configName == Name("User")) {
                 return &state().user;
             }
-            std::string key = lower(configName.str());
+            std::string key = lowered(configName.str());
             auto it = state().others.find(key);
             if (it != state().others.end()) {
                 return it->second.get();
@@ -376,16 +348,22 @@ namespace dx {
 
         Ini* localization(std::string_view package)
         {
-            std::string key = lower(package);
+            std::string key = lowered(package);
             auto it = state().localizations.find(key);
             if (it != state().localizations.end()) {
                 return it->second.get();
             }
             auto ini = std::make_unique<Ini>();
             if (!ini->load(state().systemDirectory / (std::string(package) + ".int"))) {
-                for (const auto& item : std::filesystem::directory_iterator(state().systemDirectory)) {
-                    if (iequals(item.path().filename().string(), std::string(package) + ".int")) {
-                        ini->load(item.path());
+                std::error_code error;
+                std::filesystem::directory_iterator items(state().systemDirectory, error);
+                if (error) {
+                    log::warn("DevConfig", "cannot list the system directory for {}.int: {}", package, error.message());
+                }
+                for (auto end = std::filesystem::directory_iterator(); !error && items != end; items.increment(error)) {
+                    std::u8string filename = items->path().filename().u8string();
+                    if (iequals(std::string(filename.begin(), filename.end()), std::string(package) + ".int")) {
+                        ini->load(items->path());
                     }
                 }
             }
@@ -498,6 +476,54 @@ namespace dx {
                     Ini* defaults = forName(configNameOf(loaded));
                     if (defaults) {
                         loadConfigPropagated(loaded->defaultObject, loaded, *defaults);
+                    }
+                }
+            }
+        }
+
+        namespace {
+            struct SettingListener {
+                uint64_t id = 0;
+                std::function<void(const SettingChange&)> listener;
+            };
+
+            struct SettingListeners {
+                std::vector<SettingListener> entries;
+                uint64_t nextId = 1;
+            };
+
+            // Never freed, so a subscription held by a static can give up its place at exit
+            // whatever order statics go in.
+            SettingListeners& settingListeners()
+            {
+                static SettingListeners* instance = new SettingListeners;
+                return *instance;
+            }
+        }
+
+        Subscription onSettingChanged(std::function<void(const SettingChange& change)> listener)
+        {
+            SettingListeners& listeners = settingListeners();
+            uint64_t id = listeners.nextId++;
+            listeners.entries.push_back({ id, std::move(listener) });
+            return Subscription([](uint64_t gone) { std::erase_if(settingListeners().entries, [&](const SettingListener& entry) { return entry.id == gone; }); }, id);
+        }
+
+        void settingChanged(const Ini& ini, std::string_view section, std::string_view key)
+        {
+            SettingChange change { ini, section, key };
+            std::vector<uint64_t> ids;
+            for (const SettingListener& entry : settingListeners().entries) {
+                ids.push_back(entry.id);
+            }
+            for (uint64_t id : ids) {
+                std::vector<SettingListener>& entries = settingListeners().entries;
+                auto found = std::find_if(entries.begin(), entries.end(), [&](const SettingListener& entry) { return entry.id == id; });
+                if (found != entries.end()) {
+                    // A copy, as the listener may unsubscribe and so free its own entry.
+                    std::function<void(const SettingChange&)> call = found->listener;
+                    if (call) {
+                        call(change);
                     }
                 }
             }

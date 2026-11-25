@@ -1,12 +1,15 @@
 #pragma once
 
-#include <atomic>
+#include "core/log.h"
+
+#include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace dx::editor {
+    // The lines the log has written since start, for the editor's log window: the last 10000,
+    // each as "Category: text".
     class LogCapture {
     public:
         LogCapture() = default;
@@ -14,22 +17,16 @@ namespace dx::editor {
         LogCapture(const LogCapture&) = delete;
         LogCapture& operator=(const LogCapture&) = delete;
 
-        bool start();
+        void start();
         void stop();
+        // A line of the window's own, such as a command typed into it, which the log does not get.
         void add(const std::string& line);
         std::vector<std::string> lines();
         void clear();
-        int originalStderr() const;
 
     private:
-        void pump();
-
         std::mutex mutex;
-        std::thread reader;
         std::vector<std::string> captured;
-        std::string partial;
-        std::atomic<bool> stopping { false };
-        int pipeRead = -1;
-        int original = -1;
+        std::unique_ptr<log::Listener> listener;
     };
 }

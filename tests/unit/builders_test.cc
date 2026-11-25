@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/bsp.h"
 #include "engine/csg.h"
@@ -9,6 +11,7 @@
 #include "engine/shape_editor.h"
 #include "engine/special_brush.h"
 #include "engine/world.h"
+#include "fixtures.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -28,7 +31,7 @@ namespace {
 
     dx::UObject* makeBuilderBrush(const char* packageName)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         dx::UObject* brush = make<dx::UObject>("Brush", package);
         dx::UModel* model = make<dx::UModel>("Model", package);
@@ -140,13 +143,6 @@ namespace {
         put32(bytes, raw);
     }
 
-    std::filesystem::path scratch(const char* name)
-    {
-        std::filesystem::path directory = std::filesystem::temp_directory_path() / "opende-builders-test";
-        std::filesystem::create_directories(directory);
-        return directory / name;
-    }
-
     double polygonArea(const std::vector<dx::shapeeditor::Point>& points, const std::vector<std::array<size_t, 3>>& triangles)
     {
         double total = 0;
@@ -234,7 +230,7 @@ TEST_CASE("hollow tube has inner walls facing the axis and ring caps", "[builder
     CHECK(error == "The Inner Radius must be smaller than the Outer Radius");
 }
 
-TEST_CASE("solid tube with many sides splits its caps into fans around the centre", "[builders][data]")
+TEST_CASE("solid tube with many sides splits its caps into fans around the center", "[builders][data]")
 {
     dx::UObject* brush = makeBuilderBrush("TubeFans");
     std::string error;
@@ -303,7 +299,7 @@ TEST_CASE("floor lofter splits raised cells along the chosen diagonal", "[builde
     CHECK_FALSE(dx::brushbuilder::buildFloor(grid, brush, &error));
 }
 
-TEST_CASE("height maps load from greyscale BMP and PCX files", "[builders]")
+TEST_CASE("height maps load from grayscale BMP and PCX files", "[builders]")
 {
     std::vector<uint8_t> bmp { 'B', 'M' };
     put32(bmp, 54 + 1024 + 8);
@@ -325,7 +321,8 @@ TEST_CASE("height maps load from greyscale BMP and PCX files", "[builders]")
         bmp.insert(bmp.end(), { grey, grey, grey, 0 });
     }
     bmp.insert(bmp.end(), { 255, 254, 253, 0, 0, 1, 2, 0 });
-    std::filesystem::path bmpFile = scratch("height.bmp");
+    dx::test::TempDir folder("builders-height");
+    std::filesystem::path bmpFile = folder / "height.bmp";
     writeBytes(bmpFile, bmp);
     dx::brushbuilder::GreyImage image;
     std::string error;
@@ -349,7 +346,7 @@ TEST_CASE("height maps load from greyscale BMP and PCX files", "[builders]")
         uint8_t grey = static_cast<uint8_t>(i);
         pcx.insert(pcx.end(), { grey, grey, grey });
     }
-    std::filesystem::path pcxFile = scratch("height.pcx");
+    std::filesystem::path pcxFile = folder / "height.pcx";
     writeBytes(pcxFile, pcx);
     REQUIRE(dx::brushbuilder::loadGreyImage(pcxFile, image, &error));
     CHECK(image.width == 3);
@@ -459,7 +456,7 @@ TEST_CASE("extruding a concave shape keeps every face convex and outward", "[bui
         dx::Vector n = faceNormal(poly);
         if (poly.itemName == dx::Name("2DLoftTOP")) {
             CHECK(n.z > 0);
-            topArea += n.size() / 2;
+            topArea += static_cast<double>(n.size()) / 2;
         } else if (poly.itemName == dx::Name("2DLoftEND")) {
             CHECK(n.z < 0);
         }
@@ -487,7 +484,7 @@ TEST_CASE("extruding a concave shape keeps every face convex and outward", "[bui
     }
 }
 
-TEST_CASE("extrude to point and to bevel taper the shape upwards", "[builders][data]")
+TEST_CASE("extrude to point and to bevel taper the shape upward", "[builders][data]")
 {
     dx::UObject* brush = makeBuilderBrush("ShapeTaper");
     std::string error;
@@ -569,7 +566,8 @@ TEST_CASE("2D shapes save and load in the UnrealEd .2ds format", "[builders]")
 {
     dx::shapeeditor::Document document = lShape();
     document.origin = { 16, 32 };
-    std::filesystem::path file = scratch("shape.2ds");
+    dx::test::TempDir folder("builders-shape");
+    std::filesystem::path file = folder / "shape.2ds";
     std::string error;
     REQUIRE(dx::shapeeditor::save(document, file, &error));
     CHECK(std::filesystem::file_size(file) == 4 + 4 + 4 + 4 + 6 * (12 * 4 + 8));
@@ -602,7 +600,7 @@ TEST_CASE("2D shapes save and load in the UnrealEd .2ds format", "[builders]")
         put32(bytes, 0);
         put32(bytes, 10);
     }
-    std::filesystem::path unordered = scratch("unordered.2ds");
+    std::filesystem::path unordered = folder / "unordered.2ds";
     writeBytes(unordered, bytes);
     REQUIRE(dx::shapeeditor::load(loaded, unordered, &error));
     REQUIRE(loaded.shapes[0].vertices.size() == 3);
@@ -656,7 +654,7 @@ TEST_CASE("special brushes keep their flags and solidity through a CSG rebuild",
     for (size_t index = 0; index < all.size(); index++) {
         const dx::specialbrush::Preset& preset = all[index];
         INFO(preset.name);
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(("SpecialPresetLevel" + std::to_string(index)).c_str()));
         dx::ULevel* level = make<dx::ULevel>("Level", package);
         level->model = make<dx::UModel>("Model", package);
@@ -712,7 +710,7 @@ TEST_CASE("special brushes keep their flags and solidity through a CSG rebuild",
 
 TEST_CASE("an extruded concave shape subtracts a matching room from the world", "[builders][data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UObject* package = dx::objects::packageObject(dx::Name("ShapeCsgLevel"));
     dx::ULevel* level = make<dx::ULevel>("Level", package);
     level->model = make<dx::UModel>("Model", package);

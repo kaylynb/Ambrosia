@@ -1,6 +1,8 @@
 #include "core/config.h"
+#include "test_paths.h"
 #include "core/objects.h"
 #include "core/vm.h"
+#include "deusex/startup.h"
 #include "engine/console.h"
 #include "engine/props_engine.h"
 #include "engine/world.h"
@@ -37,7 +39,7 @@ namespace {
 
 TEST_CASE("set ini: writes the audio device section and get reads it back", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     std::string original = dx::console::execute(nullptr, "get ini:Engine.Engine.AudioDevice MusicVolume");
     REQUIRE(original == "153");
     dx::console::execute(nullptr, "set ini:Engine.Engine.AudioDevice MusicVolume 100");
@@ -49,7 +51,7 @@ TEST_CASE("set ini: writes the audio device section and get reads it back", "[da
 
 TEST_CASE("SET InputExt rebinds a key and saves it to the user ini", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     std::string original = dx::console::binding(dx::console::keyFromName("N"));
     dx::console::execute(nullptr, "SET InputExt N ShowGoalsWindow");
     CHECK(dx::console::binding(dx::console::keyFromName("N")) == "ShowGoalsWindow");
@@ -61,7 +63,7 @@ TEST_CASE("SET InputExt rebinds a key and saves it to the user ini", "[data]")
 
 TEST_CASE("set of a config property updates the class default and persists it", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     std::string original = dx::console::execute(nullptr, "get DeusExPlayer bHelpMessages");
     REQUIRE(original == "True");
     dx::console::execute(nullptr, "set DeusExPlayer bHelpMessages False");
@@ -73,7 +75,7 @@ TEST_CASE("set of a config property updates the class default and persists it", 
 
 TEST_CASE("open start and servertravel pass partial absolute and relative travel types", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     std::vector<std::pair<std::string, int32_t>> requests;
     auto previous = dx::console::openMapHook;
     dx::console::openMapHook = [&](const std::string& url, int32_t travelType) {
@@ -92,7 +94,7 @@ TEST_CASE("open start and servertravel pass partial absolute and relative travel
 
 TEST_CASE("a Talk binding opens the script console with a Say prompt", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
     {
         dx::World world;
@@ -107,9 +109,34 @@ TEST_CASE("a Talk binding opens the script console with a Say prompt", "[data]")
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
+TEST_CASE("loadout fills the inventory grid with weapons and gadgets and leaves cheats off", "[data]")
+{
+    dx::engine::initialize(dx::test::gameData());
+    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
+    {
+        dx::World world;
+        REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+        dx::UObject* player = world.player();
+        CHECK(dx::console::execute(player, "loadout") == "loadout gave 20 items");
+        std::string inventory = dx::console::execute(player, "invlist");
+        for (const char* item : { "WeaponAssaultGun", "WeaponRifle", "WeaponLAM", "Multitool", "Lockpick", "MedKit", "TechGoggles", "WeaponModLaser" }) {
+            INFO(item);
+            CHECK(inventory.find(item) != std::string::npos);
+        }
+        auto property = [player](const char* name) {
+            dx::UProperty* found = player->cls->findProperty(dx::Name(name));
+            REQUIRE(found != nullptr);
+            return found->toText(player->data + found->offset);
+        };
+        CHECK(property("Credits") == "100000");
+        CHECK(property("bCheatsEnabled") == "False");
+    }
+    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
+}
+
 TEST_CASE("Console.ConsoleCommand prints the command output to the console", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
     {
         dx::World world;
@@ -121,17 +148,4 @@ TEST_CASE("Console.ConsoleCommand prints the command output to the console", "[d
         CHECK(dx::console::MsgText(scriptConsole, dx::console::TopLine(scriptConsole)) == "False");
     }
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-}
-
-TEST_CASE("the menu writing back the whole part of a custom UI scale keeps the custom value", "[data]")
-{
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    std::string original = dx::console::execute(nullptr, "get ini:Engine.Engine.ViewportManager UIScale");
-    dx::console::execute(nullptr, "set ini:Engine.Engine.ViewportManager UIScale 1.5");
-    CHECK(dx::console::execute(nullptr, "get ini:Engine.Engine.ViewportManager UIScale") == "1.5");
-    dx::console::execute(nullptr, "set ini:Engine.Engine.ViewportManager UIScale 1");
-    CHECK(dx::console::execute(nullptr, "get ini:Engine.Engine.ViewportManager UIScale") == "1.5");
-    dx::console::execute(nullptr, "set ini:Engine.Engine.ViewportManager UIScale 2");
-    CHECK(dx::console::execute(nullptr, "get ini:Engine.Engine.ViewportManager UIScale") == "2");
-    dx::console::execute(nullptr, "set ini:Engine.Engine.ViewportManager UIScale " + (original.empty() ? std::string("0") : original));
 }

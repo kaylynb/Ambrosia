@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "debugui/imgui_setup.h"
 
 namespace dx::editor {
     void Editor::surfacePanel()
@@ -201,7 +202,7 @@ namespace dx::editor {
         if (!model) {
             return false;
         }
-        std::istringstream words(lower(line));
+        std::istringstream words(lowered(line));
         std::string verb;
         std::string kind;
         words >> verb >> kind;
@@ -243,6 +244,9 @@ namespace dx::editor {
             status = "unknown surface selection " + line;
             return false;
         }
+        std::erase_if(selectedSurfs, [&](int32_t index) {
+            return index < 0 || static_cast<size_t>(index) >= model->surfs.size();
+        });
         status = "selected " + std::to_string(selectedSurfs.size()) + " surfaces";
         return true;
     }
@@ -252,8 +256,8 @@ namespace dx::editor {
         if (!showTextureProperties || !propertiesTexture) {
             return;
         }
-        ImGui::SetNextWindowPos(ImVec2(360, 60), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(420, 560), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(360), debugui::scaled(60)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(420), debugui::scaled(560)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Texture Properties", &showTextureProperties)) {
             ImGui::End();
             return;
@@ -304,12 +308,11 @@ namespace dx::editor {
             const dx::GLTextureInfo* info = thumbnails.get(texture);
             if (info) {
                 float scale = std::min(1.0f, 256.0f / static_cast<float>(std::max(info->width, info->height)));
-                ImGui::Image(static_cast<ImTextureID>(info->id), ImVec2(static_cast<float>(info->width) * scale, static_cast<float>(info->height) * scale));
+                ImGui::Image(static_cast<ImTextureID>(info->id()), ImVec2(static_cast<float>(info->width) * scale, static_cast<float>(info->height) * scale));
             }
         }
         if (ImGui::Button("Use as current texture")) {
             currentTexture = propertiesTexture;
-            dx::bsp::setCurrentTexture(propertiesTexture);
         }
         ImGui::SameLine();
         if (ImGui::Button("Select surfaces using it")) {
@@ -332,7 +335,7 @@ namespace dx::editor {
                 if (!ImGui::BeginTable(category.first.c_str(), 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
                     continue;
                 }
-                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(140.0f));
                 ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
                 for (dx::UProperty* property : category.second) {
                     for (int32_t index = 0; index < property->arrayDim; index++) {
@@ -391,7 +394,6 @@ namespace dx::editor {
             }
             command("texgroup " + dx::editorops::textureGroup(texture));
             currentTexture = texture;
-            dx::bsp::setCurrentTexture(texture);
             scrollToTexture = true;
             pendingTab = "textures";
             status = "found " + texture->pathName();

@@ -23,12 +23,12 @@ namespace dx {
 
         void registerNatives();
         bool finishBrush(UObject* brushActor, const std::vector<Vector>& vertices, std::vector<BuilderPolygon> polys, Name group, bool mergeCoplanars);
-        void setTarget(UObject* builderBrush);
         Constraints& constraints();
         std::vector<UClass*> builderClasses();
         UObject* builderFor(UClass* cls);
-        bool build(UObject* builder);
-        std::string lastMessage();
+        // Runs the builder's script, which writes into the brush of brushActor. A message the script
+        // gives with BadParameters goes to error.
+        bool build(UObject* builder, UObject* brushActor, std::string* error);
         void validateBrush(UModel& brush, bool force);
     }
 }

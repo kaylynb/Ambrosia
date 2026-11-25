@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/editor_views.h"
 #include "engine/props_engine.h"
@@ -40,7 +42,7 @@ TEST_CASE("hsv colors follow FGetHSV brightness and hue wheel")
     CHECK(white.z == Catch::Approx(0.821309f).margin(1e-5));
 }
 
-TEST_CASE("bsp cut colors give neighbouring nodes different hues")
+TEST_CASE("bsp cut colors give neighboring nodes different hues")
 {
     dx::Vector first = dx::bspCutColor(0);
     dx::Vector second = dx::bspCutColor(1);
@@ -94,7 +96,7 @@ TEST_CASE("actor icons scale with the view zoom but stay visible")
 
 TEST_CASE("path links come from unpruned reach specs and mark monster paths", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UClass* nodeClass = dx::objects::findClass("Engine.PathNode");
     dx::objects::flushLoads();
     REQUIRE(nodeClass != nullptr);
@@ -143,7 +145,7 @@ TEST_CASE("path links come from unpruned reach specs and mark monster paths", "[
 
 TEST_CASE("overhead icons use the sprite texture of hidden and sprite actors only", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UClass* lightClass = dx::objects::findClass("Engine.Light");
     dx::UClass* barrelClass = dx::objects::findClass("DeusEx.Barrel1");
     dx::objects::flushLoads();

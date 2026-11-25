@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/csg.h"
 #include "engine/props_engine.h"
@@ -44,7 +46,7 @@ namespace {
 
     Rooms makeRooms(const char* packageName)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         Rooms rooms;
         rooms.level = make<dx::ULevel>("Level", package);
@@ -259,7 +261,7 @@ TEST_CASE("select all reverse and memory combinations", "[data]")
 
 TEST_CASE("textures report their group inside the package and their format", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UObject* brick = dx::objects::loadObject("CoreTexBrick.Brick.rough_greywall", nullptr);
     dx::objects::flushLoads();
     REQUIRE(brick != nullptr);

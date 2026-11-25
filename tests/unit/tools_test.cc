@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "editor/log_capture.h"
 #include "engine/actor.h"
 #include "engine/actor_search.h"
@@ -36,7 +38,7 @@ namespace {
 
     CheckRoom makeCheckRoom(const char* packageName)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         CheckRoom room;
         room.package = dx::objects::packageObject(dx::Name(packageName));
         room.level = dx::cast<dx::ULevel>(dx::objects::newObject(dx::csg::nativeClass("Level"), room.package, dx::Name(), 0));
@@ -229,25 +231,17 @@ TEST_CASE("level properties edit the LevelInfo and the DeusExLevelInfo", "[data]
     CHECK(dx::propedit::levelPropertyObjects(nullptr).empty());
 }
 
-TEST_CASE("the log capture records lines written to stderr until it stops")
+TEST_CASE("the log capture records logged lines until it stops")
 {
     dx::editor::LogCapture capture;
-    REQUIRE(capture.start());
-    std::fprintf(stderr, "log capture marker one\npartial");
-    std::fprintf(stderr, " line\n");
-    std::vector<std::string> lines;
-    for (int attempt = 0; attempt < 200; attempt++) {
-        lines = capture.lines();
-        if (lines.size() >= 2) {
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    CHECK(lines == std::vector<std::string> { "log capture marker one", "partial line" });
+    capture.start();
+    dx::log::info("Log", "log capture marker one\nsecond line");
+    dx::log::warn("", "no category");
+    CHECK(capture.lines() == std::vector<std::string> { "Log: log capture marker one", "Log: second line", "no category" });
     capture.stop();
-    std::fprintf(stderr, "after the capture\n");
+    dx::log::info("Log", "after the capture");
     capture.add("> command");
-    CHECK(capture.lines() == std::vector<std::string> { "log capture marker one", "partial line", "> command" });
+    CHECK(capture.lines() == std::vector<std::string> { "Log: log capture marker one", "Log: second line", "no category", "> command" });
     capture.clear();
     CHECK(capture.lines().empty());
 }

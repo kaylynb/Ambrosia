@@ -93,10 +93,13 @@ namespace dx {
             return std::sqrt(x * x + y * y);
         }
 
+        // The original game rounded only the final vector components to float.
+        // Use double for the intermediate calculations to approximate its extended precision.
+        // If the squared length is below 1e-8 or is NaN, return the zero vector.
         Vector normal() const
         {
-            double squared = static_cast<double>(sizeSquared());
-            if (squared < 1e-8) {
+            double squared = static_cast<double>(x) * static_cast<double>(x) + static_cast<double>(y) * static_cast<double>(y) + static_cast<double>(z) * static_cast<double>(z);
+            if (!(squared >= 1e-8)) {
                 return {};
             }
             double scale = 1.0 / std::sqrt(squared);
@@ -168,11 +171,13 @@ namespace dx {
         return rotationAxes(rotation).xAxis;
     }
 
+    // FVector::Rotation truncates and leaves the angles in
+    // -32768..32768: a vector toward -Y has yaw -16384, not 49152.
     inline Rotator vectorRotation(const Vector& v)
     {
         Rotator r;
-        r.yaw = static_cast<int32_t>(std::atan2(v.y, v.x) * 32768.0f / Pi) & 65535;
-        r.pitch = static_cast<int32_t>(std::atan2(v.z, std::sqrt(v.x * v.x + v.y * v.y)) * 32768.0f / Pi) & 65535;
+        r.yaw = static_cast<int32_t>(std::atan2(v.y, v.x) * 32768.0f / Pi);
+        r.pitch = static_cast<int32_t>(std::atan2(v.z, std::sqrt(v.x * v.x + v.y * v.y)) * 32768.0f / Pi);
         r.roll = 0;
         return r;
     }

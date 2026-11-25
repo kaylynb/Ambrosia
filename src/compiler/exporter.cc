@@ -1,6 +1,6 @@
 #include "compiler/exporter.h"
 
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 #include <cstdio>

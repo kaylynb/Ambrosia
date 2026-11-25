@@ -1,11 +1,11 @@
 #include "core/config.h"
 #include "core/objects.h"
+#include "core/settings.h"
 #include "core/vm.h"
 #include "engine/actor.h"
 #include "engine/ai.h"
 #include "engine/canvas_hooks.h"
 #include "engine/console.h"
-#include "engine/net.h"
 #include "engine/resources.h"
 #include "engine/world.h"
 
@@ -25,33 +25,6 @@ namespace dx {
     {
         Color color = dx::canvas::DrawColor(canvas);
         return { static_cast<float>(color.r) / 255.0f, static_cast<float>(color.g) / 255.0f, static_cast<float>(color.b) / 255.0f, 1.0f };
-    }
-
-    UTexture* snapshotTexture(UObject* outer, Name name, int width, int height)
-    {
-        CanvasHooks& hooks = canvasHooks();
-        if (!hooks.snapshot || width <= 0 || height <= 0) {
-            return nullptr;
-        }
-        std::vector<uint8_t> rgba = hooks.snapshot(width, height);
-        size_t pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
-        if (rgba.size() != pixels * 4) {
-            return nullptr;
-        }
-        UTexture* texture = cast<UTexture>(objects::newObject(objects::findClass("Engine.Texture"), outer, name, RF_Public));
-        *texture->propertyAddress(Name("Format")) = 5;
-        TextureMip mip;
-        mip.width = static_cast<uint32_t>(width);
-        mip.height = static_cast<uint32_t>(height);
-        mip.data.resize(pixels * 4);
-        for (size_t i = 0; i < pixels; i++) {
-            mip.data[i * 4 + 0] = rgba[i * 4 + 2];
-            mip.data[i * 4 + 1] = rgba[i * 4 + 1];
-            mip.data[i * 4 + 2] = rgba[i * 4 + 0];
-            mip.data[i * 4 + 3] = 255;
-        }
-        texture->mips.push_back(std::move(mip));
-        return texture;
     }
 
     namespace {
@@ -140,7 +113,8 @@ namespace dx {
         {
             float height = 0;
             width = 0;
-            float lineHeight = textHeight(font);
+            float scale = canvasHooks().textScale;
+            float lineHeight = textHeight(font, scale);
             size_t lineStart = 0;
             while (lineStart < text.size()) {
                 size_t best = lineStart;
@@ -156,7 +130,7 @@ namespace dx {
                     if (next == probe) {
                         break;
                     }
-                    float w = textWidth(font, std::string_view(text).substr(lineStart, next - lineStart), spacing);
+                    float w = textWidth(font, std::string_view(text).substr(lineStart, next - lineStart), spacing, scale);
                     if (w > clipWidth && best != lineStart) {
                         break;
                     }
@@ -170,7 +144,7 @@ namespace dx {
                     best = text.size();
                 }
                 std::string line = text.substr(lineStart, best - lineStart);
-                width = std::max(width, textWidth(font, line, spacing));
+                width = std::max(width, textWidth(font, line, spacing, scale));
                 height += lineHeight;
                 if (lines) {
                     lines->push_back(line);
@@ -247,13 +221,14 @@ namespace dx {
             Canvas2D* target = canvasHooks().target;
             if (target && style != 0) {
                 float y = dx::canvas::CurY(self);
-                float lineHeight = textHeight(font);
+                float scale = canvasHooks().textScale;
+                float lineHeight = textHeight(font, scale);
                 for (const std::string& line : lines) {
                     float x = dx::canvas::CurX(self);
                     if (dx::canvas::bCenter(self)) {
-                        x = dx::canvas::CurX(self) + (clipX - textWidth(font, line, spacing)) / 2;
+                        x = dx::canvas::CurX(self) + (clipX - textWidth(font, line, spacing, scale)) / 2;
                     }
-                    drawText(*target, font, line, dx::canvas::OrgX(self) + x, dx::canvas::OrgY(self) + y, canvasColor(self), styleOf(style), spacing);
+                    drawText(*target, font, line, dx::canvas::OrgX(self) + x, dx::canvas::OrgY(self) + y, canvasColor(self), styleOf(style), spacing, scale);
                     y += lineHeight;
                 }
             }
@@ -419,13 +394,13 @@ namespace dx {
             vm::finish(stack);
             size_t index = 0;
             vm::iterate(stack, [&]() {
-                while (World::current && index < World::current->actors.size()) {
-                    UObject* a = World::current->actors[index++];
+                while (World::hasActive() && index < World::active().actors.size()) {
+                    UObject* a = World::active().actors[index++];
                     if (!a || a->destroyed || (cls && !a->isA(cls))) {
                         continue;
                     }
                     UObject* zone = region(a).zone;
-                    if (zone != World::current->levelInfo ? zone == self : true) {
+                    if (zone != World::active().levelInfo ? zone == self : true) {
                         *out = a;
                         return true;
                     }
@@ -449,15 +424,13 @@ namespace dx {
         void nativeGetLocalURL(UObject*, Frame& stack, void* result)
         {
             vm::finish(stack);
-            vm::ret<std::string>(result, World::current ? World::current->url : std::string());
+            vm::ret<std::string>(result, World::hasActive() ? World::active().url : std::string());
         }
 
         void nativeGetAddressURL(UObject*, Frame& stack, void* result)
         {
             vm::finish(stack);
-            std::string port = config::system().get("URL", "Port").value_or("7777");
-            int32_t number = World::current && World::current->netPort ? World::current->netPort : std::atoi(port.c_str());
-            vm::ret<std::string>(result, ":" + std::to_string(number));
+            vm::ret<std::string>(result, ":" + std::to_string(settings::get(settings::port)));
         }
 
         void nativeDescribeSpec(UObject*, Frame& stack, void*)
@@ -472,8 +445,8 @@ namespace dx {
             *end = nullptr;
             *flags = 0;
             *distance = 0;
-            if (World::current && World::current->level && index >= 0 && static_cast<size_t>(index) < World::current->level->reachSpecs.size()) {
-                const ReachSpec& spec = World::current->level->reachSpecs[static_cast<size_t>(index)];
+            if (World::hasActive() && World::active().level && index >= 0 && static_cast<size_t>(index) < World::active().level->reachSpecs.size()) {
+                const ReachSpec& spec = World::active().level->reachSpecs[static_cast<size_t>(index)];
                 *start = spec.start;
                 *end = spec.end;
                 *flags = spec.reachFlags;
@@ -505,15 +478,15 @@ namespace dx {
             uint8_t type = vm::get<uint8_t>(stack);
             bool items = vm::getBool(stack);
             vm::finish(stack);
-            if (!World::current || !playerpawn::Player(self)) {
+            if (!World::hasActive() || !playerpawn::Player(self)) {
                 return;
             }
             vm::event(self, Name("PreClientTravel"));
-            World::current->travelUrl = url;
-            World::current->travelType = type;
-            World::current->travelItems = items;
-            World::current->travelPending = true;
-            for (UObject* a : std::vector<UObject*>(World::current->actors)) {
+            World::active().travelUrl = url;
+            World::active().travelType = type;
+            World::active().travelItems = items;
+            World::active().travelPending = true;
+            for (UObject* a : std::vector<UObject*>(World::active().actors)) {
                 if (a && !a->destroyed) {
                     vm::Call preTravel(a, Name("PreTravel"));
                     if (preTravel.valid()) {
@@ -529,8 +502,8 @@ namespace dx {
             std::string value = vm::get<std::string>(stack);
             bool saveDefault = vm::getBool(stack);
             vm::finish(stack);
-            if (World::current) {
-                std::string& url = World::current->url;
+            if (World::hasActive()) {
+                std::string& url = World::active().url;
                 std::string replaced;
                 bool found = false;
                 size_t mark = url.find('?');
@@ -572,7 +545,7 @@ namespace dx {
         void nativeGetEntryLevel(UObject*, Frame& stack, void* result)
         {
             vm::finish(stack);
-            vm::ret<UObject*>(result, World::current ? World::current->levelInfo : nullptr);
+            vm::ret<UObject*>(result, World::hasActive() ? World::active().levelInfo : nullptr);
         }
 
         void nativeCopyToClipboard(UObject*, Frame& stack, void*)
@@ -594,12 +567,6 @@ namespace dx {
         {
             vm::finish(stack);
             vm::ret<std::string>(result, std::string());
-        }
-
-        void nativeGetPlayerNetworkAddress(UObject* self, Frame& stack, void* result)
-        {
-            vm::finish(stack);
-            vm::ret<std::string>(result, World::current && World::current->net ? World::current->net->playerAddress(self) : std::string());
         }
 
         void nativeParseKillMessage(UObject*, Frame& stack, void* result)
@@ -648,14 +615,14 @@ namespace dx {
             float traceDistance = vm::get<float>(stack);
             Vector decalDir = vm::getOpt<Vector>(stack, Vector {});
             vm::finish(stack);
-            vm::retBool(result, World::current && attachDecal(*World::current, self, traceDistance, decalDir));
+            vm::retBool(result, World::hasActive() && attachDecal(World::active(), self, traceDistance, decalDir));
         }
 
         void nativeDetachDecal(UObject* self, Frame& stack, void*)
         {
             vm::finish(stack);
-            if (World::current) {
-                detachDecal(*World::current, self);
+            if (World::hasActive()) {
+                detachDecal(World::active(), self);
             }
         }
     }
@@ -685,7 +652,7 @@ namespace dx {
         vm::registerNative("PlayerPawn", "GetEntryLevel", nativeGetEntryLevel);
         vm::registerNative("PlayerPawn", "CopyToClipboard", nativeCopyToClipboard);
         vm::registerNative("PlayerPawn", "PasteFromClipboard", nativePasteFromClipboard);
-        vm::registerNative("PlayerPawn", "GetPlayerNetworkAddress", nativeGetPlayerNetworkAddress);
+        vm::registerNative("PlayerPawn", "GetPlayerNetworkAddress", nativeEmptyString);
         vm::registerNative("GameInfo", "GetNetworkNumber", nativeEmptyString);
         vm::registerNative("GameInfo", "ParseKillMessage", nativeParseKillMessage);
         vm::registerNative(314, nativeWarp);

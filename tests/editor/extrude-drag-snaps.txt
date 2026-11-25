@@ -1,0 +1,21 @@
+wait 2
+exec grid 16 1
+wait 1
+exec camera -600 -350 0 0 7100
+wait 1
+exec editmode face
+wait 1
+clickview perspective 0.5 0.5
+wait 4
+expect status selected 1 face
+wait 1
+exec gizmo extrude
+wait 3
+dragview perspective 0.5 0.5 0.4 0.5
+wait 15
+expect status extruded 1 face
+wait 1
+expect novertex -128 128 128
+wait 1
+expect grid 16
+quit

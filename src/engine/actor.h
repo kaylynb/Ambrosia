@@ -110,10 +110,12 @@ namespace dx {
     }
 
     UObject* playerPawnOf(UObject* a);
-    UObject* localPlayerPawnOf(UObject* a);
-    bool isBlockedBy(UObject* a, UObject* other);
+    class World;
+
+    bool isBlockedBy(const World& world, UObject* a, UObject* other);
     bool isBasedOn(UObject* a, UObject* other);
-    bool isOverlapping(UObject* a, UObject* other);
+    // world is the world in play, or null when there is none.
+    bool isOverlapping(const World* world, UObject* a, UObject* other);
     void setOwner(UObject* a, UObject* newOwner);
     void setBase(UObject* a, UObject* newBase, bool notify);
     void setSupportBase(UObject* a, UObject* newBase);
@@ -123,8 +125,10 @@ namespace dx {
     void findBase(UObject* a);
     void setCollision(UObject* a, bool collideActors, bool blockActors, bool blockPlayers);
     bool moveSmooth(UObject* a, const Vector& delta);
-    void performPhysics(UObject* a, float deltaSeconds);
+    // world is the world in play, or null when there is none; only physics that moves or traces
+    // needs it.
+    void performPhysics(World* world, UObject* a, float deltaSeconds);
     void updateAnimation(UObject* a, float deltaSeconds);
     void processHitWall(UObject* a, const Vector& hitNormal, UObject* hitActor);
-    void processLanded(UObject* a, const Vector& hitNormal, UObject* hitActor, float remainingTime, int iterations);
+    void processLanded(World& world, UObject* a, const Vector& hitNormal, UObject* hitActor, float remainingTime, int iterations);
 }

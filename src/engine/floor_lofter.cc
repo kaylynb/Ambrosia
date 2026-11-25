@@ -1,5 +1,6 @@
 #include "engine/floor_lofter.h"
 
+#include "core/files.h"
 #include "engine/builder_mesh.h"
 
 #include <algorithm>
@@ -221,11 +222,11 @@ namespace dx {
 
         bool loadGreyImage(const std::filesystem::path& file, GreyImage& image, std::string* error)
         {
-            std::ifstream in(file, std::ios::binary);
-            if (!in) {
+            std::optional<std::string> contents = files::readFile(file);
+            if (!contents) {
                 return failWith(error, "Cannot open " + file.string());
             }
-            std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            std::vector<uint8_t> bytes(contents->begin(), contents->end());
             if (bytes.size() >= 54 && bytes[0] == 'B' && bytes[1] == 'M') {
                 return decodeBmp(bytes, image, error);
             }

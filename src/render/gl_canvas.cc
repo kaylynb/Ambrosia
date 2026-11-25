@@ -10,16 +10,12 @@ namespace dx {
         : shader(shaderRef)
         , textures(textureRef)
     {
-        glGenSamplers(1, &nearestSampler);
-        glSamplerParameteri(nearestSampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glSamplerParameteri(nearestSampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glSamplerParameteri(nearestSampler, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glSamplerParameteri(nearestSampler, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    }
-
-    GLCanvas::~GLCanvas()
-    {
-        glDeleteSamplers(1, &nearestSampler);
+        nearestSampler = gl::createSampler();
+        GLuint sampler = nearestSampler.get();
+        glSamplerParameteri(sampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glSamplerParameteri(sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glSamplerParameteri(sampler, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glSamplerParameteri(sampler, GL_TEXTURE_WRAP_T, GL_REPEAT);
     }
 
     void GLCanvas::begin(int w, int h)
@@ -67,6 +63,9 @@ namespace dx {
         case BlendStyle::Translucent:
             mode = BlendMode::Translucent;
             break;
+        case BlendStyle::Alpha:
+            mode = BlendMode::Alpha;
+            break;
         case BlendStyle::Modulated:
             mode = BlendMode::Modulated;
             if (currentMasked) {
@@ -84,7 +83,7 @@ namespace dx {
         shader.setFlags(flags);
         shader.setBlend(mode);
         shader.bindTexture(currentTexture);
-        glBindSampler(0, currentSmooth ? 0 : nearestSampler);
+        glBindSampler(0, currentSmooth ? 0 : nearestSampler.get());
         shader.draw(vertices, currentPrimitive);
         glBindSampler(0, 0);
         vertices.clear();
@@ -139,7 +138,7 @@ namespace dx {
         UTexture* frame = textures.animated(texture);
         const GLTextureInfo* info = style == BlendStyle::Masked ? textures.getMasked(frame) : textures.get(frame);
         if (info) {
-            id = info->id;
+            id = info->id();
             texWidth = static_cast<float>(info->width);
             texHeight = static_cast<float>(info->height);
             masked = info->masked;

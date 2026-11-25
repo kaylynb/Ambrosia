@@ -55,6 +55,7 @@ namespace dx {
     class UFont : public UObject {
     public:
         void serialize(Reader& reader, Linker& source) override;
+        void addReferences(ReferenceVisitor& references) override;
         const FontCharacter* glyph(uint8_t character, UTexture** texture) const;
 
         std::vector<FontPage> pages;
@@ -163,6 +164,7 @@ namespace dx {
     class UPolys : public UObject {
     public:
         void serialize(Reader& reader, Linker& source) override;
+        void addReferences(ReferenceVisitor& references) override;
 
         std::vector<Poly> polys;
     };
@@ -178,6 +180,7 @@ namespace dx {
     class UModel : public UPrimitive {
     public:
         void serialize(Reader& reader, Linker& source) override;
+        void addReferences(ReferenceVisitor& references) override;
 
         std::vector<Vector> vectors;
         std::vector<Vector> points;
@@ -211,6 +214,7 @@ namespace dx {
     class ULevel : public UObject {
     public:
         void serialize(Reader& reader, Linker& source) override;
+        void addReferences(ReferenceVisitor& references) override;
 
         std::vector<UObject*> actors;
         std::string url;

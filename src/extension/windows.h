@@ -1,8 +1,10 @@
 #pragma once
 
+#include "core/gc.h"
 #include "extension/internal.h"
 
 #include <deque>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -44,6 +46,7 @@ namespace dx::extension {
         void queryPreferredSize(float& preferredWidth, float& preferredHeight);
         float queryPreferredWidth(float queryHeight);
         float queryPreferredHeight(float queryWidth);
+        void preferredSize(bool widthSpecified, float& preferredWidth, bool heightSpecified, float& preferredHeight);
         void askParentForReconfigure();
         void askParentToShowArea(float areaX, float areaY, float areaWidth, float areaHeight);
         void queryGranularity(float& hGranularity, float& vGranularity);
@@ -73,7 +76,6 @@ namespace dx::extension {
         virtual void mouseMoved(float newX, float newY);
         virtual void mouseEnteredWindow();
         virtual void mouseLeftWindow();
-        UObject* cursorRequested(UWindow* win, float pointX, float pointY, float& hotX, float& hotY, Color& color, UObject*& shadow);
         virtual bool rawMouseButtonPressed(float pointX, float pointY, uint8_t button, uint8_t inputState);
         virtual bool mouseButtonPressed(float pointX, float pointY, uint8_t button, int32_t numClicks);
         virtual bool mouseButtonReleased(float pointX, float pointY, uint8_t button, int32_t numClicks);
@@ -130,6 +132,8 @@ namespace dx::extension {
 
     class UModalWindow : public UTabGroupWindow {
     public:
+        // An overflowing modal can handle scrolling itself (zero queries availability).
+        virtual bool scrollContent(int) { return false; }
         void initWindow() override;
         bool keyPressed(const std::string& key) override;
         void visibilityChanged(bool visible) override;
@@ -143,15 +147,20 @@ namespace dx::extension {
         bool isTraversable(UWindow* window, bool checkModal);
         UWindow* moveFocus(int32_t move);
         UWindow* moveTabGroup(int32_t move);
+        // Controls the gamepad can move focus to in the top modal.
+        std::vector<UWindow*> navigationCandidates();
+        UWindow* moveFocusToward(int32_t dx, int32_t dy);
         void checkFocusWindow();
         void postDrawWindow(UGC* gc) override;
         bool setRootFocusWindow(UWindow* window);
         void setRootCursorPos(float newMouseX, float newMouseY);
         UWindow* cursorFocus(float& relativeX, float& relativeY);
+        UWindow* findWindowByPoint(UWindow* window, float px, float py, float& relativeX, float& relativeY);
         bool isModalOpen();
         bool isCursorVisible();
         bool onMouseButton(uint8_t key, bool pressed);
         bool onKey(uint8_t key, bool pressed, bool repeat);
+        int32_t countClick(UWindow* window, uint8_t key, bool pressed);
         bool onChar(const std::string& chars);
         bool onRawMouseMove(float dx, float dy);
         void forgetWindow(UWindow* window);
@@ -160,12 +169,20 @@ namespace dx::extension {
         float& mouseY();
         UWindow* focusWindow();
 
+        void addReferences(ReferenceVisitor& references) override;
+
         bool renderViewportSet = false;
-        double lastClickTime = -1;
+        // Set while a gamepad is driving focus: the cursor is hidden and the focus is outlined.
+        bool gamepadFocus = false;
+        // Multi-click state, as XRootWindow::HandleButtons keeps it: the time the
+        // next press must come by, the zero-based click count, and where the
+        // first press of the run was.
+        double clickDeadline = -1;
         uint8_t lastClickButton = 0;
         UWindow* lastClickWindow = nullptr;
-        UWindow* pressWindow = nullptr;
         int32_t clicks = 0;
+        float firstClickX = -1;
+        float firstClickY = -1;
     };
 
     class UClipWindow : public UTabGroupWindow {
@@ -197,6 +214,8 @@ namespace dx::extension {
         void parentRequestedPreferredSize(bool widthSpecified, float& preferredWidth, bool heightSpecified, float& preferredHeight) override;
         void drawWindow(UGC* gc) override;
         virtual void textModified();
+        bool hideReplyMarker = false;
+        std::string displayedText();
         void textExtent(float maxWidth, float& outWidth, float& outHeight);
         std::string& text();
     };
@@ -212,6 +231,8 @@ namespace dx::extension {
         void tick(float deltaSeconds) override;
         virtual void activate(uint8_t key);
         size_t stateIndex();
+
+        void addReferences(ReferenceVisitor& references) override;
 
         std::array<Color, 6> buttonColors {};
         std::array<Color, 6> textColors {};
@@ -252,29 +273,56 @@ namespace dx::extension {
         bool keyPressed(const std::string& key) override;
         bool virtualKeyPressed(uint8_t key, bool repeat) override;
         bool mouseButtonPressed(float pointX, float pointY, uint8_t button, int32_t numClicks) override;
+        bool mouseButtonReleased(float pointX, float pointY, uint8_t button, int32_t numClicks) override;
+        void mouseMoved(float newX, float newY) override;
+        void tick(float deltaSeconds) override;
         void textModified() override;
         bool filterChar(char& c);
+        bool filterString(const std::string& value, std::string& filtered);
         bool insertText(const std::string& value, bool undo, bool select);
         void deleteChar(bool before, bool undo);
+        void replaceText(const std::string& value, bool undo, bool drag);
+        void setText(const std::string& value);
+        void appendText(const std::string& value);
+        void setMaxSize(int32_t value);
+        void setMaxUndos(int32_t value);
+        void copy(bool cut);
+        void paste();
         std::vector<TextRow> editRows();
         int32_t rowOf(const std::vector<TextRow>& rows, int32_t position);
         int32_t rowEnd(const std::vector<TextRow>& rows, int32_t row);
         float columnX(const std::vector<TextRow>& rows, int32_t position);
         int32_t positionAtX(const std::vector<TextRow>& rows, int32_t row, float x);
+        int32_t positionAt(float pointX, float pointY);
+        int32_t startOfWord(int32_t position);
+        int32_t endOfWord(int32_t position);
+        int32_t nextWord(const std::vector<TextRow>& rows, int32_t position);
+        int32_t prevWord(const std::vector<TextRow>& rows, int32_t position);
         void moveInsertion(uint8_t move, bool drag);
         void setInsertion(int32_t position, bool drag);
-        void deleteSelection();
-        void pushUndo();
+        void setCursorPoint(int32_t position, bool drag);
+        void setCursorRow(int32_t row, bool drag);
+        void setSelectedArea(int32_t start, int32_t count);
+        void computeSelectArea();
+        int32_t textLength();
+        void addUndo(int32_t position, const std::string& removed, const std::string& inserted);
+        void clampUndo();
+        void undo();
+        void redo();
         bool hasTextChanged();
         void setTextChangedFlag(bool value);
         void clearUndo();
-        void notifyChanged();
         void clampPositions();
 
-        std::vector<std::string> undoStack;
-        size_t undoPosition = 0;
+        struct UndoEntry {
+            int32_t position = 0;
+            std::string removed;
+            std::string inserted;
+        };
+
+        std::vector<UndoEntry> undoEntries;
+        int32_t currentUndo = 0;
         int32_t unchangedUndo = 0;
-        std::string clipboard;
         double blinkTime = 0;
     };
 
@@ -296,12 +344,15 @@ namespace dx::extension {
 
     class UTileWindow : public UWindow {
     public:
+        void (*arrangeRows)(UTileWindow*) = nullptr;
         void initWindow() override;
         void parentRequestedPreferredSize(bool widthSpecified, float& preferredWidth, bool heightSpecified, float& preferredHeight) override;
         void parentRequestedGranularity(float& hGranularity, float& vGranularity) override;
         void configurationChanged() override;
         bool childRequestedReconfiguration(UWindow* child) override;
         void computeChildSizes(bool widthSpecified, float& w, bool heightSpecified, float& h);
+
+        void addReferences(ReferenceVisitor& references) override;
 
         struct Hold {
             UWindow* window = nullptr;
@@ -338,6 +389,7 @@ namespace dx::extension {
         float positionValue(int32_t position);
         int32_t positionFromPoint(float pointX, float pointY);
         void moveThumb(uint8_t move);
+        bool stepAlongAxis(uint8_t key);
         void notifyPosition(bool final);
         void changeScaleAttributes();
         void changeThumbPosition(int32_t position, bool force, bool final);
@@ -380,11 +432,13 @@ namespace dx::extension {
         void parentRequestedPreferredSize(bool widthSpecified, float& preferredWidth, bool heightSpecified, float& preferredHeight) override;
         void drawWindow(UGC* gc) override;
         bool mouseButtonPressed(float pointX, float pointY, uint8_t button, int32_t numClicks) override;
+        bool mouseButtonReleased(float pointX, float pointY, uint8_t button, int32_t numClicks) override;
         bool virtualKeyPressed(uint8_t key, bool repeat) override;
         bool keyPressed(const std::string& key) override;
         void tick(float deltaSeconds) override;
         void visibilityChanged(bool visible) override;
-        void setRow(int32_t rowId, bool select, bool clearRows);
+        void setRow(int32_t rowId, bool select, bool clearRows, bool drag = false);
+        void moveToRow(int32_t index, bool select, bool clearRows, bool invert, bool drag, bool setFocus);
 
         struct Column {
             uint8_t align = HALIGN_Left;
@@ -418,12 +472,26 @@ namespace dx::extension {
         std::vector<std::string> splitRow(const std::string& text);
         void selectRow(int32_t rowId, bool select);
         void setFocusLine(int32_t index, bool show);
-        void moveRow(uint8_t move, bool select, bool clearRows);
+        void moveRow(uint8_t move, bool select, bool clearRows, bool drag = false);
         void notifySelection();
         void notifyActivated(int32_t rowId);
         void sortRows();
+
+        // Remembers the focus and anchor rows by id across a change to rows.
+        struct RowKeeper {
+            explicit RowKeeper(UListWindow* owner);
+            void restore();
+            UListWindow* list;
+            bool hasFocus = false;
+            bool hasAnchor = false;
+            int32_t focusId = 0;
+            int32_t anchorId = 0;
+        };
+
         void autoSize();
         int32_t selectedCount();
+
+        void addReferences(ReferenceVisitor& references) override;
 
         std::vector<Column> columns;
         std::vector<Row> rows;
@@ -467,6 +535,7 @@ namespace dx::extension {
             int32_t col = -1;
             int32_t row = -1;
             bool noFade = false;
+            bool typedEcho = false;
             UObject* object = nullptr;
             int32_t x = -1;
             int32_t y = -1;
@@ -490,6 +559,8 @@ namespace dx::extension {
         void scroll();
         void invokeParents(Name eventName);
         void finishInput(bool cancel);
+
+        void addReferences(ReferenceVisitor& references) override;
 
         std::vector<Event> queued;
         size_t queuedStart = 0;
@@ -526,6 +597,28 @@ namespace dx::extension {
 
     class UGC : public UObject {
     public:
+        // Pushes a clip and pops it again when it goes, however the drawing in between ends.
+        // Only for native drawing: a script's PushGC in between would be popped in its place.
+        class ClipScope {
+        public:
+            ClipScope(UGC* gc, float clipX, float clipY, float clipWidth, float clipHeight)
+                : owner(gc)
+            {
+                owner->pushClip(clipX, clipY, clipWidth, clipHeight);
+            }
+
+            ~ClipScope()
+            {
+                owner->popClip();
+            }
+
+            ClipScope(const ClipScope&) = delete;
+            ClipScope& operator=(const ClipScope&) = delete;
+
+        private:
+            UGC* owner;
+        };
+
         void resetState(UWindow* window, float offsetX, float offsetY);
         void resetClip(float clipX, float clipY, float clipWidth, float clipHeight);
         void pushClip(float clipX, float clipY, float clipWidth, float clipHeight);
@@ -549,9 +642,10 @@ namespace dx::extension {
         void setFonts(UObject* normal, UObject* bold);
         void bleed(float& destX, float& destWidth);
 
+        void addReferences(ReferenceVisitor& references) override;
+
         float offsetX = 0;
         float offsetY = 0;
-        float drawScale = 1;
         float bleedLeft = 0;
         float bleedRight = 0;
         float bleedEdge = 0;
@@ -560,13 +654,11 @@ namespace dx::extension {
         float clipRight = 0;
         float clipBottom = 0;
         std::vector<std::array<float, 4>> clipStack;
-        bool specialText = false;
 
         struct Saved {
             std::vector<uint8_t> data;
             float offsetX = 0;
             float offsetY = 0;
-            bool specialText = false;
         };
 
         std::vector<Saved> savedStates;
@@ -576,4 +668,7 @@ namespace dx::extension {
     void measureText(const TextContext& context, float wrapWidth, const std::string& text, float& outWidth, float& outHeight);
     std::vector<TextRow> textRows(const TextContext& context, float wrapWidth, const std::string& text);
     void measureString(UObject* font, const std::string& text, float& width, float& height);
+    // Runs draw with the request's actor set up as GC.DrawActor draws it in the given draw style,
+    // then puts the actor back as it was.
+    void drawActorAs(const ActorDrawRequest& request, uint8_t style, const std::function<void()>& draw);
 }

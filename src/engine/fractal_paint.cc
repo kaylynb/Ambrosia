@@ -1,5 +1,6 @@
 #include "engine/fractal_paint.h"
 
+#include "core/random.h"
 #include "engine/mesh.h"
 #include "engine/props_fire.h"
 
@@ -82,7 +83,12 @@ namespace dx::fractalpaint {
 
         uint8_t speedRand()
         {
-            static uint32_t seed = 0x2545F491u;
+            static uint32_t seed = 0;
+            static uint32_t seenGeneration = 0;
+            if (seenGeneration != random::generation()) {
+                seenGeneration = random::generation();
+                seed = random::seedOf(random::Stream::FractalPaint);
+            }
             seed = seed * 1103515245u + 12345u;
             return static_cast<uint8_t>(seed >> 16);
         }

@@ -3,6 +3,7 @@
 #include "core/vm.h"
 #include "editor/script_workspace.h"
 #include "engine/world.h"
+#include "fixtures.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -13,13 +14,6 @@
 #include <string>
 
 namespace {
-    void begin()
-    {
-        dx::objects::setEditorMode(true);
-        dx::engine::initialize(DEUSEX_GAME_DATA);
-        REQUIRE(dx::objects::objectClass()->scriptText != nullptr);
-    }
-
     int32_t callAnswer(dx::UObject* object)
     {
         dx::vm::Call call(object, dx::Name("Answer"));
@@ -71,7 +65,7 @@ namespace {
 
 TEST_CASE("class browser loads a class from a .uc file and reloads it in place", "[.][editor-scripts][data]")
 {
-    begin();
+    dx::test::ScriptEditing editing;
     dx::editor::ScriptWorkspace workspace;
     std::filesystem::path file = dx::config::userDirectory() / "load-test" / "EdTestLoaded" / "Classes" / "EdTestLoad.uc";
     writeText(file, loadable(6, 11));
@@ -91,7 +85,7 @@ TEST_CASE("class browser loads a class from a .uc file and reloads it in place",
 
 TEST_CASE("loading a class whose parent does not exist reports it and creates nothing", "[.][editor-scripts][data]")
 {
-    begin();
+    dx::test::ScriptEditing editing;
     dx::editor::ScriptWorkspace workspace;
     std::filesystem::path file = dx::config::userDirectory() / "load-test" / "EdTestLoaded" / "Classes" / "EdTestOrphan.uc";
     writeText(file, "class EdTestOrphan expands EdTestNoSuchParent;\r\n\r\nvar int Value;\r\n");
@@ -109,7 +103,7 @@ TEST_CASE("loading a class whose parent does not exist reports it and creates no
 
 TEST_CASE("class defaults are edited and exported with a single class", "[.][editor-scripts][data]")
 {
-    begin();
+    dx::test::ScriptEditing editing;
     dx::editor::ScriptWorkspace workspace;
     dx::UClass* cls = workspace.newClass("EdTestDefaults", "EdTestCounted", dx::objects::objectClass());
     REQUIRE(cls != nullptr);
@@ -135,7 +129,7 @@ TEST_CASE("class defaults are edited and exported with a single class", "[.][edi
 
 TEST_CASE("deleting a class is refused while it has subclasses or instances", "[.][editor-scripts][data]")
 {
-    begin();
+    dx::test::ScriptEditing editing;
     dx::editor::ScriptWorkspace workspace;
     dx::UClass* parent = workspace.newClass("EdTestDelete", "EdTestDoomedParent", dx::objects::objectClass());
     REQUIRE(parent != nullptr);

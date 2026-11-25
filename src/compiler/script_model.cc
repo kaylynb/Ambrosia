@@ -1,7 +1,8 @@
 #include "compiler/script_model.h"
 
+#include "core/crc.h"
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -15,30 +16,13 @@ namespace dx::compiler {
             return (value + alignment - 1) / alignment * alignment;
         }
 
-        uint32_t crcTable(uint32_t index)
-        {
-            static uint32_t table[256];
-            static bool ready = false;
-            if (!ready) {
-                for (uint32_t i = 0; i < 256; i++) {
-                    uint32_t c = i << 24;
-                    for (int bit = 0; bit < 8; bit++) {
-                        c = (c & 0x80000000u) ? (c << 1) ^ 0x04c11db7u : (c << 1);
-                    }
-                    table[i] = c;
-                }
-                ready = true;
-            }
-            return table[index];
-        }
-
         uint32_t stringCrc(const std::string& text)
         {
             uint32_t crc = 0xffffffffu;
             for (char c : text) {
                 uint32_t low = static_cast<uint8_t>(c);
-                crc = (crc << 8) ^ crcTable((crc >> 24) ^ low);
-                crc = (crc << 8) ^ crcTable(crc >> 24);
+                crc = (crc << 8) ^ crcTable[(crc >> 24) ^ low];
+                crc = (crc << 8) ^ crcTable[crc >> 24];
             }
             return ~crc;
         }
@@ -302,20 +286,6 @@ namespace dx::compiler {
         }
         objects::ensureLoaded(it->second);
         return it->second;
-    }
-
-    UObject* Lookup::findPackage(std::string_view name)
-    {
-        Name packageName = Name::find(name);
-        if (packageName.none()) {
-            return nullptr;
-        }
-        for (UObject* object : objects::all()) {
-            if (object && !object->destroyed && !object->outer && object->name == packageName) {
-                return object;
-            }
-        }
-        return nullptr;
     }
 
     UObject* Lookup::findObject(UClass* cls, std::string_view path)

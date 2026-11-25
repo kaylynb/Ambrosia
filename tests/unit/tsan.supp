@@ -1,0 +1,16 @@
+# ThreadSanitizer suppressions for the tests (GCC and Clang TSan builds; tests/unit/CMakeLists.txt).
+# Mesa's software renderer (llvmpipe: libgallium, its EGL and LLVM's JIT) and Steam Audio
+# (libphonon) run threads of their own that TSan, without their sources instrumented, reports as
+# races, lock-order inversions and mutex misuse inside them. Reports are left out by the library
+# they come from; called_from_lib is not used, as ignoring a library's locks but not the
+# condition-variable waits libstdc++ does for it makes every such wait look like a bad unlock.
+race:libgallium
+race:libEGL_mesa
+race:libLLVM
+race:libphonon.so
+deadlock:libgallium
+deadlock:libEGL_mesa
+deadlock:libLLVM
+deadlock:libphonon.so
+mutex:libgallium
+mutex:libphonon.so

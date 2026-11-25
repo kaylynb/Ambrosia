@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/bsp.h"
 #include "engine/csg.h"
@@ -9,6 +11,7 @@
 #include <catch_amalgamated.hpp>
 
 #include <cmath>
+#include <vector>
 
 namespace {
     struct TestLevel {
@@ -26,7 +29,7 @@ namespace {
 
     TestLevel makeLevel(const char* packageName)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         TestLevel result;
         result.level = make<dx::ULevel>("Level", package);
@@ -288,6 +291,68 @@ TEST_CASE("brush from intersection keeps the part of the builder inside the soli
     CHECK(brush.polys->polys.size() == 6);
     CHECK(brush.bounds.min.x == Catch::Approx(-128.0f).margin(0.01));
     CHECK(brush.bounds.max.x == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("brush polygons without a texture take the default texture in every CSG operation", "[data]")
+{
+    TestLevel test = makeLevel("CsgCurrentTextureTest");
+    dx::UObject* texture = dx::objects::loadObject("CoreTexBrick.Brick.rough_greywall", nullptr);
+    dx::objects::flushLoads();
+    REQUIRE(texture != nullptr);
+    dx::UPolys& polys = builderPolys(test);
+    dx::csg::buildCube(polys, 512.0f, 512.0f, 256.0f, nullptr);
+    dx::UObject* room = dx::csg::addBrush(test.level, test.builder, dx::csg::CsgSubtract, 0, texture);
+    REQUIRE(room != nullptr);
+    for (const dx::Poly& poly : dx::cast<dx::UModel>(dx::actor::Brush(room))->polys->polys) {
+        CHECK(poly.texture == texture);
+    }
+    dx::csg::rebuild(test.level);
+    const dx::UModel& model = *test.level->model;
+    REQUIRE(model.surfs.size() == 6);
+    for (const dx::BspSurf& surf : model.surfs) {
+        CHECK(surf.texture == texture);
+    }
+
+    dx::csg::buildCube(polys, 256.0f, 256.0f, 256.0f, nullptr);
+    dx::actor::Location(test.builder) = { 256.0f, 0.0f, 0.0f };
+    REQUIRE(dx::csg::brushFromIntersection(test.level, test.builder, false, texture));
+    REQUIRE(polys.polys.size() == 6);
+    for (const dx::Poly& poly : polys.polys) {
+        CHECK(poly.texture == texture);
+    }
+}
+
+TEST_CASE("rebuilding a level again gives the same model and leaves nothing for the next build", "[data]")
+{
+    auto build = [](const char* name) {
+        TestLevel test = makeLevel(name);
+        dx::UPolys& polys = builderPolys(test);
+        dx::csg::buildCube(polys, 1024.0f, 1024.0f, 512.0f, nullptr);
+        dx::csg::addBrush(test.level, test.builder, dx::csg::CsgSubtract);
+        dx::csg::buildCube(polys, 128.0f, 128.0f, 512.0f, nullptr);
+        dx::actor::Location(test.builder) = { 100.0f, 50.0f, 0.0f };
+        dx::csg::addBrush(test.level, test.builder, dx::csg::CsgAdd);
+        dx::csg::buildCube(polys, 256.0f, 64.0f, 64.0f, nullptr);
+        dx::actor::Location(test.builder) = { -300.0f, 0.0f, -100.0f };
+        dx::csg::addBrush(test.level, test.builder, dx::csg::CsgAdd, dx::csg::PolySemisolid);
+        return test;
+    };
+    auto shape = [](const dx::csg::Stats& stats, const dx::UModel& model) {
+        return std::vector<size_t> { stats.brushes, stats.nodes, stats.surfs, stats.leaves, stats.zones, stats.errors, model.points.size(), model.vectors.size(), model.verts.size() };
+    };
+    TestLevel first = build("CsgRepeatFirstTest");
+    dx::csg::Stats once = dx::csg::rebuild(first.level);
+    std::vector<size_t> expected = shape(once, *first.level->model);
+    CHECK(once.errors > 0);
+    CHECK(shape(dx::csg::rebuild(first.level), *first.level->model) == expected);
+
+    // A brush added straight after a rebuild, then a second level built from the same brushes,
+    // see none of the first level's build.
+    dx::csg::buildCube(builderPolys(first), 64.0f, 64.0f, 64.0f, nullptr);
+    dx::actor::Location(first.builder) = { 300.0f, 300.0f, 0.0f };
+    REQUIRE(dx::csg::addBrush(first.level, first.builder, dx::csg::CsgAdd) != nullptr);
+    TestLevel second = build("CsgRepeatSecondTest");
+    CHECK(shape(dx::csg::rebuild(second.level), *second.level->model) == expected);
 }
 
 TEST_CASE("the cube brush matches the original cube builder vertex order and texture axes", "[data]")

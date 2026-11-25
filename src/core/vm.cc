@@ -1,6 +1,10 @@
 #include "core/vm.h"
 
+#include "core/gc.h"
+#include "core/log.h"
 #include "core/objects.h"
+#include "core/profile.h"
+#include "core/text.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -15,10 +19,24 @@ namespace dx {
     namespace {
         struct NativeRegistry {
             std::vector<NativeFunction> byIndex = std::vector<NativeFunction>(4096, nullptr);
+            // The function last bound to each native index, for calls by index. Weak: a
+            // function deleted with its class leaves its index without one, which a call
+            // copes with as it does for an index nothing was bound to.
             std::vector<UFunction*> indexFunctions = std::vector<UFunction*>(4096, nullptr);
             std::unordered_map<std::string, NativeFunction> byName;
             std::set<std::string> warned;
+            // The function of the native call being made; read only at the start of that call.
             UFunction* current = nullptr;
+            gc::ReleaseHook released { [this](const gc::ReleasedSet& dead) {
+                for (UFunction*& function : indexFunctions) {
+                    if (function && dead.count(function)) {
+                        function = nullptr;
+                    }
+                }
+                if (current && dead.count(current)) {
+                    current = nullptr;
+                }
+            } };
             Frame* frame = nullptr;
             int depth = 0;
             uint32_t assertionFailures = 0;
@@ -98,15 +116,6 @@ namespace dx {
             "All",
         };
 
-        std::string lowerKey(std::string_view text)
-        {
-            std::string key(text);
-            for (char& c : key) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
-            return key;
-        }
-
         void evaluateDiscard(Frame& stack, UProperty* property)
         {
             if (!property) {
@@ -120,6 +129,86 @@ namespace dx {
             property->destroy(memory);
         }
 
+        // A struct value worked on for the length of one token, zeroed as the std::vector it
+        // replaces was: on the stack when small, as most structs (vectors, rotators) are.
+        class ScratchValue {
+        public:
+            explicit ScratchValue(size_t size)
+            {
+                if (size <= sizeof(local)) {
+                    std::memset(local, 0, size);
+                    memory = local;
+                } else {
+                    heap.assign(size, 0);
+                    memory = heap.data();
+                }
+            }
+
+            ScratchValue(const ScratchValue&) = delete;
+            ScratchValue& operator=(const ScratchValue&) = delete;
+
+            uint8_t* data()
+            {
+                return memory;
+            }
+
+        private:
+            alignas(16) uint8_t local[128];
+            std::vector<uint8_t> heap;
+            uint8_t* memory = nullptr;
+        };
+
+        // A script call's locals, taken from a stack of memory in the order calls nest instead of
+        // from the heap, falling back to the heap when the stack is full. Uninitialised, as new[]
+        // gives them; the caller initialises them (UStruct::initValue) either way.
+        class LocalsBlock {
+        public:
+            explicit LocalsBlock(size_t size)
+            {
+                Arena& arena = arenaOf();
+                size_t rounded = (size + 15) & ~static_cast<size_t>(15);
+                saved = arena.top;
+                if (rounded <= Arena::Size - arena.top) {
+                    memory = arena.bytes.get() + arena.top;
+                    arena.top += rounded;
+                } else {
+                    heap.reset(new uint8_t[size]);
+                    memory = heap.get();
+                }
+            }
+
+            ~LocalsBlock()
+            {
+                arenaOf().top = saved;
+            }
+
+            LocalsBlock(const LocalsBlock&) = delete;
+            LocalsBlock& operator=(const LocalsBlock&) = delete;
+
+            uint8_t* get() const
+            {
+                return memory;
+            }
+
+        private:
+            struct Arena {
+                static constexpr size_t Size = 1u << 20;
+                // Aligned as new[] aligns, and each block a multiple of 16 bytes from its start.
+                std::unique_ptr<uint8_t[]> bytes { new uint8_t[Size] };
+                size_t top = 0;
+            };
+
+            static Arena& arenaOf()
+            {
+                static thread_local Arena arena;
+                return arena;
+            }
+
+            uint8_t* memory = nullptr;
+            size_t saved = 0;
+            std::unique_ptr<uint8_t[]> heap;
+        };
+
         void unimplementedNative(UObject*, Frame& stack, void* result)
         {
             UFunction* function = natives().current;
@@ -132,7 +221,7 @@ namespace dx {
             }
             std::string key = function->outer ? function->outer->name.str() + "." + function->name.str() : function->name.str();
             if (natives().warned.insert(key).second) {
-                std::fprintf(stderr, "unimplemented native %s (%d)\n", key.c_str(), function->nativeIndex);
+                log::warn("ScriptWarning", "unimplemented native {} ({})", key, function->nativeIndex);
             }
             for (UProperty* param : function->params) {
                 if (*stack.code == vm::EX_EndFunctionParms) {
@@ -165,7 +254,7 @@ namespace dx {
             if (!tracing() || !function) {
                 return;
             }
-            std::fprintf(stderr, "%*s%s %s.%s\n", natives().depth * 2, "", kind, context ? context->name.c_str() : "None", function->pathName().c_str());
+            log::info("ScriptLog", "{:{}}{} {}.{}", "", natives().depth * 2, kind, context ? context->name.c_str() : "None", function->pathName());
         }
 
         void callNative(Frame& stack, UObject* context, UFunction* function, NativeFunction native, void* result)
@@ -182,9 +271,30 @@ namespace dx {
             return buffer;
         }
 
-        bool parseVector(const std::string& text, Vector& out)
+        // execStringToVector and execStringToRotator
+        // read each component on its own: the first from the start, the others
+        // after each comma, so a bad or missing component is 0 and the rest still
+        // count.
+        template <typename T, typename Parse>
+        void parseComponents(const std::string& text, T& a, T& b, T& c, Parse parse)
         {
-            return std::sscanf(text.c_str(), "%f,%f,%f", &out.x, &out.y, &out.z) == 3;
+            const char* p = text.c_str();
+            a = parse(p);
+            const char* comma = std::strchr(p, ',');
+            if (comma) {
+                b = parse(comma + 1);
+                comma = std::strchr(comma + 1, ',');
+                if (comma) {
+                    c = parse(comma + 1);
+                }
+            }
+        }
+
+        // An object reference in bytecode that did not resolve (an import that failed to load leaves handle 0).
+        // Reported the same way as an unknown token.
+        [[noreturn]] void unresolvedReference(const char* what, uint8_t token, const UStruct* node)
+        {
+            throw std::runtime_error(std::string("unresolved ") + what + " in bytecode token " + std::to_string(token) + " in " + (node ? node->pathName() : std::string("?")));
         }
     }
 
@@ -219,7 +329,7 @@ namespace dx {
 
     UObject* Frame::readObject()
     {
-        return objects::fromHandle(static_cast<uint32_t>(readInt()));
+        return objects::fromHandle(static_cast<uint32_t>(readInt()), node);
     }
 
     Name Frame::readName()
@@ -239,6 +349,9 @@ namespace dx {
         case 0x00:
         case 0x29: {
             UProperty* property = cast<UProperty>(readObject());
+            if (!property) [[unlikely]] {
+                unresolvedReference("property", token, node);
+            }
             uint8_t* address = locals + property->offset;
             propAddr = address;
             prop = property;
@@ -249,6 +362,9 @@ namespace dx {
         }
         case 0x01: {
             UProperty* property = cast<UProperty>(readObject());
+            if (!property) [[unlikely]] {
+                unresolvedReference("property", token, node);
+            }
             if (!context->data) {
                 objects::ensureLoaded(context);
             }
@@ -262,6 +378,9 @@ namespace dx {
         }
         case 0x02: {
             UProperty* property = cast<UProperty>(readObject());
+            if (!property || !context->cls->defaultObject) [[unlikely]] {
+                unresolvedReference(property ? "class defaults" : "property", token, node);
+            }
             uint8_t* address = context->cls->defaultObject->data + property->offset;
             propAddr = address;
             prop = property;
@@ -440,6 +559,11 @@ namespace dx {
         case 0x19: {
             UObject* newContext = nullptr;
             step(context, &newContext);
+            if (newContext && newContext->released) {
+                // KeepFreedObjects held this back from gc::freeObjects; without it, this read
+                // would be of freed memory, as it would in the original.
+                vm::warn(*this, "read of freed " + newContext->fullName());
+            }
             if (newContext) {
                 code += 3;
                 step(newContext, result);
@@ -591,8 +715,11 @@ namespace dx {
         case 0x32:
         case 0x33: {
             UStruct* structType = cast<UStruct>(readObject());
-            std::vector<uint8_t> a(structType->size + 16);
-            std::vector<uint8_t> b(structType->size + 16);
+            if (!structType) [[unlikely]] {
+                unresolvedReference("struct", token, node);
+            }
+            ScratchValue a(structType->size + 16);
+            ScratchValue b(structType->size + 16);
             structType->initValue(a.data());
             structType->initValue(b.data());
             step(object, a.data());
@@ -605,8 +732,11 @@ namespace dx {
         }
         case 0x36: {
             UProperty* member = cast<UProperty>(readObject());
-            UStruct* structType = cast<UStruct>(member->outer);
-            std::vector<uint8_t> buffer(structType->size + 16);
+            UStruct* structType = member ? cast<UStruct>(member->outer) : nullptr;
+            if (!structType) [[unlikely]] {
+                unresolvedReference("struct member", token, node);
+            }
+            ScratchValue buffer(structType->size + 16);
             structType->initValue(buffer.data());
             propAddr = nullptr;
             step(context, buffer.data());
@@ -742,17 +872,13 @@ namespace dx {
         case 0x4D: {
             std::string value;
             step(object, &value);
-            Vector parsed;
-            parseVector(value, parsed);
-            vm::ret<Vector>(result, parsed);
+            vm::ret<Vector>(result, vm::stringToVector(value));
             return;
         }
         case 0x4E: {
             std::string value;
             step(object, &value);
-            Rotator parsed;
-            std::sscanf(value.c_str(), "%d,%d,%d", &parsed.pitch, &parsed.yaw, &parsed.roll);
-            vm::ret<Rotator>(result, parsed);
+            vm::ret<Rotator>(result, vm::stringToRotator(value));
             return;
         }
         case 0x4F: {
@@ -861,7 +987,7 @@ namespace dx {
 
         void registerNative(std::string_view className, std::string_view functionName, NativeFunction function)
         {
-            natives().byName[lowerKey(className) + "." + lowerKey(functionName)] = function;
+            natives().byName[lowered(className) + "." + lowered(functionName)] = function;
         }
 
         NativeFunction bindNative(UFunction* function)
@@ -879,7 +1005,7 @@ namespace dx {
                 owner = owner->outer;
             }
             if (owner) {
-                auto it = registry.byName.find(lowerKey(owner->name.str()) + "." + lowerKey(function->name.str()));
+                auto it = registry.byName.find(lowered(owner->name.str()) + "." + lowered(function->name.str()));
                 if (it != registry.byName.end()) {
                     if (function->nativeIndex > 0 && function->nativeIndex < 4096) {
                         registry.byIndex[function->nativeIndex] = it->second;
@@ -890,16 +1016,38 @@ namespace dx {
             return unimplementedNative;
         }
 
+        UFunction* indexedFunction(int32_t index)
+        {
+            if (index <= 0 || index >= 4096) {
+                return nullptr;
+            }
+            return natives().indexFunctions[static_cast<size_t>(index)];
+        }
+
         uint32_t assertionFailures()
         {
             return natives().assertionFailures;
         }
 
+        Vector stringToVector(const std::string& text)
+        {
+            Vector out;
+            parseComponents(text, out.x, out.y, out.z, [](const char* s) { return static_cast<float>(std::atof(s)); });
+            return out;
+        }
+
+        Rotator stringToRotator(const std::string& text)
+        {
+            Rotator out;
+            parseComponents(text, out.pitch, out.yaw, out.roll, [](const char* s) { return static_cast<int32_t>(std::atoi(s)); });
+            return out;
+        }
+
         CriticalHandler& criticalHandler()
         {
             static CriticalHandler handler = [](const std::string& message) {
-                std::fprintf(stderr, "Critical Error: %s\n", message.c_str());
-                std::fflush(stderr);
+                log::error("Critical", "{}", message);
+                log::flush();
                 std::_Exit(1);
             };
             return handler;
@@ -944,21 +1092,35 @@ namespace dx {
             }
             std::string where = frame.node ? frame.node->pathName() : std::string("?");
             std::string who = frame.object ? frame.object->name.str() : std::string("?");
-            std::fprintf(stderr, "script warning: %s (%s in %s)\n", message.c_str(), who.c_str(), where.c_str());
+            log::warn("ScriptWarning", "{} ({} in {})", message, who, where);
         }
 
         void execute(Frame& frame)
         {
             const uint8_t* end = frame.node->script.data() + frame.node->script.size();
-            Frame* saved = natives().frame;
-            natives().frame = &frame;
+
+            // Put back even when the script throws, so scriptRunning does not stay true.
+            struct Current {
+                explicit Current(Frame* running)
+                    : saved(natives().frame)
+                {
+                    natives().frame = running;
+                }
+
+                ~Current()
+                {
+                    natives().frame = saved;
+                }
+
+                Current(const Current&) = delete;
+                Current& operator=(const Current&) = delete;
+                Frame* saved;
+            } current(&frame);
+
             while (frame.code && frame.code < end) {
                 frame.step(frame.object, nullptr);
             }
-            natives().frame = saved;
         }
-
-        RemoteHook remoteHook = nullptr;
 
         void callFunction(Frame& stack, UObject* context, UFunction* function, void* result)
         {
@@ -969,8 +1131,7 @@ namespace dx {
                 stack.code++;
                 return;
             }
-            bool remoteNative = remoteHook && context && (function->functionFlags & (FUNC_Native | FUNC_Net)) == (FUNC_Native | FUNC_Net);
-            if ((function->functionFlags & FUNC_Native) && !remoteNative) {
+            if (function->functionFlags & FUNC_Native) {
                 if (!function->native) {
                     function->native = bindNative(function);
                 }
@@ -990,7 +1151,7 @@ namespace dx {
                 return;
             }
 
-            std::unique_ptr<uint8_t[]> locals(new uint8_t[function->size + 16]);
+            LocalsBlock locals(function->size + 16);
             function->initValue(locals.get());
 
             struct OutParm {
@@ -1028,19 +1189,7 @@ namespace dx {
 
             traceCall("call", context, function);
             uint32_t singular = function->functionFlags & FUNC_Singular;
-            bool remote = remoteHook && context && remoteHook(context, function, locals.get());
-            if (remoteNative && !remote) {
-                if (!function->native) {
-                    function->native = bindNative(function);
-                }
-                Frame stub;
-                stub.object = context;
-                stub.node = function;
-                stub.locals = locals.get();
-                stub.code = function->stub.data();
-                stub.previous = &stack;
-                callNative(stub, context, function, function->native, function->returnParm ? locals.get() + function->returnParm->offset : nullptr);
-            } else if (!remote && context && isProbing(context, function->name) && !(singular && context->singular)) {
+            if (context && isProbing(context, function->name) && !(singular && context->singular)) {
                 Frame frame;
                 frame.object = context;
                 frame.node = function;
@@ -1052,12 +1201,7 @@ namespace dx {
                 }
                 registry.depth++;
                 try {
-                    if (function->scriptOverride) {
-                        frame.code = function->stub.data();
-                        callNative(frame, context, function, function->scriptOverride, function->returnParm ? locals.get() + function->returnParm->offset : nullptr);
-                    } else {
-                        execute(frame);
-                    }
+                    execute(frame);
                 } catch (...) {
                     registry.depth--;
                     if (singular) {
@@ -1090,8 +1234,20 @@ namespace dx {
                 }
                 return table;
             }();
+            // Asked on every script call and event, so each name's answer is kept by its index
+            // in the name table; -2 is not looked up yet. The answer depends on the name alone.
+            static std::vector<int8_t> byName;
+            uint32_t id = eventName.index();
+            if (id < byName.size() && byName[id] != -2) {
+                return byName[id];
+            }
             auto it = lookup.find(eventName);
-            return it == lookup.end() ? -1 : it->second;
+            int32_t probe = it == lookup.end() ? -1 : it->second;
+            if (id >= byName.size()) {
+                byName.resize(static_cast<size_t>(id) + 256, -2);
+            }
+            byName[id] = static_cast<int8_t>(probe);
+            return probe;
         }
 
         StateFrame& stateFrame(UObject* object)
@@ -1116,6 +1272,11 @@ namespace dx {
                 }
             }
             return object->cls->findFunction(functionName);
+        }
+
+        bool scriptRunning()
+        {
+            return natives().frame != nullptr;
         }
 
         bool isProbing(UObject* object, Name functionName)
@@ -1149,8 +1310,11 @@ namespace dx {
 
         bool gotoLabel(UObject* object, Name label)
         {
+            // UObject::GotoLabel cancels any latent action and,
+            // when the label is not found, stops the state code.
             StateFrame& frame = stateFrame(object);
-            for (UState* source = frame.state; source; source = cast<UState>(source->superField)) {
+            frame.latentAction = 0;
+            for (UState* source = label.none() ? nullptr : frame.state; source; source = cast<UState>(source->superField)) {
                 objects::ensureLoaded(source);
                 if (source->labelTableOffset == 0xffff || source->labelTableOffset >= source->script.size()) {
                     continue;
@@ -1168,11 +1332,11 @@ namespace dx {
                     if (Name::fromIndex(labelName) == label) {
                         frame.node = source;
                         frame.code = source->script.data() + offset;
-                        frame.latentAction = 0;
                         return true;
                     }
                 }
             }
+            frame.code = nullptr;
             return false;
         }
 
@@ -1232,6 +1396,7 @@ namespace dx {
             if (!frame.code || frame.latentAction != 0 || frame.running || object->destroyed) {
                 return;
             }
+            DX_TIME("Script");
             frame.running = true;
             Frame* saved = natives().frame;
             natives().frame = &frame;
@@ -1253,7 +1418,7 @@ namespace dx {
                     }
                 }
             } catch (const std::exception& error) {
-                std::fprintf(stderr, "script error in state code of %s: %s\n", object->name.c_str(), error.what());
+                log::error("ScriptWarning", "script error in state code of {}: {}", object->name.str(), error.what());
                 frame.code = nullptr;
             }
             natives().frame = saved;
@@ -1489,9 +1654,6 @@ namespace dx {
             if (!function || !object || object->destroyed) {
                 return;
             }
-            if (remoteHook && remoteHook(object, function, buffer.data())) {
-                return;
-            }
             Frame stub;
             stub.object = object;
             stub.node = function;
@@ -1523,16 +1685,12 @@ namespace dx {
             if (singular) {
                 object->singular = true;
             }
+            DX_TIME("Script");
             registry.depth++;
             try {
-                if (function->scriptOverride) {
-                    frame.code = function->stub.data();
-                    callNative(frame, object, function, function->scriptOverride, returnValue());
-                } else {
-                    execute(frame);
-                }
+                execute(frame);
             } catch (const std::exception& error) {
-                std::fprintf(stderr, "script error in %s: %s\n", function->pathName().c_str(), error.what());
+                log::error("ScriptWarning", "script error in {}: {}", function->pathName(), error.what());
             }
             registry.depth--;
             if (singular) {

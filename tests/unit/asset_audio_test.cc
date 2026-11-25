@@ -1,5 +1,7 @@
 #include "compiler/package_dump.h"
-#include "engine/package.h"
+#include "test_paths.h"
+#include "core/package.h"
+#include "ucc_runner.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -47,21 +49,18 @@ namespace {
         return at;
     }
 
-    std::string environmentFor(const std::filesystem::path& home)
-    {
-        return "XDG_DATA_HOME=\"" + home.string() + "\" ";
-    }
 }
 
 TEST_CASE("batchexport sound wav writes the stored wave file", "[data]")
 {
+    // ucc (or the child run) needs the data too; this fails saying it is missing, not with an exit code.
+    dx::test::gameData();
     const char* xdg = std::getenv("XDG_DATA_HOME");
     REQUIRE(xdg != nullptr);
     std::filesystem::path home = std::filesystem::path(xdg) / "ucc-audio-export";
     std::filesystem::remove_all(home);
     std::filesystem::path directory = home / "wav";
-    std::string command = environmentFor(home) + "\"" UCC_PATH "\" batchexport DeusExSounds.u sound wav \"" + directory.string() + "\" > /dev/null 2>&1";
-    REQUIRE(std::system(command.c_str()) == 0);
+    REQUIRE(ucctest::runUcc(home, "batchexport DeusExSounds.u sound wav \"" + directory.string() + "\"") == 0);
     std::vector<uint8_t> wave = readFile(directory / "CatDie.wav");
     REQUIRE(wave.size() == 65656);
     CHECK(std::memcmp(wave.data(), "RIFF", 4) == 0);
@@ -78,18 +77,20 @@ TEST_CASE("batchexport sound wav writes the stored wave file", "[data]")
 
 TEST_CASE("exportsources and make rebuild DeusExSounds identical to the shipped package", "[data]")
 {
+    // ucc (or the child run) needs the data too; this fails saying it is missing, not with an exit code.
+    dx::test::gameData();
     const char* xdg = std::getenv("XDG_DATA_HOME");
     REQUIRE(xdg != nullptr);
     std::filesystem::path home = std::filesystem::path(xdg) / "ucc-audio-make";
     std::filesystem::remove_all(home);
-    std::filesystem::path user = home / "deusex";
-    REQUIRE(std::system((environmentFor(home) + "\"" UCC_PATH "\" exportsources DeusExSounds.u \"" + user.string() + "\" > /dev/null 2>&1").c_str()) == 0);
+    std::filesystem::path user = home / "ambrosia";
+    REQUIRE(ucctest::runUcc(home, "exportsources DeusExSounds.u \"" + user.string() + "\"") == 0);
     CHECK(std::filesystem::exists(user / "DeusExSounds" / "Sounds" / "Generic" / "AlarmUnitL.wav"));
-    REQUIRE(std::system((environmentFor(home) + "\"" UCC_PATH "\" make > /dev/null 2>&1").c_str()) == 0);
-    std::filesystem::path shipped = std::filesystem::path(DEUSEX_GAME_DATA) / "System" / "DeusExSounds.u";
+    REQUIRE(ucctest::runUcc(home, "make") == 0);
+    std::filesystem::path shipped = std::filesystem::path(dx::test::gameData()) / "System" / "DeusExSounds.u";
     std::filesystem::path built = user / "System" / "DeusExSounds.u";
     REQUIRE(std::filesystem::exists(built));
-    std::filesystem::path system = std::filesystem::path(DEUSEX_GAME_DATA) / "System";
+    std::filesystem::path system = std::filesystem::path(dx::test::gameData()) / "System";
     auto expected = dx::compiler::dumpPackage(shipped, system);
     auto actual = dx::compiler::dumpPackage(built, system);
     std::map<std::string, dx::compiler::DumpedExport> actualByPath;

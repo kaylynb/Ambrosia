@@ -1,28 +1,31 @@
 #include "compiler/exec_parse.h"
 
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <cctype>
 #include <cstdlib>
 
 namespace dx::compiler {
-    namespace {
-        size_t findNoCase(std::string_view stream, std::string_view match)
-        {
-            if (match.size() > stream.size()) {
-                return std::string_view::npos;
-            }
-            for (size_t i = 0; i + match.size() <= stream.size(); i++) {
-                if (iequals(stream.substr(i, match.size()), match)) {
-                    return i;
-                }
-            }
+    size_t findKey(std::string_view stream, std::string_view match)
+    {
+        if (match.size() > stream.size()) {
             return std::string_view::npos;
         }
+        bool afterAlnum = false;
+        for (size_t i = 0; i + match.size() <= stream.size(); i++) {
+            if (!afterAlnum && iequals(stream.substr(i, match.size()), match)) {
+                return i;
+            }
+            char c = stream[i];
+            afterAlnum = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+        }
+        return std::string_view::npos;
+    }
 
+    namespace {
         bool rawValue(std::string_view stream, std::string_view match, std::string_view& value)
         {
-            size_t found = findNoCase(stream, match);
+            size_t found = findKey(stream, match);
             if (found == std::string_view::npos) {
                 return false;
             }

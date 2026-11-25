@@ -31,9 +31,23 @@ namespace dx {
             constexpr int MaxNodeVertices = 16;
             constexpr float WorldMax = 65536.0f;
 
-            UObject* currentTextureObject = nullptr;
-            bool fastRebuild = false;
-            size_t errors = 0;
+            // Where the CSG filter callbacks of one brush put what they keep.
+            struct CsgContext {
+                UModel* model = nullptr;
+                int32_t node = -1;
+                int32_t lastCoplanar = -1;
+                size_t numNodes = 0;
+                int discarded = 0;
+            };
+
+            // What one build carries from step to step. Each public entry point makes its own, so
+            // nothing is left over from an earlier build.
+            struct BuildState {
+                // A geometry rebuild adds points without looking for an equal one first.
+                bool fastRebuild = false;
+                size_t errors = 0;
+                CsgContext csg;
+            };
 
             const std::array<float, 16384>& trig()
             {
@@ -387,7 +401,7 @@ namespace dx {
                 return addThing(model.vectors, v, normal ? ThreshNormalsAreSame : ThreshVectorsAreNear, true);
             }
 
-            int32_t addPoint(UModel& model, const Vector& v, bool exact)
+            int32_t addPoint(const BuildState& state, UModel& model, const Vector& v, bool exact)
             {
                 float thresh = exact ? ThreshPointsAreSame : ThreshPointsAreNear;
                 Vector temp;
@@ -396,8 +410,10 @@ namespace dx {
                 if (nearest >= 0.0f && nearest <= thresh) {
                     return pVertex;
                 }
-                return addThing(model.points, v, thresh, !fastRebuild);
+                return addThing(model.points, v, thresh, !state.fastRebuild);
             }
+
+            int32_t addNode(BuildState& state, UModel& model, int32_t parent, NodePlace place, uint8_t nodeFlags, Poly& poly);
 
             UPolys* ensurePolys(UModel& model)
             {
@@ -483,7 +499,7 @@ namespace dx {
                 return best;
             }
 
-            void splitPolyList(UModel& model, int32_t parent, NodePlace place, std::vector<Poly*>& list, Optimization opt, int balance, int rebuildSimplePolys, std::deque<Poly>& arena)
+            void splitPolyList(BuildState& state, UModel& model, int32_t parent, NodePlace place, std::vector<Poly*>& list, Optimization opt, int balance, int rebuildSimplePolys, std::deque<Poly>& arena)
             {
                 std::vector<Poly*> frontList;
                 std::vector<Poly*> backList;
@@ -491,7 +507,7 @@ namespace dx {
                 if (rebuildSimplePolys) {
                     splitPoly->link = static_cast<int32_t>(model.surfs.size());
                 }
-                int32_t ourNode = addNode(model, parent, place, 0, *splitPoly);
+                int32_t ourNode = addNode(state, model, parent, place, 0, *splitPoly);
                 int32_t planeNode = ourNode;
                 for (Poly* poly : list) {
                     if (poly == splitPoly) {
@@ -504,7 +520,7 @@ namespace dx {
                         if (rebuildSimplePolys) {
                             poly->link = static_cast<int32_t>(model.surfs.size()) - 1;
                         }
-                        planeNode = addNode(model, planeNode, NodePlane, 0, *poly);
+                        planeNode = addNode(state, model, planeNode, NodePlane, 0, *poly);
                         break;
                     case SplitFront:
                         frontList.push_back(poly);
@@ -532,10 +548,10 @@ namespace dx {
                     }
                 }
                 if (!frontList.empty()) {
-                    splitPolyList(model, ourNode, NodeFront, frontList, opt, balance, rebuildSimplePolys, arena);
+                    splitPolyList(state, model, ourNode, NodeFront, frontList, opt, balance, rebuildSimplePolys, arena);
                 }
                 if (!backList.empty()) {
-                    splitPolyList(model, ourNode, NodeBack, backList, opt, balance, rebuildSimplePolys, arena);
+                    splitPolyList(state, model, ourNode, NodeBack, backList, opt, balance, rebuildSimplePolys, arena);
                 }
             }
 
@@ -729,105 +745,95 @@ namespace dx {
                 FCospatialFacingOut = 5,
             };
 
-            struct CsgContext {
-                UModel* model = nullptr;
-                int32_t node = -1;
-                int32_t lastCoplanar = -1;
-                size_t numNodes = 0;
-                int discarded = 0;
-            };
+            using FilterFunc = void (*)(BuildState& state, UModel& model, int32_t iNode, Poly& poly, Filter filter, NodePlace place);
 
-            CsgContext context;
-
-            using FilterFunc = void (*)(UModel& model, int32_t iNode, Poly& poly, Filter filter, NodePlace place);
-
-            void addBrushToWorld(UModel& model, int32_t iNode, Poly& poly, Filter filter, NodePlace place)
+            void addBrushToWorld(BuildState& state, UModel& model, int32_t iNode, Poly& poly, Filter filter, NodePlace place)
             {
                 if (filter == FOutside || filter == FCoplanarOutside) {
-                    addNode(model, iNode, place, NF_IsNew, poly);
+                    addNode(state, model, iNode, place, NF_IsNew, poly);
                 } else if (filter == FCospatialFacingOut && !(poly.polyFlags & PF_Semisolid)) {
-                    addNode(model, iNode, place, NF_IsNew, poly);
+                    addNode(state, model, iNode, place, NF_IsNew, poly);
                 }
             }
 
-            void discardWorldPoly()
+            void discardWorldPoly(CsgContext& csg)
             {
-                context.discarded++;
-                BspNode& node = context.model->nodes[static_cast<size_t>(context.node)];
+                csg.discarded++;
+                BspNode& node = csg.model->nodes[static_cast<size_t>(csg.node)];
                 if (node.numVertices) {
                     node.numVertices = 0;
                 }
             }
 
-            void addWorldToBrush(UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
+            void addWorldToBrush(BuildState& state, UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
             {
                 if (filter == FOutside || filter == FCoplanarOutside) {
                     if (poly.polyFlags & PF_EdCut) {
-                        addNode(*context.model, context.lastCoplanar, NodePlane, NF_IsNew, poly);
+                        addNode(state, *state.csg.model, state.csg.lastCoplanar, NodePlane, NF_IsNew, poly);
                     }
                 } else {
-                    discardWorldPoly();
+                    discardWorldPoly(state.csg);
                 }
             }
 
-            void subtractBrushFromWorld(UModel& model, int32_t iNode, Poly& poly, Filter filter, NodePlace place)
+            void subtractBrushFromWorld(BuildState& state, UModel& model, int32_t iNode, Poly& poly, Filter filter, NodePlace place)
             {
                 if (filter == FCoplanarInside || filter == FInside) {
                     reversePoly(poly);
-                    addNode(model, iNode, place, NF_IsNew, poly);
+                    addNode(state, model, iNode, place, NF_IsNew, poly);
                     reversePoly(poly);
                 }
             }
 
-            void subtractWorldToBrush(UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
+            void subtractWorldToBrush(BuildState& state, UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
             {
                 if (filter == FOutside || filter == FCoplanarOutside || filter == FCospatialFacingIn) {
                     if (poly.polyFlags & PF_EdCut) {
-                        addNode(*context.model, context.lastCoplanar, NodePlane, NF_IsNew, poly);
+                        addNode(state, *state.csg.model, state.csg.lastCoplanar, NodePlane, NF_IsNew, poly);
                     }
                 } else {
-                    discardWorldPoly();
+                    discardWorldPoly(state.csg);
                 }
             }
 
-            void keepPoly(Poly& poly, bool reversed)
+            void keepPoly(const CsgContext& csg, Poly& poly, bool reversed)
             {
                 if (fixPoly(poly) >= 3) {
                     if (reversed) {
                         reversePoly(poly);
                     }
-                    context.model->polys->polys.push_back(poly);
+                    csg.model->polys->polys.push_back(poly);
                     if (reversed) {
                         reversePoly(poly);
                     }
                 }
             }
 
-            void intersectBrushWithWorld(UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
+            void intersectBrushWithWorld(BuildState& state, UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
             {
                 if (filter == FInside || filter == FCoplanarInside) {
-                    keepPoly(poly, false);
+                    keepPoly(state.csg, poly, false);
                 }
             }
 
-            void intersectWorldWithBrush(UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
+            void intersectWorldWithBrush(BuildState& state, UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
             {
                 if (filter == FInside || filter == FCoplanarInside || filter == FCospatialFacingOut) {
-                    keepPoly(poly, false);
+                    keepPoly(state.csg, poly, false);
                 }
             }
 
-            void deintersectBrushWithWorld(UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
+            void deintersectBrushWithWorld(BuildState& state, UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
             {
                 if (filter == FOutside || filter == FCoplanarOutside) {
-                    keepPoly(poly, false);
+                    keepPoly(state.csg, poly, false);
                 }
             }
 
-            void deintersectWorldWithBrush(UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
+            void deintersectWorldWithBrush(BuildState& state, UModel&, int32_t, Poly& poly, Filter filter, NodePlace)
             {
                 if (filter == FCoplanarInside || filter == FInside || filter == FCospatialFacingIn) {
-                    keepPoly(poly, true);
+                    keepPoly(state.csg, poly, true);
                 }
             }
 
@@ -839,19 +845,19 @@ namespace dx {
                 bool processingBack = false;
             };
 
-            void filterEdPoly(FilterFunc func, UModel& model, int32_t iNode, Poly& poly, CoplanarInfo info, bool outside);
+            void filterEdPoly(BuildState& state, FilterFunc func, UModel& model, int32_t iNode, Poly& poly, CoplanarInfo info, bool outside);
 
-            void filterLeaf(FilterFunc func, UModel& model, int32_t iNode, Poly& poly, CoplanarInfo info, bool leafOutside, NodePlace place)
+            void filterLeaf(BuildState& state, FilterFunc func, UModel& model, int32_t iNode, Poly& poly, CoplanarInfo info, bool leafOutside, NodePlace place)
             {
                 if (info.originalNode < 0) {
-                    func(model, iNode, poly, leafOutside ? FOutside : FInside, place);
+                    func(state, model, iNode, poly, leafOutside ? FOutside : FInside, place);
                     return;
                 }
                 if (!info.processingBack) {
                     info.frontLeafOutside = leafOutside;
                     if (info.backNode >= 0) {
                         info.processingBack = true;
-                        filterEdPoly(func, model, info.backNode, poly, info, info.backNodeOutside);
+                        filterEdPoly(state, func, model, info.backNode, poly, info, info.backNodeOutside);
                         return;
                     }
                     leafOutside = info.backNodeOutside;
@@ -866,7 +872,7 @@ namespace dx {
                 } else {
                     type = FCospatialFacingIn;
                 }
-                func(model, info.originalNode, poly, type, NodePlane);
+                func(state, model, info.originalNode, poly, type, NodePlane);
             }
 
             bool nodeIsCsg(const UModel& model, int32_t iNode)
@@ -874,14 +880,14 @@ namespace dx {
                 return isCsg(model.nodes[static_cast<size_t>(iNode)], 0);
             }
 
-            void filterEdPoly(FilterFunc func, UModel& model, int32_t iNode, Poly& polyIn, CoplanarInfo info, bool outside)
+            void filterEdPoly(BuildState& state, FilterFunc func, UModel& model, int32_t iNode, Poly& polyIn, CoplanarInfo info, bool outside)
             {
                 Poly poly = polyIn;
                 for (;;) {
                     if (static_cast<int>(poly.vertices.size()) >= VertexThreshold) {
                         Poly temp;
                         splitInHalf(poly, temp);
-                        filterEdPoly(func, model, iNode, temp, info, outside);
+                        filterEdPoly(state, func, model, iNode, temp, info, outside);
                     }
                     Poly frontPoly;
                     Poly backPoly;
@@ -891,14 +897,14 @@ namespace dx {
                     int result = splitWithPlane(poly, base, normal, &frontPoly, &backPoly, false);
                     bool goFront = result == SplitFront;
                     if (result == SplitCoplanar && info.originalNode >= 0) {
-                        errors++;
+                        state.errors++;
                         goFront = true;
                     }
                     if (goFront) {
                         const BspNode& node = model.nodes[static_cast<size_t>(iNode)];
                         outside = outside || isCsg(node, 0);
                         if (node.front < 0) {
-                            filterLeaf(func, model, iNode, poly, info, outside, NodeFront);
+                            filterLeaf(state, func, model, iNode, poly, info, outside, NodeFront);
                             return;
                         }
                         iNode = node.front;
@@ -908,7 +914,7 @@ namespace dx {
                         const BspNode& node = model.nodes[static_cast<size_t>(iNode)];
                         outside = outside && !isCsg(node, 0);
                         if (node.back < 0) {
-                            filterLeaf(func, model, iNode, poly, info, outside, NodeBack);
+                            filterLeaf(state, func, model, iNode, poly, info, outside, NodeBack);
                             return;
                         }
                         iNode = node.back;
@@ -941,7 +947,7 @@ namespace dx {
                         if (ourFront < 0 && ourBack < 0) {
                             info.processingBack = true;
                             info.frontLeafOutside = newFrontOutside;
-                            filterLeaf(func, model, iNode, poly, info, info.backNodeOutside, NodePlane);
+                            filterLeaf(state, func, model, iNode, poly, info, info.backNodeOutside, NodePlane);
                             return;
                         }
                         if (ourFront < 0 && ourBack >= 0) {
@@ -966,31 +972,31 @@ namespace dx {
                     }
                     int32_t front = model.nodes[static_cast<size_t>(iNode)].front;
                     if (front < 0) {
-                        filterLeaf(func, model, iNode, frontPoly, info, newFrontOutside, NodeFront);
+                        filterLeaf(state, func, model, iNode, frontPoly, info, newFrontOutside, NodeFront);
                     } else {
-                        filterEdPoly(func, model, front, frontPoly, info, newFrontOutside);
+                        filterEdPoly(state, func, model, front, frontPoly, info, newFrontOutside);
                     }
                     int32_t back = model.nodes[static_cast<size_t>(iNode)].back;
                     if (back < 0) {
-                        filterLeaf(func, model, iNode, backPoly, info, newBackOutside, NodeBack);
+                        filterLeaf(state, func, model, iNode, backPoly, info, newBackOutside, NodeBack);
                     } else {
-                        filterEdPoly(func, model, back, backPoly, info, newBackOutside);
+                        filterEdPoly(state, func, model, back, backPoly, info, newBackOutside);
                     }
                     return;
                 }
             }
 
-            void bspFilterFPoly(FilterFunc func, UModel& model, Poly& poly)
+            void bspFilterFPoly(BuildState& state, FilterFunc func, UModel& model, Poly& poly)
             {
                 CoplanarInfo info;
                 if (model.nodes.empty()) {
-                    func(model, 0, poly, model.rootOutside ? FOutside : FInside, NodeRoot);
+                    func(state, model, 0, poly, model.rootOutside ? FOutside : FInside, NodeRoot);
                 } else {
-                    filterEdPoly(func, model, 0, poly, info, model.rootOutside != 0);
+                    filterEdPoly(state, func, model, 0, poly, info, model.rootOutside != 0);
                 }
             }
 
-            void filterWorldThroughBrush(UModel& model, UModel& brush, uint8_t oper, int32_t iNode, const Plane* sphere)
+            void filterWorldThroughBrush(BuildState& state, UModel& model, UModel& brush, uint8_t oper, int32_t iNode, const Plane* sphere)
             {
                 while (iNode >= 0) {
                     int32_t iSurf = model.nodes[static_cast<size_t>(iNode)].surf;
@@ -1010,35 +1016,35 @@ namespace dx {
                         temp.actor = model.surfs[static_cast<size_t>(iSurf)].actor;
                         temp.brushPoly = model.surfs[static_cast<size_t>(iSurf)].brushPoly;
                         if (oper == CsgAdd || oper == CsgSubtract) {
-                            context.node = iNode;
-                            context.model = &model;
-                            context.discarded = 0;
-                            context.numNodes = model.nodes.size();
-                            context.lastCoplanar = iNode;
-                            while (model.nodes[static_cast<size_t>(context.lastCoplanar)].iPlane >= 0) {
-                                context.lastCoplanar = model.nodes[static_cast<size_t>(context.lastCoplanar)].iPlane;
+                            state.csg.node = iNode;
+                            state.csg.model = &model;
+                            state.csg.discarded = 0;
+                            state.csg.numNodes = model.nodes.size();
+                            state.csg.lastCoplanar = iNode;
+                            while (model.nodes[static_cast<size_t>(state.csg.lastCoplanar)].iPlane >= 0) {
+                                state.csg.lastCoplanar = model.nodes[static_cast<size_t>(state.csg.lastCoplanar)].iPlane;
                             }
-                            bspFilterFPoly(oper == CsgAdd ? addWorldToBrush : subtractWorldToBrush, brush, temp);
-                            if (context.discarded == 0) {
-                                model.nodes[static_cast<size_t>(context.lastCoplanar)].iPlane = -1;
-                                model.nodes.resize(context.numNodes);
+                            bspFilterFPoly(state, oper == CsgAdd ? addWorldToBrush : subtractWorldToBrush, brush, temp);
+                            if (state.csg.discarded == 0) {
+                                model.nodes[static_cast<size_t>(state.csg.lastCoplanar)].iPlane = -1;
+                                model.nodes.resize(state.csg.numNodes);
                             } else {
-                                BspNode& node = model.nodes[static_cast<size_t>(context.node)];
+                                BspNode& node = model.nodes[static_cast<size_t>(state.csg.node)];
                                 if (node.numVertices) {
                                     node.numVertices = 0;
                                 }
                             }
                         } else if (oper == CsgIntersect) {
-                            bspFilterFPoly(intersectWorldWithBrush, brush, temp);
+                            bspFilterFPoly(state, intersectWorldWithBrush, brush, temp);
                         } else if (oper == CsgDeintersect) {
-                            bspFilterFPoly(deintersectWorldWithBrush, brush, temp);
+                            bspFilterFPoly(state, deintersectWorldWithBrush, brush, temp);
                         }
                     }
                     if (doFront && model.nodes[static_cast<size_t>(iNode)].front >= 0) {
-                        filterWorldThroughBrush(model, brush, oper, model.nodes[static_cast<size_t>(iNode)].front, sphere);
+                        filterWorldThroughBrush(state, model, brush, oper, model.nodes[static_cast<size_t>(iNode)].front, sphere);
                     }
                     if (doBack && model.nodes[static_cast<size_t>(iNode)].back >= 0) {
-                        filterWorldThroughBrush(model, brush, oper, model.nodes[static_cast<size_t>(iNode)].back, sphere);
+                        filterWorldThroughBrush(state, model, brush, oper, model.nodes[static_cast<size_t>(iNode)].back, sphere);
                     }
                     iNode = model.nodes[static_cast<size_t>(iNode)].iPlane;
                 }
@@ -1145,7 +1151,7 @@ namespace dx {
                 }
             }
 
-            int distributePoint(UModel& model, PointVertList* pointVerts, int32_t iNode, int32_t pVertex)
+            int distributePoint(BuildState& state, UModel& model, PointVertList* pointVerts, int32_t iNode, int32_t pVertex)
             {
                 int count = 0;
                 const Vector point = model.points[static_cast<size_t>(pVertex)];
@@ -1153,12 +1159,12 @@ namespace dx {
                 float dist = start.plane.x * point.x + start.plane.y * point.y + start.plane.z * point.z - start.plane.w;
                 if (dist < ThreshOptGeomCoplanar) {
                     if (model.nodes[static_cast<size_t>(iNode)].back >= 0) {
-                        count += distributePoint(model, pointVerts, model.nodes[static_cast<size_t>(iNode)].back, pVertex);
+                        count += distributePoint(state, model, pointVerts, model.nodes[static_cast<size_t>(iNode)].back, pVertex);
                     }
                 }
                 if (dist > -ThreshOptGeomCoplanar) {
                     if (model.nodes[static_cast<size_t>(iNode)].front >= 0) {
-                        count += distributePoint(model, pointVerts, model.nodes[static_cast<size_t>(iNode)].front, pVertex);
+                        count += distributePoint(state, model, pointVerts, model.nodes[static_cast<size_t>(iNode)].front, pVertex);
                     }
                 }
                 if (dist > -ThreshOptGeomCoplanar && dist < ThreshOptGeomCoplanar) {
@@ -1202,14 +1208,14 @@ namespace dx {
                                     skippedInside = true;
                                 }
                             } else {
-                                errors++;
+                                state.errors++;
                             }
                         }
                         if (i == n && foundSide >= 0) {
                             addPointToNode(model, pointVerts, iNode, foundSide, pVertex);
                             count++;
                         } else if (skippedColinear || skippedInside) {
-                            errors++;
+                            state.errors++;
                         }
                     }
                 }
@@ -1476,11 +1482,6 @@ namespace dx {
                 return mask;
             }
 
-            bool childOutside(const BspNode& node, int child, bool outside, uint8_t extraFlags)
-            {
-                return child ? (outside || isCsg(node, extraFlags)) : (outside && !isCsg(node, extraFlags));
-            }
-
             float worldLightRadius(UObject* a)
             {
                 return 25.0f * (static_cast<float>(actor::LightRadius(a)) + 1.0f);
@@ -1526,6 +1527,7 @@ namespace dx {
             public:
                 using PortalFunc = void (Visibility::*)(Poly&, int32_t, int32_t, int32_t, int32_t);
 
+                BuildState* state = nullptr;
                 ULevel* level = nullptr;
                 UModel* model = nullptr;
                 std::vector<int32_t> clips;
@@ -1540,7 +1542,7 @@ namespace dx {
 
                 void tagZonePortalFragment(Poly& poly, int32_t frontLeaf, int32_t backLeaf, int32_t generatingNode, int32_t generatingBase)
                 {
-                    int32_t newNode = addNode(*model, generatingNode, NodePlane, static_cast<uint8_t>(model->nodes[static_cast<size_t>(generatingNode)].nodeFlags | NF_IsNew), poly);
+                    int32_t newNode = addNode(*state, *model, generatingNode, NodePlane, static_cast<uint8_t>(model->nodes[static_cast<size_t>(generatingNode)].nodeFlags | NF_IsNew), poly);
                     const BspNode& base = model->nodes[static_cast<size_t>(generatingBase)];
                     int backward = poly.normal.x * base.plane.x + poly.normal.y * base.plane.y + poly.normal.z * base.plane.z < 0.0f ? 1 : 0;
                     BspNode& node = model->nodes[static_cast<size_t>(newNode)];
@@ -1781,17 +1783,7 @@ namespace dx {
                     if (model->nodes.empty()) {
                         return result;
                     }
-                    int32_t iNode = 0;
-                    int32_t parent = 0;
-                    int isFront = 0;
-                    while (iNode >= 0) {
-                        const BspNode& node = model->nodes[static_cast<size_t>(iNode)];
-                        isFront = node.plane.x * location.x + node.plane.y * location.y + node.plane.z * location.z - node.plane.w >= 0.0f ? 1 : 0;
-                        parent = iNode;
-                        iNode = isFront ? node.front : node.back;
-                    }
-                    result.iLeaf = model->nodes[static_cast<size_t>(parent)].leaf[isFront];
-                    result.zoneNumber = model->nodes[static_cast<size_t>(parent)].zone[isFront];
+                    result.zoneNumber = static_cast<uint8_t>(pointLeafZone(*model, location, &result.iLeaf));
                     UObject* zoneActor = model->zones[result.zoneNumber & 63].zoneActor;
                     result.zone = zoneActor ? zoneActor : levelInfo;
                     return result;
@@ -1957,6 +1949,9 @@ namespace dx {
                         int32_t iNode = 0;
                         int32_t parent = 0;
                         int isFront = 0;
+                        // FEditorVisibility::ActorVisibility sends a point
+                        // exactly on a plane to the back, unlike UModel::PointRegion,
+                        // which sends it to the front.
                         while (iNode >= 0) {
                             const BspNode& node = model->nodes[static_cast<size_t>(iNode)];
                             isFront = node.plane.x * location.x + node.plane.y * location.y + node.plane.z * location.z - node.plane.w > 0.0f ? 1 : 0;
@@ -2063,6 +2058,10 @@ namespace dx {
                     cleanup(*model);
                     refresh(*model, true);
                     buildBounds(*model);
+                    // cleanup can remove every node; there is no root left to walk.
+                    if (model->nodes.empty()) {
+                        return;
+                    }
                     buildZoneMasks(*model, 0);
                     buildConnectivity();
                     buildZoneInfo();
@@ -2137,16 +2136,6 @@ namespace dx {
             }
         }
 
-        void setCurrentTexture(UObject* texture)
-        {
-            currentTextureObject = texture;
-        }
-
-        UObject* currentTexture()
-        {
-            return currentTextureObject;
-        }
-
         void ensureLevelPolys(UModel& model)
         {
             ensurePolys(model);
@@ -2159,12 +2148,17 @@ namespace dx {
 
         int32_t pointIndex(UModel& model, const Vector& v, bool exact)
         {
-            return addPoint(model, v, exact);
+            return addPoint(BuildState(), model, v, exact);
         }
 
         bool isCsg(const BspNode& node, uint8_t extraFlags)
         {
             return node.numVertices > 0 && !(node.nodeFlags & (NF_IsNew | NF_NotCsg | extraFlags));
+        }
+
+        bool childOutside(const BspNode& node, int child, bool outside, uint8_t extraFlags)
+        {
+            return child ? (outside || isCsg(node, extraFlags)) : (outside && !isCsg(node, extraFlags));
         }
 
         Vector transformVector(const Vector& v, const CoordSystem& coords)
@@ -2207,7 +2201,7 @@ namespace dx {
             if (orientation < 0.0f) {
                 std::reverse(poly.vertices.begin(), poly.vertices.end());
             }
-            poly.normal = safeNormal(transformVector(poly.normal, coords.vectorXform));
+            poly.normal = transformVector(poly.normal, coords.vectorXform).normal();
         }
 
         void reversePoly(Poly& poly)
@@ -2264,8 +2258,8 @@ namespace dx {
             }
             if (poly.textureU.zero() && poly.textureV.zero()) {
                 for (size_t i = 1; i < poly.vertices.size(); i++) {
-                    poly.textureU = safeNormal((poly.vertices[0] - poly.vertices[i]).cross(poly.normal));
-                    poly.textureV = safeNormal(poly.normal.cross(poly.textureU));
+                    poly.textureU = (poly.vertices[0] - poly.vertices[i]).cross(poly.normal).normal();
+                    poly.textureV = poly.normal.cross(poly.textureU).normal();
                     if (poly.textureU.sizeSquared() != 0 && poly.textureV.sizeSquared() != 0) {
                         break;
                     }
@@ -2535,146 +2529,160 @@ namespace dx {
             }
         }
 
-        int32_t addNode(UModel& model, int32_t parent, NodePlace place, uint8_t nodeFlags, Poly& poly)
-        {
-            if (place == NodePlane) {
-                while (model.nodes[static_cast<size_t>(parent)].iPlane >= 0) {
-                    parent = model.nodes[static_cast<size_t>(parent)].iPlane;
+        namespace {
+            int32_t addNode(BuildState& state, UModel& model, int32_t parent, NodePlace place, uint8_t nodeFlags, Poly& poly)
+            {
+                if (place == NodePlane) {
+                    while (model.nodes[static_cast<size_t>(parent)].iPlane >= 0) {
+                        parent = model.nodes[static_cast<size_t>(parent)].iPlane;
+                    }
                 }
-            }
-            int32_t surfIndex = poly.link;
-            if (poly.link == static_cast<int32_t>(model.surfs.size())) {
-                BspSurf surf;
-                surf.pBase = addPoint(model, poly.base, true);
-                surf.vNormal = addVector(model, poly.normal, true);
-                surf.vTextureU = addVector(model, poly.textureU, false);
-                surf.vTextureV = addVector(model, poly.textureV, false);
-                surf.texture = poly.texture;
-                surf.lightMap = -1;
-                surf.panU = poly.panU;
-                surf.panV = poly.panV;
-                surf.polyFlags = poly.polyFlags & ~PF_NoAddToBSP;
-                surf.actor = poly.actor;
-                surf.brushPoly = poly.brushPoly;
-                model.surfs.push_back(surf);
-            }
-            const BspSurf& surf = model.surfs[static_cast<size_t>(surfIndex)];
-            if (surf.polyFlags & PF_NotSolid) {
-                nodeFlags |= NF_NotCsg;
-            }
-            if (surf.polyFlags & (PF_Invisible | PF_Portal)) {
-                nodeFlags |= NF_NotVisBlocking;
-            }
-            if (surf.polyFlags & PF_Masked) {
-                nodeFlags |= NF_ShootThrough;
-            }
-            int n = static_cast<int>(poly.vertices.size());
-            if (n > MaxNodeVertices) {
-                Poly poly1 = poly;
-                poly1.vertices.resize(static_cast<size_t>(MaxNodeVertices));
-                Poly poly2 = poly;
-                poly2.vertices.clear();
-                poly2.vertices.push_back(poly.vertices[0]);
-                for (int i = MaxNodeVertices - 1; i < n; i++) {
-                    poly2.vertices.push_back(poly.vertices[static_cast<size_t>(i)]);
+                int32_t surfIndex = poly.link;
+                if (poly.link == static_cast<int32_t>(model.surfs.size())) {
+                    BspSurf surf;
+                    surf.pBase = addPoint(state, model, poly.base, true);
+                    surf.vNormal = addVector(model, poly.normal, true);
+                    surf.vTextureU = addVector(model, poly.textureU, false);
+                    surf.vTextureV = addVector(model, poly.textureV, false);
+                    surf.texture = poly.texture;
+                    surf.lightMap = -1;
+                    surf.panU = poly.panU;
+                    surf.panV = poly.panV;
+                    surf.polyFlags = poly.polyFlags & ~PF_NoAddToBSP;
+                    surf.actor = poly.actor;
+                    surf.brushPoly = poly.brushPoly;
+                    model.surfs.push_back(surf);
                 }
-                int32_t iNode = addNode(model, parent, place, nodeFlags, poly1);
-                addNode(model, iNode, NodePlane, nodeFlags, poly2);
+                const BspSurf& surf = model.surfs[static_cast<size_t>(surfIndex)];
+                if (surf.polyFlags & PF_NotSolid) {
+                    nodeFlags |= NF_NotCsg;
+                }
+                if (surf.polyFlags & (PF_Invisible | PF_Portal)) {
+                    nodeFlags |= NF_NotVisBlocking;
+                }
+                if (surf.polyFlags & PF_Masked) {
+                    nodeFlags |= NF_ShootThrough;
+                }
+                int n = static_cast<int>(poly.vertices.size());
+                if (n > MaxNodeVertices) {
+                    Poly poly1 = poly;
+                    poly1.vertices.resize(static_cast<size_t>(MaxNodeVertices));
+                    Poly poly2 = poly;
+                    poly2.vertices.clear();
+                    poly2.vertices.push_back(poly.vertices[0]);
+                    for (int i = MaxNodeVertices - 1; i < n; i++) {
+                        poly2.vertices.push_back(poly.vertices[static_cast<size_t>(i)]);
+                    }
+                    int32_t iNode = addNode(state, model, parent, place, nodeFlags, poly1);
+                    addNode(state, model, iNode, NodePlane, nodeFlags, poly2);
+                    return iNode;
+                }
+                int32_t iNode = static_cast<int32_t>(model.nodes.size());
+                model.nodes.emplace_back();
+                BspNode node;
+                node.surf = poly.link;
+                node.nodeFlags = nodeFlags;
+                node.renderBound = -1;
+                node.collisionBound = -1;
+                node.zoneMask = place != NodeRoot ? model.nodes[static_cast<size_t>(parent)].zoneMask : ~0ull;
+                node.plane = { poly.normal.x, poly.normal.y, poly.normal.z, poly.base.dot(poly.normal) };
+                node.vertPool = static_cast<int32_t>(model.verts.size());
+                model.verts.resize(model.verts.size() + static_cast<size_t>(n));
+                node.front = -1;
+                node.back = -1;
+                node.iPlane = -1;
+                if (place == NodeRoot) {
+                    node.leaf[0] = -1;
+                    node.leaf[1] = -1;
+                    node.zone[0] = 0;
+                    node.zone[1] = 0;
+                } else if (place == NodeFront || place == NodeBack) {
+                    int zoneFront = place == NodeFront ? 1 : 0;
+                    const BspNode& p = model.nodes[static_cast<size_t>(parent)];
+                    node.leaf[0] = p.leaf[zoneFront];
+                    node.leaf[1] = p.leaf[zoneFront];
+                    node.zone[0] = p.zone[zoneFront];
+                    node.zone[1] = p.zone[zoneFront];
+                } else {
+                    const BspNode& p = model.nodes[static_cast<size_t>(parent)];
+                    int flipped = node.plane.x * p.plane.x + node.plane.y * p.plane.y + node.plane.z * p.plane.z < 0.0f ? 1 : 0;
+                    node.leaf[0] = p.leaf[flipped];
+                    node.leaf[1] = p.leaf[1 - flipped];
+                    node.zone[0] = p.zone[flipped];
+                    node.zone[1] = p.zone[1 - flipped];
+                }
+                if (place == NodeFront) {
+                    model.nodes[static_cast<size_t>(parent)].front = iNode;
+                } else if (place == NodeBack) {
+                    model.nodes[static_cast<size_t>(parent)].back = iNode;
+                } else if (place == NodePlane) {
+                    model.nodes[static_cast<size_t>(parent)].iPlane = iNode;
+                }
+                node.numVertices = 0;
+                model.nodes[static_cast<size_t>(iNode)] = node;
+                for (int i = 0; i < n; i++) {
+                    int32_t pVertex = addPoint(state, model, poly.vertices[static_cast<size_t>(i)], false);
+                    BspNode& current = model.nodes[static_cast<size_t>(iNode)];
+                    if (current.numVertices == 0 || model.verts[static_cast<size_t>(current.vertPool + current.numVertices - 1)].vertex != pVertex) {
+                        BspVert& vert = model.verts[static_cast<size_t>(current.vertPool + current.numVertices)];
+                        vert.side = -1;
+                        vert.vertex = pVertex;
+                        current.numVertices++;
+                    }
+                }
+                BspNode& done = model.nodes[static_cast<size_t>(iNode)];
+                if (done.numVertices >= 2 && model.verts[static_cast<size_t>(done.vertPool)].vertex == model.verts[static_cast<size_t>(done.vertPool + done.numVertices - 1)].vertex) {
+                    done.numVertices--;
+                }
+                if (done.numVertices < 3) {
+                    state.errors++;
+                    done.numVertices = 0;
+                }
                 return iNode;
             }
-            int32_t iNode = static_cast<int32_t>(model.nodes.size());
-            model.nodes.emplace_back();
-            BspNode node;
-            node.surf = poly.link;
-            node.nodeFlags = nodeFlags;
-            node.renderBound = -1;
-            node.collisionBound = -1;
-            node.zoneMask = place != NodeRoot ? model.nodes[static_cast<size_t>(parent)].zoneMask : ~0ull;
-            node.plane = { poly.normal.x, poly.normal.y, poly.normal.z, poly.base.dot(poly.normal) };
-            node.vertPool = static_cast<int32_t>(model.verts.size());
-            model.verts.resize(model.verts.size() + static_cast<size_t>(n));
-            node.front = -1;
-            node.back = -1;
-            node.iPlane = -1;
-            if (place == NodeRoot) {
-                node.leaf[0] = -1;
-                node.leaf[1] = -1;
-                node.zone[0] = 0;
-                node.zone[1] = 0;
-            } else if (place == NodeFront || place == NodeBack) {
-                int zoneFront = place == NodeFront ? 1 : 0;
-                const BspNode& p = model.nodes[static_cast<size_t>(parent)];
-                node.leaf[0] = p.leaf[zoneFront];
-                node.leaf[1] = p.leaf[zoneFront];
-                node.zone[0] = p.zone[zoneFront];
-                node.zone[1] = p.zone[zoneFront];
-            } else {
-                const BspNode& p = model.nodes[static_cast<size_t>(parent)];
-                int flipped = node.plane.x * p.plane.x + node.plane.y * p.plane.y + node.plane.z * p.plane.z < 0.0f ? 1 : 0;
-                node.leaf[0] = p.leaf[flipped];
-                node.leaf[1] = p.leaf[1 - flipped];
-                node.zone[0] = p.zone[flipped];
-                node.zone[1] = p.zone[1 - flipped];
-            }
-            if (place == NodeFront) {
-                model.nodes[static_cast<size_t>(parent)].front = iNode;
-            } else if (place == NodeBack) {
-                model.nodes[static_cast<size_t>(parent)].back = iNode;
-            } else if (place == NodePlane) {
-                model.nodes[static_cast<size_t>(parent)].iPlane = iNode;
-            }
-            node.numVertices = 0;
-            model.nodes[static_cast<size_t>(iNode)] = node;
-            for (int i = 0; i < n; i++) {
-                int32_t pVertex = addPoint(model, poly.vertices[static_cast<size_t>(i)], false);
-                BspNode& current = model.nodes[static_cast<size_t>(iNode)];
-                if (current.numVertices == 0 || model.verts[static_cast<size_t>(current.vertPool + current.numVertices - 1)].vertex != pVertex) {
-                    BspVert& vert = model.verts[static_cast<size_t>(current.vertPool + current.numVertices)];
-                    vert.side = -1;
-                    vert.vertex = pVertex;
-                    current.numVertices++;
+
+            void build(BuildState& state, UModel& model, Optimization opt, int balance, int rebuildSimplePolys)
+            {
+                if (rebuildSimplePolys == 1) {
+                    emptyModel(model, true, false);
+                } else if (rebuildSimplePolys == 0) {
+                    for (BspNode& node : model.nodes) {
+                        node.numVertices = 0;
+                    }
+                    refresh(model, true);
+                    emptyModel(model, false, false);
+                }
+                if (!model.polys || model.polys->polys.empty()) {
+                    return;
+                }
+                std::vector<Poly*> list;
+                for (Poly& poly : model.polys->polys) {
+                    if (!poly.vertices.empty()) {
+                        list.push_back(&poly);
+                    }
+                }
+                if (list.empty()) {
+                    return;
+                }
+                std::deque<Poly> arena;
+                splitPolyList(state, model, -1, NodeRoot, list, opt, balance, rebuildSimplePolys, arena);
+                if (rebuildSimplePolys == 0) {
+                    refresh(model, true);
+                    buildBounds(model);
                 }
             }
-            BspNode& done = model.nodes[static_cast<size_t>(iNode)];
-            if (done.numVertices >= 2 && model.verts[static_cast<size_t>(done.vertPool)].vertex == model.verts[static_cast<size_t>(done.vertPool + done.numVertices - 1)].vertex) {
-                done.numVertices--;
-            }
-            if (done.numVertices < 3) {
-                errors++;
-                done.numVertices = 0;
-            }
-            return iNode;
+        }
+
+        int32_t addNode(UModel& model, int32_t parent, NodePlace place, uint8_t nodeFlags, Poly& poly)
+        {
+            BuildState state;
+            return addNode(state, model, parent, place, nodeFlags, poly);
         }
 
         void build(UModel& model, Optimization opt, int balance, int rebuildSimplePolys)
         {
-            if (rebuildSimplePolys == 1) {
-                emptyModel(model, true, false);
-            } else if (rebuildSimplePolys == 0) {
-                for (BspNode& node : model.nodes) {
-                    node.numVertices = 0;
-                }
-                refresh(model, true);
-                emptyModel(model, false, false);
-            }
-            if (!model.polys || model.polys->polys.empty()) {
-                return;
-            }
-            std::vector<Poly*> list;
-            for (Poly& poly : model.polys->polys) {
-                if (!poly.vertices.empty()) {
-                    list.push_back(&poly);
-                }
-            }
-            if (list.empty()) {
-                return;
-            }
-            std::deque<Poly> arena;
-            splitPolyList(model, -1, NodeRoot, list, opt, balance, rebuildSimplePolys, arena);
-            if (rebuildSimplePolys == 0) {
-                refresh(model, true);
-                buildBounds(model);
-            }
+            BuildState state;
+            build(state, model, opt, balance, rebuildSimplePolys);
         }
 
         int nodeToFPoly(const UModel& model, int32_t iNode, Poly& poly)
@@ -2783,133 +2791,141 @@ namespace dx {
             }
         }
 
-        int brushCSG(UObject* brushActor, UModel& model, uint32_t polyFlags, uint8_t oper, bool buildBoundsFlag)
-        {
-            errors = 0;
-            UModel* brush = cast<UModel>(actor::Brush(brushActor));
-            if (!brush) {
-                return 0;
-            }
-            objects::ensureLoaded(brush);
-            objects::flushLoads();
-            if (brush->polys) {
-                objects::ensureLoaded(brush->polys);
-                objects::flushLoads();
-            }
-            uint32_t notPolyFlags = 0;
-            if (oper != CsgAdd) {
-                notPolyFlags |= PF_Semisolid | PF_NotSolid;
-            }
-            UModel tempModel;
-            UPolys tempPolys;
-            tempModel.polys = &tempPolys;
-            tempModel.rootOutside = 1;
-            emptyModel(tempModel, true, true);
-            ModelCoords coords;
-            ModelCoords uncoords;
-            float orientation = buildCoords(brushActor, &coords, &uncoords);
-            Vector prePivot = actor::PrePivot(brushActor);
-            Vector location = actor::Location(brushActor);
-            std::vector<Poly> brushPolys = brush->polys ? brush->polys->polys : std::vector<Poly>();
-            for (size_t i = 0; i < brushPolys.size(); i++) {
-                Poly dest = brushPolys[i];
-                dest.actor = brushActor;
-                dest.brushPoly = static_cast<int32_t>(i);
-                dest.polyFlags = (dest.polyFlags | polyFlags) & ~notPolyFlags;
-                if (dest.link == -1) {
-                    dest.link = static_cast<int32_t>(i);
-                }
-                transformPoly(dest, coords, prePivot, location, orientation);
-                if (!dest.vertices.empty()) {
-                    float error = (dest.vertices[0] - dest.base).dot(dest.normal);
-                    if (std::abs(error) > 0.0001f) {
-                        dest.base += dest.normal * error;
-                    }
-                }
-                if (!dest.texture) {
-                    dest.texture = currentTextureObject;
-                }
-                tempPolys.polys.push_back(dest);
-            }
-            int numPolysFromBrush = 0;
-            if (oper == CsgIntersect || oper == CsgDeintersect) {
-                emptyModel(*brush, true, true);
-                if (!brush->polys) {
+        namespace {
+            int brushCSG(BuildState& state, UObject* brushActor, UModel& model, uint32_t polyFlags, uint8_t oper, bool buildBoundsFlag, UObject* defaultTexture)
+            {
+                state.errors = 0;
+                UModel* brush = cast<UModel>(actor::Brush(brushActor));
+                if (!brush) {
                     return 0;
                 }
-                for (size_t i = 0; i < tempPolys.polys.size(); i++) {
-                    Poly edPoly = tempPolys.polys[i];
-                    context.model = brush;
-                    bspFilterFPoly(oper == CsgIntersect ? intersectBrushWithWorld : deintersectBrushWithWorld, model, edPoly);
+                objects::ensureLoaded(brush);
+                objects::flushLoads();
+                if (brush->polys) {
+                    objects::ensureLoaded(brush->polys);
+                    objects::flushLoads();
                 }
-                numPolysFromBrush = static_cast<int>(brush->polys->polys.size());
-            } else {
+                uint32_t notPolyFlags = 0;
+                if (oper != CsgAdd) {
+                    notPolyFlags |= PF_Semisolid | PF_NotSolid;
+                }
+                UModel tempModel;
+                UPolys tempPolys;
+                tempModel.polys = &tempPolys;
+                tempModel.rootOutside = 1;
+                emptyModel(tempModel, true, true);
+                ModelCoords coords;
+                ModelCoords uncoords;
+                float orientation = buildCoords(brushActor, &coords, &uncoords);
+                Vector prePivot = actor::PrePivot(brushActor);
+                Vector location = actor::Location(brushActor);
+                std::vector<Poly> brushPolys = brush->polys ? brush->polys->polys : std::vector<Poly>();
                 for (size_t i = 0; i < brushPolys.size(); i++) {
-                    Poly edPoly = tempPolys.polys[i];
-                    edPoly.polyFlags &= ~PF_EdCut;
-                    if (edPoly.link == static_cast<int32_t>(i)) {
-                        edPoly.link = static_cast<int32_t>(model.surfs.size());
-                        tempPolys.polys[i].link = edPoly.link;
-                    } else {
-                        edPoly.link = tempPolys.polys[static_cast<size_t>(edPoly.link)].link;
-                    }
-                    bspFilterFPoly(oper == CsgAdd ? addBrushToWorld : subtractBrushFromWorld, model, edPoly);
-                }
-            }
-            if (!model.nodes.empty() && !(polyFlags & (PF_NotSolid | PF_Semisolid))) {
-                build(tempModel, Optimization::Lame, 0, 1);
-                context.model = brush;
-                buildBound(tempModel);
-                filterWorldThroughBrush(model, tempModel, oper, 0, &tempModel.sphere);
-            }
-            if (oper == CsgIntersect || oper == CsgDeintersect) {
-                std::vector<Poly>& polys = brush->polys->polys;
-                for (int i = numPolysFromBrush - 1; i >= 0; i--) {
-                    Poly& dest = polys[static_cast<size_t>(i)];
-                    int j = 0;
-                    for (j = 0; j < i; j++) {
-                        if (dest.link == polys[static_cast<size_t>(j)].link) {
-                            dest.link = j;
-                            break;
-                        }
-                    }
-                    if (j >= i) {
-                        dest.link = i;
-                    }
-                }
-                for (int i = static_cast<int>(polys.size()) - 1; i >= numPolysFromBrush; i--) {
-                    Poly& dest = polys[static_cast<size_t>(i)];
-                    int j = 0;
-                    for (j = numPolysFromBrush; j < i; j++) {
-                        if (dest.link == polys[static_cast<size_t>(j)].link) {
-                            dest.link = j;
-                            break;
-                        }
-                    }
-                    if (j >= i) {
-                        dest.link = i;
-                    }
-                }
-                brush->linked = 1;
-                for (size_t i = 0; i < polys.size(); i++) {
-                    Poly& dest = polys[i];
-                    transformPoly(dest, uncoords, location, prePivot, orientation);
-                    fixPoly(dest);
-                    dest.actor = nullptr;
+                    Poly dest = brushPolys[i];
+                    dest.actor = brushActor;
                     dest.brushPoly = static_cast<int32_t>(i);
+                    dest.polyFlags = (dest.polyFlags | polyFlags) & ~notPolyFlags;
+                    if (dest.link == -1) {
+                        dest.link = static_cast<int32_t>(i);
+                    }
+                    transformPoly(dest, coords, prePivot, location, orientation);
+                    if (!dest.vertices.empty()) {
+                        float error = (dest.vertices[0] - dest.base).dot(dest.normal);
+                        if (std::abs(error) > 0.0001f) {
+                            dest.base += dest.normal * error;
+                        }
+                    }
+                    if (!dest.texture) {
+                        dest.texture = defaultTexture;
+                    }
+                    tempPolys.polys.push_back(dest);
                 }
-            }
-            if (oper == CsgAdd || oper == CsgSubtract) {
-                cleanup(model);
-                if (buildBoundsFlag) {
-                    buildBounds(model);
+                int numPolysFromBrush = 0;
+                if (oper == CsgIntersect || oper == CsgDeintersect) {
+                    emptyModel(*brush, true, true);
+                    if (!brush->polys) {
+                        return 0;
+                    }
+                    for (size_t i = 0; i < tempPolys.polys.size(); i++) {
+                        Poly edPoly = tempPolys.polys[i];
+                        state.csg.model = brush;
+                        bspFilterFPoly(state, oper == CsgIntersect ? intersectBrushWithWorld : deintersectBrushWithWorld, model, edPoly);
+                    }
+                    numPolysFromBrush = static_cast<int>(brush->polys->polys.size());
+                } else {
+                    for (size_t i = 0; i < brushPolys.size(); i++) {
+                        Poly edPoly = tempPolys.polys[i];
+                        edPoly.polyFlags &= ~PF_EdCut;
+                        if (edPoly.link == static_cast<int32_t>(i)) {
+                            edPoly.link = static_cast<int32_t>(model.surfs.size());
+                            tempPolys.polys[i].link = edPoly.link;
+                        } else {
+                            edPoly.link = tempPolys.polys[static_cast<size_t>(edPoly.link)].link;
+                        }
+                        bspFilterFPoly(state, oper == CsgAdd ? addBrushToWorld : subtractBrushFromWorld, model, edPoly);
+                    }
                 }
+                if (!model.nodes.empty() && !(polyFlags & (PF_NotSolid | PF_Semisolid))) {
+                    build(state, tempModel, Optimization::Lame, 0, 1);
+                    state.csg.model = brush;
+                    buildBound(tempModel);
+                    filterWorldThroughBrush(state, model, tempModel, oper, 0, &tempModel.sphere);
+                }
+                if (oper == CsgIntersect || oper == CsgDeintersect) {
+                    std::vector<Poly>& polys = brush->polys->polys;
+                    for (int i = numPolysFromBrush - 1; i >= 0; i--) {
+                        Poly& dest = polys[static_cast<size_t>(i)];
+                        int j = 0;
+                        for (j = 0; j < i; j++) {
+                            if (dest.link == polys[static_cast<size_t>(j)].link) {
+                                dest.link = j;
+                                break;
+                            }
+                        }
+                        if (j >= i) {
+                            dest.link = i;
+                        }
+                    }
+                    for (int i = static_cast<int>(polys.size()) - 1; i >= numPolysFromBrush; i--) {
+                        Poly& dest = polys[static_cast<size_t>(i)];
+                        int j = 0;
+                        for (j = numPolysFromBrush; j < i; j++) {
+                            if (dest.link == polys[static_cast<size_t>(j)].link) {
+                                dest.link = j;
+                                break;
+                            }
+                        }
+                        if (j >= i) {
+                            dest.link = i;
+                        }
+                    }
+                    brush->linked = 1;
+                    for (size_t i = 0; i < polys.size(); i++) {
+                        Poly& dest = polys[i];
+                        transformPoly(dest, uncoords, location, prePivot, orientation);
+                        fixPoly(dest);
+                        dest.actor = nullptr;
+                        dest.brushPoly = static_cast<int32_t>(i);
+                    }
+                }
+                if (oper == CsgAdd || oper == CsgSubtract) {
+                    cleanup(model);
+                    if (buildBoundsFlag) {
+                        buildBounds(model);
+                    }
+                }
+                if (oper == CsgIntersect || oper == CsgDeintersect) {
+                    mergeCoplanars(*brush, true, false);
+                    buildBound(*brush);
+                }
+                return 1 + static_cast<int>(state.errors);
             }
-            if (oper == CsgIntersect || oper == CsgDeintersect) {
-                mergeCoplanars(*brush, true, false);
-                buildBound(*brush);
-            }
-            return 1 + static_cast<int>(errors);
+        }
+
+        int brushCSG(UObject* brushActor, UModel& model, uint32_t polyFlags, uint8_t oper, bool buildBoundsFlag, UObject* defaultTexture)
+        {
+            BuildState state;
+            return brushCSG(state, brushActor, model, polyFlags, oper, buildBoundsFlag, defaultTexture);
         }
 
         void refresh(UModel& model, bool noRemapSurfs)
@@ -2993,77 +3009,85 @@ namespace dx {
             }
         }
 
-        void optGeom(UModel& model)
-        {
-            mergeNearPoints(model, 0.25f);
-            refresh(model, false);
-            PointVertList pointVerts;
-            pointVerts.alloc(model);
-            pointVerts.addAllNodes();
-            model.numSharedSides = 4;
-            for (BspVert& vert : model.verts) {
-                vert.side = -1;
-            }
-            for (size_t iNode = 0; iNode < model.nodes.size(); iNode++) {
-                for (int thisVert = 0; thisVert < model.nodes[iNode].numVertices; thisVert++) {
-                    const BspNode& node = model.nodes[iNode];
-                    int prevVert = thisVert > 0 ? thisVert - 1 : node.numVertices - 1;
-                    int32_t pThis = model.verts[static_cast<size_t>(node.vertPool + thisVert)].vertex;
-                    int32_t pPrev = model.verts[static_cast<size_t>(node.vertPool + prevVert)].vertex;
-                    bool shared = false;
-                    for (int32_t pv1 = pointVerts.index[static_cast<size_t>(pThis)]; pv1 >= 0 && !shared; pv1 = pointVerts.entries[static_cast<size_t>(pv1)].next) {
-                        for (int32_t pv2 = pointVerts.index[static_cast<size_t>(pPrev)]; pv2 >= 0; pv2 = pointVerts.entries[static_cast<size_t>(pv2)].next) {
-                            if (pointVerts.entries[static_cast<size_t>(pv1)].node == pointVerts.entries[static_cast<size_t>(pv2)].node && pointVerts.entries[static_cast<size_t>(pv1)].node != static_cast<int32_t>(iNode)) {
-                                shared = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (shared) {
-                        continue;
-                    }
-                    distributePoint(model, &pointVerts, 0, pThis);
-                    distributePoint(model, &pointVerts, 0, pPrev);
+        namespace {
+            void optGeom(BuildState& state, UModel& model)
+            {
+                mergeNearPoints(model, 0.25f);
+                refresh(model, false);
+                PointVertList pointVerts;
+                pointVerts.alloc(model);
+                pointVerts.addAllNodes();
+                model.numSharedSides = 4;
+                for (BspVert& vert : model.verts) {
+                    vert.side = -1;
                 }
-            }
-            pointVerts.alloc(model);
-            pointVerts.addAllNodes();
-            for (size_t iNode = 0; iNode < model.nodes.size(); iNode++) {
-                const BspNode node = model.nodes[iNode];
-                for (int thisVert = 0; thisVert < node.numVertices; thisVert++) {
-                    if (model.verts[static_cast<size_t>(node.vertPool + thisVert)].side != -1) {
-                        continue;
-                    }
-                    int prevVert = thisVert > 0 ? thisVert - 1 : node.numVertices - 1;
-                    int32_t pThis = model.verts[static_cast<size_t>(node.vertPool + thisVert)].vertex;
-                    int32_t pPrev = model.verts[static_cast<size_t>(node.vertPool + prevVert)].vertex;
-                    bool linked = false;
-                    for (int32_t pv1 = pointVerts.index[static_cast<size_t>(pThis)]; pv1 >= 0 && !linked; pv1 = pointVerts.entries[static_cast<size_t>(pv1)].next) {
-                        for (int32_t pv2 = pointVerts.index[static_cast<size_t>(pPrev)]; pv2 >= 0; pv2 = pointVerts.entries[static_cast<size_t>(pv2)].next) {
-                            const PointVert& a = pointVerts.entries[static_cast<size_t>(pv1)];
-                            const PointVert& b = pointVerts.entries[static_cast<size_t>(pv2)];
-                            if (a.node == b.node && a.node != static_cast<int32_t>(iNode)) {
-                                const BspNode& other = model.nodes[static_cast<size_t>(b.node)];
-                                int delta = (other.numVertices + b.vertex - a.vertex) % other.numVertices;
-                                if (delta == 1) {
-                                    int32_t otherVert = b.vertex;
-                                    int32_t side = model.verts[static_cast<size_t>(other.vertPool + otherVert)].side;
-                                    if (side == -1) {
-                                        side = model.numSharedSides++;
-                                    }
-                                    model.verts[static_cast<size_t>(node.vertPool + thisVert)].side = side;
-                                    model.verts[static_cast<size_t>(other.vertPool + otherVert)].side = side;
-                                    linked = true;
+                for (size_t iNode = 0; iNode < model.nodes.size(); iNode++) {
+                    for (int thisVert = 0; thisVert < model.nodes[iNode].numVertices; thisVert++) {
+                        const BspNode& node = model.nodes[iNode];
+                        int prevVert = thisVert > 0 ? thisVert - 1 : node.numVertices - 1;
+                        int32_t pThis = model.verts[static_cast<size_t>(node.vertPool + thisVert)].vertex;
+                        int32_t pPrev = model.verts[static_cast<size_t>(node.vertPool + prevVert)].vertex;
+                        bool shared = false;
+                        for (int32_t pv1 = pointVerts.index[static_cast<size_t>(pThis)]; pv1 >= 0 && !shared; pv1 = pointVerts.entries[static_cast<size_t>(pv1)].next) {
+                            for (int32_t pv2 = pointVerts.index[static_cast<size_t>(pPrev)]; pv2 >= 0; pv2 = pointVerts.entries[static_cast<size_t>(pv2)].next) {
+                                if (pointVerts.entries[static_cast<size_t>(pv1)].node == pointVerts.entries[static_cast<size_t>(pv2)].node && pointVerts.entries[static_cast<size_t>(pv1)].node != static_cast<int32_t>(iNode)) {
+                                    shared = true;
                                     break;
                                 }
                             }
                         }
+                        if (shared) {
+                            continue;
+                        }
+                        distributePoint(state, model, &pointVerts, 0, pThis);
+                        distributePoint(state, model, &pointVerts, 0, pPrev);
                     }
-                    if (!linked) {
-                        errors++;
+                }
+                pointVerts.alloc(model);
+                pointVerts.addAllNodes();
+                for (size_t iNode = 0; iNode < model.nodes.size(); iNode++) {
+                    const BspNode node = model.nodes[iNode];
+                    for (int thisVert = 0; thisVert < node.numVertices; thisVert++) {
+                        if (model.verts[static_cast<size_t>(node.vertPool + thisVert)].side != -1) {
+                            continue;
+                        }
+                        int prevVert = thisVert > 0 ? thisVert - 1 : node.numVertices - 1;
+                        int32_t pThis = model.verts[static_cast<size_t>(node.vertPool + thisVert)].vertex;
+                        int32_t pPrev = model.verts[static_cast<size_t>(node.vertPool + prevVert)].vertex;
+                        bool linked = false;
+                        for (int32_t pv1 = pointVerts.index[static_cast<size_t>(pThis)]; pv1 >= 0 && !linked; pv1 = pointVerts.entries[static_cast<size_t>(pv1)].next) {
+                            for (int32_t pv2 = pointVerts.index[static_cast<size_t>(pPrev)]; pv2 >= 0; pv2 = pointVerts.entries[static_cast<size_t>(pv2)].next) {
+                                const PointVert& a = pointVerts.entries[static_cast<size_t>(pv1)];
+                                const PointVert& b = pointVerts.entries[static_cast<size_t>(pv2)];
+                                if (a.node == b.node && a.node != static_cast<int32_t>(iNode)) {
+                                    const BspNode& other = model.nodes[static_cast<size_t>(b.node)];
+                                    int delta = (other.numVertices + b.vertex - a.vertex) % other.numVertices;
+                                    if (delta == 1) {
+                                        int32_t otherVert = b.vertex;
+                                        int32_t side = model.verts[static_cast<size_t>(other.vertPool + otherVert)].side;
+                                        if (side == -1) {
+                                            side = model.numSharedSides++;
+                                        }
+                                        model.verts[static_cast<size_t>(node.vertPool + thisVert)].side = side;
+                                        model.verts[static_cast<size_t>(other.vertPool + otherVert)].side = side;
+                                        linked = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (!linked) {
+                            state.errors++;
+                        }
                     }
                 }
             }
+        }
+
+        void optGeom(UModel& model)
+        {
+            BuildState state;
+            optGeom(state, model);
         }
 
         void buildBounds(UModel& model)
@@ -3100,12 +3124,35 @@ namespace dx {
             filterBound(model, nullptr, 0, list, model.rootOutside != 0, arena);
         }
 
+        namespace {
+            void repartition(BuildState& state, UModel& model, int32_t iNode, int simple)
+            {
+                buildFPolys(model, true, iNode);
+                mergeCoplanars(model, false, false);
+                build(state, model, Optimization::Good, 12, simple);
+                refresh(model, true);
+            }
+
+            void testVisibility(BuildState& state, ULevel* level, UModel& model)
+            {
+                if (model.nodes.empty()) {
+                    return;
+                }
+                if (model.zones.size() < 64) {
+                    model.zones.resize(64);
+                }
+                Visibility visibility;
+                visibility.state = &state;
+                visibility.level = level;
+                visibility.model = &model;
+                visibility.run();
+            }
+        }
+
         void repartition(UModel& model, int32_t iNode, int simple)
         {
-            buildFPolys(model, true, iNode);
-            mergeCoplanars(model, false, false);
-            build(model, Optimization::Good, 12, simple);
-            refresh(model, true);
+            BuildState state;
+            repartition(state, model, iNode, simple);
         }
 
         void prepMovingBrush(UObject* brushActor)
@@ -3115,23 +3162,16 @@ namespace dx {
                 return;
             }
             buildBound(*brush);
-            build(*brush, Optimization::Good, 15, 1);
+            BuildState state;
+            build(state, *brush, Optimization::Good, 15, 1);
             refresh(*brush, true);
             buildBounds(*brush);
         }
 
         void testVisibility(ULevel* level, UModel& model)
         {
-            if (model.nodes.empty()) {
-                return;
-            }
-            if (model.zones.size() < 64) {
-                model.zones.resize(64);
-            }
-            Visibility visibility;
-            visibility.level = level;
-            visibility.model = &model;
-            visibility.run();
+            BuildState state;
+            testVisibility(state, level, model);
         }
 
         int32_t pointLeafZone(const UModel& model, const Vector& point, int32_t* leaf)
@@ -3157,7 +3197,7 @@ namespace dx {
             return model.nodes[static_cast<size_t>(parent)].zone[isFront];
         }
 
-        Stats csgRebuild(ULevel* level)
+        Stats csgRebuild(ULevel* level, UObject* defaultTexture)
         {
             Stats stats;
             if (!level || !level->model) {
@@ -3166,7 +3206,8 @@ namespace dx {
             UModel& model = *level->model;
             objects::ensureLoaded(&model);
             objects::flushLoads();
-            fastRebuild = true;
+            BuildState state;
+            state.fastRebuild = true;
             size_t totalErrors = 0;
             ensurePolys(model);
             emptyModel(model, true, true);
@@ -3182,13 +3223,13 @@ namespace dx {
                         flags = (flags & ~PF_Semisolid) | PF_NotSolid;
                         brush::PolyFlags(a) = static_cast<int32_t>(flags);
                     }
-                    brushCSG(a, model, flags, oper, false);
-                    totalErrors += errors;
+                    brushCSG(state, a, model, flags, oper, false, defaultTexture);
+                    totalErrors += state.errors;
                     stats.brushes++;
                 }
             }
-            repartition(model, 0, 0);
-            testVisibility(level, model);
+            repartition(state, model, 0, 0);
+            testVisibility(state, level, model);
             std::vector<int32_t> fronts;
             std::vector<int32_t> backs;
             if (!model.nodes.empty()) {
@@ -3197,27 +3238,25 @@ namespace dx {
             for (UObject* a : brushes) {
                 uint32_t flags = static_cast<uint32_t>(brush::PolyFlags(a));
                 if ((flags & PF_Semisolid) && !(flags & PF_Portal) && brush::CsgOper(a) == CsgAdd) {
-                    brushCSG(a, model, flags, CsgAdd, false);
-                    totalErrors += errors;
+                    brushCSG(state, a, model, flags, CsgAdd, false, defaultTexture);
+                    totalErrors += state.errors;
                     stats.brushes++;
                 }
             }
             for (int32_t front : fronts) {
                 int32_t child = model.nodes[static_cast<size_t>(front)].front;
                 if (child >= 0) {
-                    repartition(model, child, 2);
+                    repartition(state, model, child, 2);
                 }
             }
             for (int32_t back : backs) {
                 int32_t child = model.nodes[static_cast<size_t>(back)].back;
                 if (child >= 0) {
-                    repartition(model, child, 2);
+                    repartition(state, model, child, 2);
                 }
             }
-            optGeom(model);
+            optGeom(state, model);
             buildBounds(model);
-            fastRebuild = false;
-            errors = totalErrors;
             stats.nodes = model.nodes.size();
             stats.surfs = model.surfs.size();
             stats.leaves = model.leaves.size();
@@ -3236,15 +3275,15 @@ namespace dx {
                 return stats;
             }
             UModel& model = *level->model;
-            errors = 0;
+            BuildState state;
             buildFPolys(model, true, 0);
             mergeCoplanars(model, false, false);
-            build(model, opt, balance, 0);
+            build(state, model, opt, balance, 0);
             if (zones) {
-                testVisibility(level, model);
+                testVisibility(state, level, model);
             }
             if (optimizeGeometry) {
-                optGeom(model);
+                optGeom(state, model);
             }
             if (model.polys) {
                 model.polys->polys.clear();
@@ -3252,7 +3291,7 @@ namespace dx {
             stats.nodes = model.nodes.size();
             stats.surfs = model.surfs.size();
             stats.leaves = model.leaves.size();
-            stats.errors = errors;
+            stats.errors = state.errors;
             for (const ConvexLeaf& leaf : model.leaves) {
                 stats.zones = std::max(stats.zones, static_cast<size_t>(leaf.zone + 1));
             }

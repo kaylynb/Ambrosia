@@ -1,6 +1,7 @@
 #include "engine/t3d.h"
 
 #include "core/objects.h"
+#include "core/text.h"
 #include "engine/actor.h"
 #include "engine/bsp.h"
 #include "engine/csg.h"
@@ -26,15 +27,6 @@ namespace dx {
                 bool hasBrush = false;
             };
 
-            std::string lower(std::string_view text)
-            {
-                std::string result(text);
-                for (char& c : result) {
-                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                }
-                return result;
-            }
-
             std::string_view trim(std::string_view text)
             {
                 while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front()))) {
@@ -49,7 +41,7 @@ namespace dx {
             bool word(std::string_view& line, std::string_view expected)
             {
                 std::string_view text = trim(line);
-                if (text.size() < expected.size() || lower(text.substr(0, expected.size())) != lower(expected)) {
+                if (text.size() < expected.size() || lowered(text.substr(0, expected.size())) != lowered(expected)) {
                     return false;
                 }
                 if (text.size() > expected.size() && !std::isspace(static_cast<unsigned char>(text[expected.size()]))) {
@@ -61,10 +53,10 @@ namespace dx {
 
             std::string field(std::string_view line, std::string_view key)
             {
-                std::string text = lower(line);
-                size_t found = text.find(lower(key));
+                std::string text = lowered(line);
+                size_t found = text.find(lowered(key));
                 while (found != std::string::npos && found > 0 && !std::isspace(static_cast<unsigned char>(text[found - 1]))) {
-                    found = text.find(lower(key), found + 1);
+                    found = text.find(lowered(key), found + 1);
                 }
                 if (found == std::string::npos) {
                     return {};
@@ -223,14 +215,14 @@ namespace dx {
                     path.pop_back();
                 }
                 size_t dot = path.rfind('.');
-                std::string objectName = lower(dot == std::string::npos ? path : path.substr(dot + 1));
+                std::string objectName = lowered(dot == std::string::npos ? path : path.substr(dot + 1));
                 auto found = remap.find(objectName);
                 if (found != remap.end()) {
                     return found->second;
                 }
                 if (searchLevel) {
                     for (UObject* actor : level->actors) {
-                        if (actor && !actor->destroyed && lower(actor->name.str()) == objectName) {
+                        if (actor && !actor->destroyed && lowered(actor->name.str()) == objectName) {
                             return actor;
                         }
                     }
@@ -316,11 +308,11 @@ namespace dx {
                 }
                 UObject* actor = objects::newObject(record.cls, package, Name(), ImportFlags);
                 actor->loaded = true;
-                remap[lower(record.name)] = actor;
+                remap[lowered(record.name)] = actor;
                 if (record.hasBrush) {
                     UModel* model = importBrush(record, package);
                     actor::Brush(actor) = model;
-                    remap[lower(record.brushName)] = model;
+                    remap[lowered(record.brushName)] = model;
                 }
                 created.push_back(actor);
                 sources.push_back(&record);

@@ -1,0 +1,3 @@
+// The game's icon for Explorer and the taskbar (dx_program_icon, src/CMakeLists.txt). The window's
+// own comes from the embedded PNGs (core/desktop/window_icon.cc).
+1 ICON "../assets/icon/ambrosia/ambrosia.ico"

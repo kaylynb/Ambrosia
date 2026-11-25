@@ -223,6 +223,10 @@ namespace dx::extension {
 
     void UTileWindow::configurationChanged()
     {
+        if (arrangeRows) {
+            arrangeRows(this);
+            return;
+        }
         float w = width();
         float h = height();
         computeChildSizes(true, w, true, h);
@@ -844,6 +848,9 @@ namespace dx::extension {
             *outWidth = marginW * 2.0f + clipW + (showV ? vExtra : 0.0f);
         }
         if (outHeight) {
+            // XScrollAreaWindow::ComputeChildSizes
+            // builds the preferred height from the width margin; the height
+            // margin only shrinks the clip window. This is the original's behaviour.
             *outHeight = marginW * 2.0f + clipH + (showH ? hExtra : 0.0f);
         }
     }
@@ -924,9 +931,13 @@ namespace dx::extension {
                     break;
                 }
             }
-            if (shown) {
-                vScale->moveThumb(button == IK_MouseWheelUp ? 4 : 5);
+            // Wheel scrolling is Ambrosia's own. An area with nothing to scroll
+            // leaves the wheel to its parent, so a scroll area nested in another
+            // does not stop the outer one scrolling.
+            if (!shown || vScale->maxPosition() <= 0) {
+                return handled;
             }
+            vScale->moveThumb(button == IK_MouseWheelUp ? 4 : 5);
             return true;
         }
         return handled;
@@ -1330,6 +1341,9 @@ namespace dx::extension {
         {
             vm::finish(stack);
             UClipWindow* clip = clipSelf(object);
+            // XClipWindow::ResetUnitHeight tests
+            // prefVUnits but resets prefHUnits, like ResetUnitWidth. This is the
+            // original's behaviour.
             if (clip && clipwindow::prefVUnits(clip) >= 0) {
                 clipwindow::prefHUnits(clip) = -1;
                 clip->askParentForReconfigure();

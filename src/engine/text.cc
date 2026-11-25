@@ -2,7 +2,7 @@
 #include "engine/resources.h"
 
 namespace dx {
-    float textWidth(UFont* font, std::string_view text, float spacing)
+    float textWidth(UFont* font, std::string_view text, float spacing, float scale)
     {
         if (!font) {
             return 0;
@@ -11,13 +11,13 @@ namespace dx {
         for (char c : text) {
             const FontCharacter* glyph = font->glyph(static_cast<uint8_t>(c), nullptr);
             if (glyph) {
-                width += static_cast<float>(glyph->width) + spacing;
+                width += (static_cast<float>(glyph->width) + spacing) * scale;
             }
         }
         return width;
     }
 
-    float textHeight(UFont* font)
+    float textHeight(UFont* font, float scale)
     {
         if (!font) {
             return 0;
@@ -26,10 +26,10 @@ namespace dx {
         if (!glyph) {
             glyph = font->glyph(static_cast<uint8_t>(' '), nullptr);
         }
-        return glyph ? static_cast<float>(glyph->height) : 0;
+        return glyph ? static_cast<float>(glyph->height) * scale : 0;
     }
 
-    void drawText(Canvas2D& canvas, UFont* font, std::string_view text, float x, float y, LinearColor color, BlendStyle style, float spacing)
+    void drawText(Canvas2D& canvas, UFont* font, std::string_view text, float x, float y, LinearColor color, BlendStyle style, float spacing, float scale)
     {
         if (!font) {
             return;
@@ -42,9 +42,9 @@ namespace dx {
                 continue;
             }
             if (texture && glyph->width > 0 && glyph->height > 0) {
-                canvas.drawTile(texture, cursor, y, static_cast<float>(glyph->width), static_cast<float>(glyph->height), static_cast<float>(glyph->u), static_cast<float>(glyph->v), static_cast<float>(glyph->width), static_cast<float>(glyph->height), color, style == BlendStyle::Normal ? BlendStyle::Masked : style, false);
+                canvas.drawTile(texture, cursor, y, static_cast<float>(glyph->width) * scale, static_cast<float>(glyph->height) * scale, static_cast<float>(glyph->u), static_cast<float>(glyph->v), static_cast<float>(glyph->width), static_cast<float>(glyph->height), color, style == BlendStyle::Normal ? BlendStyle::Masked : style, false);
             }
-            cursor += static_cast<float>(glyph->width) + spacing;
+            cursor += (static_cast<float>(glyph->width) + spacing) * scale;
         }
     }
 }

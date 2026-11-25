@@ -1,5 +1,7 @@
 #include "core/objects.h"
+#include "test_paths.h"
 #include "core/vm.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/path_builder.h"
 #include "engine/props_engine.h"
@@ -19,7 +21,7 @@ namespace {
 
         Island()
         {
-            dx::engine::initialize(DEUSEX_GAME_DATA);
+            dx::engine::initialize(dx::test::gameData());
             dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
             world = std::make_unique<dx::World>();
             REQUIRE(world->loadMap("01_NYC_UNATCOIsland"));
@@ -114,8 +116,8 @@ TEST_CASE("a move ends within 16 units in 2D when the height difference is below
     CHECK(dx::actor::Acceleration(paul).z == 0.0f);
     moveTo(paul, start + dx::Vector { 12, 0, 60 }, 1.0f);
     double length = std::sqrt(12.0 * 12.0 + 60.0 * 60.0);
-    CHECK(dx::actor::Acceleration(paul).x == Catch::Approx(12.0 / length * dx::pawn::AccelRate(paul)).margin(1e-3));
-    CHECK(dx::actor::Acceleration(paul).z == Catch::Approx(60.0 / length * dx::pawn::AccelRate(paul)).margin(1e-3));
+    CHECK(dx::actor::Acceleration(paul).x == Catch::Approx(12.0 / length * static_cast<double>(dx::pawn::AccelRate(paul))).margin(1e-3));
+    CHECK(dx::actor::Acceleration(paul).z == Catch::Approx(60.0 / length * static_cast<double>(dx::pawn::AccelRate(paul))).margin(1e-3));
 }
 
 TEST_CASE("TurnTo leaves the acceleration and TurnToward and StrafeFacing aim with FaceTarget", "[data]")
@@ -400,6 +402,32 @@ TEST_CASE("FindBestInventoryPath leads a pawn off the network to the nearest rea
     REQUIRE(path != nullptr);
     CHECK(path->name == dx::Name("PathNode28"));
     CHECK(*reinterpret_cast<float*>(call.parameter(0)) == 0.00005f);
+}
+
+TEST_CASE("path searches skip reach specs whose start or end navigation point is gone", "[data]")
+{
+    Island island;
+    dx::UObject* paul = walker(island);
+    dx::UObject* player = island.world->player();
+    for (size_t i = 0; i < island.world->level->reachSpecs.size(); i++) {
+        dx::ReachSpec& spec = island.world->level->reachSpecs[i];
+        if (i % 2) {
+            spec.start = nullptr;
+        } else {
+            spec.end = nullptr;
+        }
+    }
+    dx::actor::Location(player) = dx::actor::Location(paul) + dx::Vector { 2000, 0, 0 };
+    {
+        dx::vm::Call call(paul, dx::Name("FindPathToward"));
+        call.obj(player).b(false).b(true).run();
+        CHECK(objectResult(call) != player);
+    }
+    dx::actor::Physics(player) = dx::PHYS_Walking;
+    dx::pawn::MoveTarget(player) = nullptr;
+    dx::vm::Call call(player, dx::Name("FindBestInventoryPath"));
+    call.f(0.0f).b(false).run();
+    CHECK(objectResult(call) == nullptr);
 }
 
 TEST_CASE("walkReachable steps 16 units in the editor and so gives up after 101 steps", "[data]")

@@ -1,11 +1,13 @@
 #include "audio/audio.h"
 #include "core/objects.h"
+#include "core/random.h"
 #include "core/vm.h"
 #include "engine/actor.h"
 #include "engine/ai.h"
 #include "engine/latent.h"
 #include "engine/path_builder.h"
 #include "engine/resources.h"
+#include "engine/wall_adjust.h"
 #include "engine/world.h"
 
 #include <algorithm>
@@ -19,21 +21,12 @@ namespace dx {
     namespace {
         World& world()
         {
-            return *World::current;
+            return World::active();
         }
 
         bool isPawnClass(UObject* a)
         {
             return a && a->isA(engineClasses().pawn);
-        }
-
-        Vector safeNormal(const Vector& v)
-        {
-            float squared = v.sizeSquared();
-            if (squared < 1e-8f) {
-                return {};
-            }
-            return v * (1.0f / std::sqrt(squared));
         }
 
         bool glider(UObject* self)
@@ -76,7 +69,7 @@ namespace dx {
                     return false;
                 }
                 direction.z = 0;
-                actor::Acceleration(self) = safeNormal(direction) * pawn::AccelRate(self);
+                actor::Acceleration(self) = direction.normal() * pawn::AccelRate(self);
                 return actor::Velocity(self).z < 0 && actor::Location(self).z + 100.0f < destination.z;
             }
             UObject* moveTarget = pawn::MoveTarget(self);
@@ -106,7 +99,8 @@ namespace dx {
             }
             moveTarget = pawn::MoveTarget(self);
             if (isPawnClass(moveTarget)) {
-                return static_cast<double>(distance) < static_cast<double>(actor::CollisionRadius(moveTarget) + actor::CollisionRadius(self)) + static_cast<double>(pawn::MeleeRange(self)) * 0.8;
+                // APawn::moveToward adds in this order.
+                return distance < pawn::MeleeRange(self) * 0.8f + actor::CollisionRadius(moveTarget) + actor::CollisionRadius(self);
             }
             Vector velocity = actor::Velocity(self);
             float speed = static_cast<float>(std::sqrt(static_cast<double>(velocity.sizeSquared())));
@@ -455,22 +449,6 @@ namespace dx {
             world().farMoveActor(self, location, true, true);
         }
 
-        void wallAdjust(const Vector& desired, Vector& delta, const Vector& hitNormal, const Vector& oldNormal, float hitTime)
-        {
-            if (oldNormal.dot(hitNormal) <= 0) {
-                Vector direction = hitNormal.cross(oldNormal).normal();
-                delta = direction * (delta.dot(direction) * (1.0f - hitTime));
-                if (desired.dot(delta) < 0) {
-                    delta = delta * -1.0f;
-                }
-            } else {
-                delta = (delta - hitNormal * delta.dot(hitNormal)) * (1.0f - hitTime);
-                if (delta.dot(desired) <= 0) {
-                    delta = {};
-                }
-            }
-        }
-
         bool warpMarkerReached(UObject* self, UObject* goal)
         {
             UClass* marker = engineClass("Engine.WarpZoneMarker");
@@ -634,7 +612,7 @@ namespace dx {
                 size = std::min(pawn::GroundSpeed(self), size / ticks);
                 velocity = velocity * size;
             } else {
-                velocity = safeNormal(velocity) * pawn::GroundSpeed(self);
+                velocity = velocity.normal() * pawn::GroundSpeed(self);
             }
             velocity.z = startZ;
         }
@@ -668,7 +646,7 @@ namespace dx {
                                 if (hit.normal.z > 0.7f) {
                                     landed = true;
                                 }
-                                wallAdjust(safeNormal(adjusted), delta, hit.normal, oldNormal, hit.time);
+                                twoWallAdjust(adjusted.normal(), delta, hit.normal, oldNormal, hit.time);
                                 testMove(self, delta, hit);
                                 if (hit.normal.z > 0.7f) {
                                     landed = true;
@@ -726,7 +704,7 @@ namespace dx {
                     if (distance < moveSquared) {
                         moving = flyMove(self, direction, goal, 8.0f, false);
                     } else {
-                        moving = flyMove(self, safeNormal(direction) * moveSize, goal, 4.1f, false);
+                        moving = flyMove(self, direction.normal() * moveSize, goal, 4.1f, false);
                     }
                     if (moving == 5) {
                         moving = 0;
@@ -775,7 +753,7 @@ namespace dx {
                     if (distance < moveSquared) {
                         moving = swimMove(self, direction, goal, 8.0f, false);
                     } else {
-                        moving = swimMove(self, safeNormal(direction) * moveSize, goal, 4.1f, false);
+                        moving = swimMove(self, direction.normal() * moveSize, goal, 4.1f, false);
                     }
                     if (moving == 5) {
                         moving = 0;
@@ -848,7 +826,7 @@ namespace dx {
                     if (distance < moveSquared) {
                         moving = walkMove(self, direction, hit, goal, 8.0f, false);
                     } else {
-                        direction = safeNormal(direction);
+                        direction = direction.normal();
                         moving = walkMove(self, direction * moveSize, hit, goal, 4.1f, false);
                     }
                     if (moving != 1) {
@@ -866,7 +844,7 @@ namespace dx {
                             reachFlags |= 8;
                             if (moving == -1) {
                                 Vector landing;
-                                direction = safeNormal(direction);
+                                direction = direction.normal();
                                 moving = findBestJump(self, destination, direction * pawn::GroundSpeed(self), landing);
                             }
                         } else if (moving == -1 && moveSize > pawn::MaxStepHeight(self)) {
@@ -960,7 +938,8 @@ namespace dx {
             Vector real = actor::Location(self);
             Vector point = actor::Location(other);
             if (otherPawn) {
-                float threshold = actor::CollisionRadius(self) + std::min(1.5f * actor::CollisionRadius(self), pawn::MeleeRange(self)) + actor::CollisionRadius(other);
+                // APawn::actorReachable adds in this order.
+                float threshold = std::min(actor::CollisionRadius(self) * 1.5f, pawn::MeleeRange(self)) + actor::CollisionRadius(other) + actor::CollisionRadius(self);
                 if (distance <= threshold * threshold) {
                     return 1;
                 }
@@ -976,7 +955,7 @@ namespace dx {
             float threshold = 15.0f;
             UClass* trigger = engineClass("Engine.Trigger");
             if (other->isA(engineClasses().inventory) || (trigger && other->isA(trigger))) {
-                threshold = actor::CollisionRadius(self) + actor::CollisionRadius(other) - 2.0f;
+                threshold = actor::CollisionRadius(other) + actor::CollisionRadius(self) - 2.0f;
             }
             if (world().farMoveActor(self, actor::Location(other), true, false)) {
                 point = actor::Location(self);
@@ -1035,6 +1014,9 @@ namespace dx {
 
         bool doorPasses(UObject* self, const ReachSpec& spec)
         {
+            if (!spec.start || !spec.end) {
+                return false;
+            }
             CheckResult hit;
             world().lineCheck(hit, actor::Location(spec.start), actor::Location(spec.end), {}, self, TRACE_Movers | TRACE_Level);
             return !hit.actor || !isMover(hit.actor) || (pawn::bCanOpenDoors(self) && (pawn::bIsPlayer(self) || !mover::bPlayerOnly(hit.actor)));
@@ -1216,10 +1198,14 @@ namespace dx {
             int32_t moveFlags = calcMoveFlags(self);
             int32_t radius = truncate(static_cast<double>(actor::CollisionRadius(self)));
             int32_t height = truncate(static_cast<double>(actor::CollisionHeight(self)));
+            // Only mark pruned paths if Paths ends early with -1. If all 16 slots
+            // are in use, leave the node's pruned paths unmarked.
             for (int pruned = 0; pruned < 2; pruned++) {
+                bool ended = false;
                 for (int j = 0; j < 16; j++) {
                     int32_t index = pruned ? navigationpoint::PrunedPaths(anchor, j) : navigationpoint::Paths(anchor, j);
                     if (index == -1) {
+                        ended = true;
                         break;
                     }
                     const ReachSpec* spec = reachSpec(index);
@@ -1227,6 +1213,9 @@ namespace dx {
                         navigationpoint::bEndPoint(spec->end) = 1;
                         navigationpoint::bestPathWeight(spec->end) = spec->distance;
                     }
+                }
+                if (!ended) {
+                    return;
                 }
             }
         }
@@ -1280,7 +1269,7 @@ namespace dx {
                             break;
                         }
                         const ReachSpec* spec = reachSpec(index);
-                        if (!spec || !supports(*spec, radius, height, moveFlags)) {
+                        if (!spec || !spec->start || !supports(*spec, radius, height, moveFlags)) {
                             continue;
                         }
                         UObject* node = spec->start;
@@ -1364,7 +1353,7 @@ namespace dx {
 
         bool hasNavigation()
         {
-            return World::current && world().level && navigationList() && !world().level->reachSpecs.empty();
+            return World::hasActive() && world().level && navigationList() && !world().level->reachSpecs.empty();
         }
 
         bool findPathTo(UObject* self, const Vector& destination, bool singlePath, UObject*& bestPath, bool clear)
@@ -1652,14 +1641,14 @@ namespace dx {
         {
             UObject* target = vm::get<UObject*>(stack);
             vm::finish(stack);
-            vm::retBool(result, World::current && world().level && execActorReachable(self, target));
+            vm::retBool(result, World::hasActive() && world().level && execActorReachable(self, target));
         }
 
         void nativePointReachable(UObject* self, Frame& stack, void* result)
         {
             Vector point = vm::get<Vector>(stack);
             vm::finish(stack);
-            vm::retBool(result, World::current && world().level && pointReachable(self, point, false) != 0);
+            vm::retBool(result, World::hasActive() && world().level && pointReachable(self, point, false) != 0);
         }
 
         void nativeFindPathToward(UObject* self, Frame& stack, void* result)
@@ -1668,7 +1657,7 @@ namespace dx {
             bool singlePath = vm::getBoolOpt(stack, false);
             bool clear = vm::getBoolOpt(stack, true);
             vm::finish(stack);
-            if (!target || !World::current) {
+            if (!target || !World::hasActive()) {
                 vm::ret<UObject*>(result, nullptr);
                 return;
             }
@@ -1684,7 +1673,7 @@ namespace dx {
             bool clear = vm::getBoolOpt(stack, true);
             vm::finish(stack);
             UObject* next = nullptr;
-            if (World::current) {
+            if (World::hasActive()) {
                 UObject* found = nullptr;
                 next = finishPath(self, findPathTo(self, point, singlePath, found, clear) ? found : nullptr);
             }
@@ -1695,7 +1684,7 @@ namespace dx {
         {
             bool clear = vm::getBoolOpt(stack, true);
             vm::finish(stack);
-            if (clear && World::current) {
+            if (clear && World::hasActive()) {
                 clearPaths(self);
             }
             vm::ret<UObject*>(result, nullptr);
@@ -1704,7 +1693,7 @@ namespace dx {
         void nativeClearPaths(UObject* self, Frame& stack, void*)
         {
             vm::finish(stack);
-            if (World::current) {
+            if (World::hasActive()) {
                 clearPaths(self);
             }
         }
@@ -1816,7 +1805,7 @@ namespace dx {
             float maxDist = vm::get<float>(stack);
             Vector* bestDest = vm::getRef<Vector>(stack);
             vm::finish(stack);
-            vm::retBool(result, World::current && world().level && directionReachable(self, focus, yaw, pitch, minDist, maxDist, bestDest));
+            vm::retBool(result, World::hasActive() && world().level && directionReachable(self, focus, yaw, pitch, minDist, maxDist, bestDest));
         }
 
         void nativePickRandomDestination(UObject* self, Frame& stack, void* result)
@@ -1831,7 +1820,7 @@ namespace dx {
             float multiplier = vm::get<float>(stack);
             Vector* destination = vm::getRef<Vector>(stack);
             vm::finish(stack);
-            if (!World::current || !world().level) {
+            if (!World::hasActive() || !world().level) {
                 vm::retBool(result, false);
                 return;
             }
@@ -1868,21 +1857,21 @@ namespace dx {
             UObject* other = vm::get<UObject*>(stack);
             bool ignoreDistance = vm::getBoolOpt(stack, false);
             vm::finish(stack);
-            vm::retBool(result, World::current && lineOfSightTo(self, other, false, ignoreDistance));
+            vm::retBool(result, World::hasActive() && lineOfSightTo(self, other, false, ignoreDistance));
         }
 
         void nativeCanSee(UObject* self, Frame& stack, void* result)
         {
             UObject* other = vm::get<UObject*>(stack);
             vm::finish(stack);
-            vm::retBool(result, World::current && lineOfSightTo(self, other, true, false));
+            vm::retBool(result, World::hasActive() && lineOfSightTo(self, other, true, false));
         }
 
         void nativeEAdjustJump(UObject* self, Frame& stack, void* result)
         {
             vm::finish(stack);
             Vector velocity = actor::Velocity(self);
-            if (World::current) {
+            if (World::hasActive()) {
                 suggestJumpVelocity(self, pawn::Destination(self), velocity);
             }
             vm::ret<Vector>(result, velocity);
@@ -1890,8 +1879,7 @@ namespace dx {
 
         float appFrand()
         {
-            static std::mt19937 generator(31337);
-            return std::uniform_real_distribution<float>(0.0f, 1.0f)(generator);
+            return std::uniform_real_distribution<float>(0.0f, 1.0f)(random::engine(random::Stream::Pawn));
         }
 
         float wallTrace(UObject* self, const Vector& start, const Vector& end, bool cylinder, Vector* normal = nullptr)
@@ -1962,7 +1950,7 @@ namespace dx {
                         up = up * -1.0f;
                     }
                     if (wallTrace(self, location, location + up, true) == 1.0f) {
-                        Vector shortDirection = safeNormal(direction) * radius;
+                        Vector shortDirection = direction.normal() * radius;
                         if (wallTrace(self, location + up, location + up + shortDirection, true) == 1.0f) {
                             destination = location + up;
                             return true;
@@ -2054,7 +2042,7 @@ namespace dx {
         void nativePickWallAdjust(UObject* self, Frame& stack, void* result)
         {
             vm::finish(stack);
-            vm::retBool(result, World::current && world().level && pickWallAdjust(self));
+            vm::retBool(result, World::hasActive() && world().level && pickWallAdjust(self));
         }
 
         float stairTrace(UObject* self, const Vector& start, const Vector& end, const Vector& extent)
@@ -2069,7 +2057,7 @@ namespace dx {
             float deltaTime = vm::get<float>(stack);
             vm::finish(stack);
             int32_t& pitch = pawn::ViewRotation(self).pitch;
-            if (static_cast<double>(deltaTime) > 0.33 || !World::current) {
+            if (static_cast<double>(deltaTime) > 0.33 || !World::hasActive()) {
                 vm::ret<int32_t>(result, pitch);
                 return;
             }
@@ -2111,7 +2099,9 @@ namespace dx {
             int32_t difference = std::abs(pitch - stairRotation);
             if (difference > 0) {
                 float rate = difference < 1000 ? static_cast<float>(8000 / difference) : 8.0f;
-                rate = std::min(1.0f, rate * deltaTime);
+                // The original eases by min(1, rate * deltaTime) a tick, a curve that changes with
+                // the frame rate. Steady timing uses the curve that approaches at high frame rates.
+                rate = steadyTiming() ? 1.0f - std::exp(-rate * deltaTime) : std::min(1.0f, rate * deltaTime);
                 stairRotation = static_cast<int32_t>((1.0f - rate) * static_cast<float>(pitch) + static_cast<float>(stairRotation) * rate);
             }
             vm::ret<int32_t>(result, stairRotation);
@@ -2120,7 +2110,7 @@ namespace dx {
         void nativeAddPawn(UObject* self, Frame& stack, void*)
         {
             vm::finish(stack);
-            if (!World::current || !world().levelInfo) {
+            if (!World::hasActive() || !world().levelInfo) {
                 return;
             }
             UObject* level = world().levelInfo;
@@ -2131,7 +2121,7 @@ namespace dx {
         void nativeRemovePawn(UObject* self, Frame& stack, void*)
         {
             vm::finish(stack);
-            if (!World::current || !world().levelInfo) {
+            if (!World::hasActive() || !world().levelInfo) {
                 return;
             }
             UObject* level = world().levelInfo;
@@ -2183,7 +2173,7 @@ namespace dx {
             Vector projStart = vm::get<Vector>(stack);
             vm::finish(stack);
             UObject* best = nullptr;
-            if (World::current && world().levelInfo) {
+            if (World::hasActive() && world().levelInfo) {
                 for (UObject* p = levelinfo::PawnList(world().levelInfo); p; p = pawn::nextPawn(p)) {
                     if (p == self || pawn::Health(p) <= 0 || !actor::bProjTarget(p) || !levelinfo::Game(world().levelInfo) || sameTeam(self, p)) {
                         continue;
@@ -2204,7 +2194,7 @@ namespace dx {
             Vector projStart = vm::get<Vector>(stack);
             vm::finish(stack);
             UObject* best = nullptr;
-            if (World::current) {
+            if (World::hasActive()) {
                 std::vector<UObject*> actors = world().actors;
                 for (UObject* a : actors) {
                     if (!a || a->destroyed || !actor::bProjTarget(a) || isPawnClass(a)) {
@@ -2253,7 +2243,7 @@ namespace dx {
                         break;
                     }
                     const ReachSpec* spec = reachSpec(index);
-                    if (!spec || !supports(*spec, radius, height, moveFlags)) {
+                    if (!spec || !spec->end || !supports(*spec, radius, height, moveFlags)) {
                         continue;
                     }
                     UObject* node = spec->end;
@@ -2364,7 +2354,7 @@ namespace dx {
             bool predictRespawns = vm::getBool(stack);
             vm::finish(stack);
             UObject* bestPath = nullptr;
-            if (World::current && world().level) {
+            if (World::hasActive() && world().level) {
                 UObject* newPath = nullptr;
                 float bestWeight = findPathTowardBestInventory(self, newPath, true, *weight, predictRespawns);
                 if (bestWeight > *weight) {
@@ -2393,12 +2383,12 @@ namespace dx {
                 }
             }
             UObject* moveTarget = pawn::MoveTarget(self);
-            if (!anchor && moveTarget && moveTarget->isA(navigation) && isOverlapping(self, moveTarget)) {
+            if (!anchor && moveTarget && moveTarget->isA(navigation) && isOverlapping(World::hasActive() ? &World::active() : nullptr, self, moveTarget)) {
                 anchor = moveTarget;
             }
             if (!anchor) {
                 for (UObject* node = navigationList(); node; node = navigationpoint::nextNavigationPoint(node)) {
-                    if (isOverlapping(self, node)) {
+                    if (isOverlapping(World::hasActive() ? &World::active() : nullptr, self, node)) {
                         anchor = node;
                         break;
                     }
@@ -2466,7 +2456,7 @@ namespace dx {
             bool usePruned = vm::getBoolOpt(stack, false);
             vm::finish(stack);
             std::vector<std::pair<UObject*, float>> list;
-            if (World::current && world().level) {
+            if (World::hasActive() && world().level) {
                 list = pathnodeList(self, 32, from, usePruned, true);
             }
             size_t index = 0;
@@ -2505,7 +2495,7 @@ namespace dx {
         {
             UObject* start = vm::getOpt<UObject*>(stack, nullptr);
             vm::finish(stack);
-            if (!World::current || !world().level) {
+            if (!World::hasActive() || !world().level) {
                 return;
             }
             int32_t moveFlags = calcMoveFlags(self);
@@ -2560,6 +2550,26 @@ namespace dx {
         return walkReachable(pawn, destination, threshold, reachFlags, goal);
     }
 
+    namespace {
+        UObject* objectProperty(UObject* object, const char* name)
+        {
+            auto* value = reinterpret_cast<UObject**>(object->propertyAddress(Name(name), 0));
+            return value && *value && !(*value)->destroyed ? *value : nullptr;
+        }
+
+        // Deus Ex's infolink plays its start sound and its speech (the talk slot) from the player
+        // (DataLinkPlay), and only while no conversation is playing. The player's other sounds,
+        // such as footsteps, stay in the world.
+        bool infoLinkSound(UObject* hearer, UObject* source, UObject* sound, int32_t slot)
+        {
+            if (source != hearer || objectProperty(hearer, "conPlay")) {
+                return false;
+            }
+            UObject* dataLink = objectProperty(hearer, "dataLinkPlay");
+            return dataLink && (slot == audio::SlotTalk || sound == objectProperty(dataLink, "startSound"));
+        }
+    }
+
     int32_t clientHearSound(UObject* hearer, UObject* source, int32_t id, UObject* sound, const Vector& location, const Vector& parameters)
     {
         USound* data = cast<USound>(sound);
@@ -2573,7 +2583,8 @@ namespace dx {
         float radius = parameters.y != 0 ? parameters.y : 1600.0f;
         float pitch = static_cast<float>(static_cast<double>(parameters.z) * 0.01);
         objects::ensureLoaded(data);
-        return audio::playSound(data, source, (id >> 1) & 7, location, volume, radius, pitch, true, (id & 1) != 0);
+        int32_t slot = (id >> 1) & 7;
+        return audio::playSound(data, source, slot, location, volume, radius, pitch, true, (id & 1) != 0, id, infoLinkSound(hearer, source, sound, slot));
     }
 
     void registerPawnNatives()

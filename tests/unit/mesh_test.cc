@@ -1,6 +1,8 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/mesh.h"
-#include "engine/reader.h"
+#include "core/reader.h"
 #include "engine/world.h"
 #include "render/lighting.h"
 #include "render/lightmap.h"
@@ -12,7 +14,7 @@ namespace {
     {
         static bool initialized = false;
         if (!initialized) {
-            dx::engine::initialize(DEUSEX_GAME_DATA);
+            dx::engine::initialize(dx::test::gameData());
             initialized = true;
         }
     }

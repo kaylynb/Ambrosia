@@ -1,6 +1,7 @@
 #include "core/name.h"
 
-#include <cctype>
+#include "core/text.h"
+
 #include <unordered_map>
 #include <vector>
 
@@ -18,20 +19,14 @@ namespace dx {
 
             uint32_t lookupIndex(std::string_view text) const
             {
-                std::string key(text);
-                for (char& c : key) {
-                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                }
+                std::string key = lowered(text);
                 auto it = lookup.find(key);
                 return it != lookup.end() ? it->second : 0;
             }
 
             uint32_t intern(std::string_view text)
             {
-                std::string key(text);
-                for (char& c : key) {
-                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                }
+                std::string key = lowered(text);
                 auto it = lookup.find(key);
                 if (it != lookup.end()) {
                     return it->second;
@@ -77,6 +72,11 @@ namespace dx {
     Name Name::find(std::string_view text)
     {
         return fromIndex(text.empty() ? 0 : table().lookupIndex(text));
+    }
+
+    size_t Name::count()
+    {
+        return table().names.size();
     }
 
     const std::string& Name::str() const

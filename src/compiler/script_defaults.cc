@@ -2,7 +2,7 @@
 
 #include "compiler/exporter.h"
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 #include <cctype>
@@ -35,9 +35,9 @@ namespace dx::compiler::detail {
                     } else if (*++buffer == '\\') {
                         out += '\\';
                         buffer++;
-                    } else {
+                    } else if (*buffer) {
                         out += static_cast<char>(hexDigit(buffer[0]) * 16 + hexDigit(buffer[1]));
-                        buffer += 2;
+                        buffer += buffer[1] ? 2 : 1;
                     }
                 }
                 if (*buffer++ != '"') {
@@ -191,12 +191,17 @@ namespace dx::compiler::detail {
                     while (*buffer == ' ') {
                         buffer++;
                     }
-                    if (*buffer++ != '\'') {
+                    // Like the original this consumes the character after the name, but never the terminating NUL.
+                    if (*buffer != '\'') {
+                        if (*buffer) {
+                            buffer++;
+                        }
                         target = lookup.findObject(property->objectClass, temp);
                         if (!target) {
                             return nullptr;
                         }
                     } else {
+                        buffer++;
                         std::string other;
                         buffer = readToken(buffer, other, true);
                         if (!buffer || *buffer++ != '\'') {
@@ -325,8 +330,10 @@ namespace dx::compiler::detail {
                 context.log(cls->pathName() + ": Unknown property in defaults: " + line);
                 continue;
             }
-            if (index >= property->arrayDim) {
-                context.log(cls->pathName() + ": Out of bound array default property");
+            if (index < 0 || index >= property->arrayDim) {
+                // The original checked only the upper bound. Reject negative indices too:
+                // they would write before the property.
+                context.log(cls->pathName() + ": Out of bound array default property (" + std::to_string(index) + "/" + std::to_string(property->arrayDim) + ")");
                 continue;
             }
             if (!iequals(property->name.str(), "Name")) {

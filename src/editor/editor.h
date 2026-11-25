@@ -1,9 +1,13 @@
 #pragma once
 
 #include "audio/audio.h"
+#include "core/command_line.h"
 #include "core/config.h"
+#include "core/run_steps.h"
 #include "compiler/con_file.h"
 #include "core/objects.h"
+#include "core/text.h"
+#include "editor/command_args.h"
 #include "editor/icons.h"
 #include "editor/log_capture.h"
 #include "editor/script_workspace.h"
@@ -31,14 +35,15 @@
 #include "engine/surface_select.h"
 #include "engine/resources.h"
 #include "engine/world.h"
+#include "render/gl_handle.h"
 #include "render/scene_renderer.h"
 #include "render/texture_cache.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <glad/gl.h>
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
-#include <imgui_impl_sdl2.h>
+#include <imgui_impl_sdl3.h>
 #include <imgui_internal.h>
 
 #include <algorithm>
@@ -65,32 +70,18 @@
 namespace dx::editor {
     constexpr uint32_t EditorActorFlags = dx::RF_Transactional | 0x00070000;
 
-    struct Options {
-        std::string map = "01_NYC_UNATCOIsland";
-        std::string blankMap;
-        std::string screenshot;
-        std::string select;
-        std::vector<std::pair<int, std::string>> actions;
-        int frames = -1;
-        int width = 1600;
-        int height = 900;
-    };
-
-    inline void saveBmp(const std::string& path, std::vector<uint8_t>& rgba, int width, int height)
-    {
-        SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormatFrom(rgba.data(), width, height, 32, width * 4, SDL_PIXELFORMAT_ABGR8888);
-        SDL_SaveBMP(surface, path.c_str());
-        SDL_FreeSurface(surface);
-    }
-
-    inline std::string lower(const std::string& text)
-    {
-        std::string result = text;
-        for (char& c : result) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    struct Options : dx::cli::RunOptions {
+        Options()
+        {
+            width = 1600;
+            height = 900;
         }
-        return result;
-    }
+
+        // A map name, or the path of a .dx file.
+        std::string map = "01_NYC_UNATCOIsland";
+        // Starts on a new, empty map of this name instead.
+        std::string blankMap;
+    };
 
     inline std::filesystem::path userMapsDirectory()
     {
@@ -100,7 +91,7 @@ namespace dx::editor {
     inline ImGuiKey keyNamed(const std::string& name)
     {
         for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_NamedKey_END; key++) {
-            if (lower(ImGui::GetKeyName(static_cast<ImGuiKey>(key))) == lower(name)) {
+            if (lowered(ImGui::GetKeyName(static_cast<ImGuiKey>(key))) == lowered(name)) {
                 return static_cast<ImGuiKey>(key);
             }
         }
@@ -169,6 +160,15 @@ namespace dx::editor {
         float zoom = 0.08f;
     };
 
+    // The offscreen colour and depth a perspective view renders into before ImGui shows it.
+    struct RenderTarget {
+        dx::FramebufferHandle framebuffer;
+        dx::TextureHandle colorTexture;
+        dx::RenderbufferHandle depthBuffer;
+        int width = 0;
+        int height = 0;
+    };
+
     struct ViewPane {
         dx::editorviews::PaneKind kind = dx::editorviews::PaneKind::Top;
         dx::RenderMode mode = dx::RenderMode::Textured;
@@ -176,11 +176,7 @@ namespace dx::editor {
         OrthoView ortho {};
         dx::Vector location;
         dx::Rotator rotation;
-        uint32_t framebuffer = 0;
-        uint32_t colorTexture = 0;
-        uint32_t depthBuffer = 0;
-        int fbWidth = 0;
-        int fbHeight = 0;
+        RenderTarget target;
     };
 
     using SpecialPreset = dx::specialbrush::Preset;
@@ -254,9 +250,9 @@ namespace dx::editor {
         const std::vector<Edge>& cachedBrushEdges(dx::UObject* actor);
         ImU32 brushColor(dx::UObject* actor);
         dx::UObject* builderBrush();
+        dx::UModel* builderModel();
         bool isBrush(dx::UObject* actor);
         void ensureFramebuffer(int width, int height);
-        void releaseFramebuffer();
         void renderPerspective(int width, int height);
         bool projectCamera(const dx::Vector& point, dx::Vector& out);
         ImVec2 cameraToScreen(const dx::Vector& camera, const ImVec2& origin, const ImVec2& size);
@@ -307,6 +303,14 @@ namespace dx::editor {
         void launchGame(const std::filesystem::path& file);
         void captureRegions();
         void geometryChanged();
+        bool levelDirty();
+        void markClean();
+        void askConfirm(const std::string& message, const std::string& button, const std::function<void()>& action, const std::function<bool()>& save);
+        void guardLevel(const std::function<void()>& action);
+        void guardConversation(const std::function<void()>& action);
+        void quit();
+        void confirmWindow();
+        void cancelComponentDrag();
         bool surfaceEdit(const std::string& label, const std::function<void(dx::UModel&)>& edit);
         void surfaceSelectMenu();
         void surfacePopup();
@@ -324,14 +328,17 @@ namespace dx::editor {
         bool command(const std::string& line);
         void printState();
         bool expect(const std::string& rest);
-        void scheduleAction(int frame, const std::string& action);
+        // A mouse or key step as the input events it makes, from frame on; false for any other.
+        bool scheduleInput(int frame, const std::string& action);
         void applyInput(int frameNumber);
-        void runScript(int frameNumber, int width, int height);
+        // A step of --do or --script: input from the next frame on, anything else at once.
+        void runStep(int frameNumber, const std::string& action, int width, int height);
         void run();
         void screenshot(int width, int height, const std::string& path);
 
         SDL_Window* window;
         Options options;
+        dx::steps::Runner steps;
         std::filesystem::path gamePath;
         std::unique_ptr<dx::SceneRenderer> renderer;
         dx::ULevel* level = nullptr;
@@ -378,15 +385,19 @@ namespace dx::editor {
         ImVec2 perspectiveOrigin;
         ImVec2 perspectiveSize;
         std::map<std::string, std::pair<ImVec2, ImVec2>> viewRects;
-        uint32_t framebuffer = 0;
-        uint32_t colorTexture = 0;
-        uint32_t depthBuffer = 0;
-        int fbWidth = 0;
-        int fbHeight = 0;
+        RenderTarget perspectiveTarget;
         bool running = true;
         int failedExpectations = 0;
         int passedExpectations = 0;
         dx::EditorHistory history;
+        uint64_t cleanRevision = 0;
+        bool levelChanged = false;
+        std::string confirmMessage;
+        std::string confirmButton;
+        std::function<void()> confirmAction;
+        std::function<bool()> confirmSave;
+        bool confirmRequested = false;
+        const void* colorEditKey = nullptr;
         dx::csg::RebuildOptions rebuildOptions;
         size_t builderChoice = 0;
         std::vector<dx::brushbuilder::ExtraBuilder> extraBuilderList;
@@ -396,6 +407,8 @@ namespace dx::editor {
         float scaleValues[2] = { 1.0f, 1.0f };
         bool showRebuild = false;
         bool showGrid = false;
+        // View > UI Scale: the scale ImGui draws at, or 0 for Auto (debugui::autoScale).
+        float uiScale = 0;
         bool lightSelectedOnly = false;
         int thumbnailSize = 64;
         dx::TextureCache thumbnails;
@@ -410,7 +423,6 @@ namespace dx::editor {
         std::array<char, 64> newPackage {};
         std::array<char, 64> newClassName {};
         std::vector<InputEvent> inputEvents;
-        std::vector<std::pair<int, std::string>> scriptActions;
         ImVec2 scriptedMouse;
         bool hasScriptedMouse = false;
 
@@ -459,6 +471,7 @@ namespace dx::editor {
         int editMode = 0;
         std::vector<std::vector<dx::Vector>> componentSelection;
         bool componentDragging = false;
+        dx::UObject* componentDragTarget = nullptr;
         std::array<float, 16> componentMatrix {};
         dx::Vector componentPivot;
         dx::Vector componentNormal;
@@ -494,7 +507,6 @@ namespace dx::editor {
         void setPaneKind(size_t index, dx::editorviews::PaneKind kind);
         void swapPaneCamera(ViewPane& pane);
         void syncPanes();
-        void releasePanes();
         bool viewCommand(const std::string& verb, const std::string& rest);
         void drawOrthoPaths(ImDrawList* list, const OrthoView& view, const ImVec2& origin, const ImVec2& size);
         void drawPerspectivePaths(ImDrawList* list, const ImVec2& origin, const ImVec2& size);
@@ -507,6 +519,7 @@ namespace dx::editor {
         std::string paneTitle;
         std::string paneKey;
         size_t currentPane = 0;
+        bool viewportActive = false;
 
         bool isSelected(dx::UObject* actor);
         std::vector<dx::UObject*> selectionList();

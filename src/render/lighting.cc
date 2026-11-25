@@ -1,8 +1,11 @@
 #include "render/lighting.h"
 
 #include "core/objects.h"
+#include "core/random.h"
+#include "engine/light_effects.h"
 #include "engine/props_engine.h"
 #include "engine/resources.h"
+#include "engine/world.h"
 
 #include <algorithm>
 #include <array>
@@ -51,7 +54,8 @@ namespace dx {
             std::array<float, RandomCount> randoms {};
             std::array<float, RandomCount> deltas {};
             uint32_t lastTicks = 0;
-            std::mt19937 generator { 12345 };
+            int32_t flickerStep = 0;
+            bool flickerDrawn = false;
         };
 
         LightRandoms& lightRandoms()
@@ -60,9 +64,9 @@ namespace dx {
             return state;
         }
 
-        float frand(LightRandoms& state)
+        float frand()
         {
-            return std::uniform_real_distribution<float>(0.0f, 1.0f)(state.generator);
+            return std::uniform_real_distribution<float>(0.0f, 1.0f)(random::engine(random::Stream::Lighting));
         }
 
         const std::array<float, 16384>& trigTable()
@@ -195,12 +199,21 @@ namespace dx {
         return std::bit_cast<float>(result);
     }
 
-    void tickLightRandoms(float timeSeconds)
+    void tickLightRandoms(float timeSeconds, bool paused)
     {
         LightRandoms& state = lightRandoms();
         uint32_t serverTicks = static_cast<uint32_t>(truncateToInt(static_cast<double>(timeSeconds) * 35.0));
-        for (float& base : state.bases) {
-            base = frand(state);
+        // The bases drive LT_Flicker lights and their ambient sounds. The original redraws them
+        // every frame, so a flicker light changes state on about half of all frames, which looks
+        // like a strobe at modern frame rates, and goes on behind a menu. Steady redraws them
+        // SteadyFlickerRate times a second (engine/light_effects.h), and not while paused.
+        int32_t flickerStep = truncateToInt(static_cast<double>(timeSeconds) * SteadyFlickerRate);
+        if (!steadyTiming() || !state.flickerDrawn || (flickerStep != state.flickerStep && !paused)) {
+            for (float& base : state.bases) {
+                base = frand();
+            }
+            state.flickerStep = flickerStep;
+            state.flickerDrawn = true;
         }
         if (static_cast<uint32_t>((serverTicks - state.lastTicks) * RandomCycle) < static_cast<uint32_t>(RandomCount) && state.lastTicks) {
             int32_t r = static_cast<int32_t>((serverTicks * RandomCycle) & RandomMask);
@@ -215,7 +228,7 @@ namespace dx {
             } while (r != m);
         } else {
             for (size_t i = 0; i < state.randoms.size(); i++) {
-                state.randoms[i] = frand(state);
+                state.randoms[i] = frand();
                 state.deltas[i] = (state.bases[i] - state.randoms[i]) / static_cast<float>(RandomCount / RandomCycle);
             }
         }
@@ -260,6 +273,11 @@ namespace dx {
     bool lightOnSurfaces(UObject* light)
     {
         return isLightSource(light) && actor::LightEffect(light) != LE_OmniBumpMap;
+    }
+
+    bool lightMayLightSurfaces(UObject* light)
+    {
+        return light && light->data && !light->destroyed && actor::LightEffect(light) != LE_OmniBumpMap;
     }
 
     bool lightMovesOnSurfaces(UObject* light)
@@ -371,13 +389,7 @@ namespace dx {
             break;
         }
         case LT_Strobe: {
-            static float lastUpdateTime = 0;
-            static int32_t toggle = 0;
-            if (lastUpdateTime != time) {
-                lastUpdateTime = time;
-                toggle ^= 1;
-            }
-            if (toggle) {
+            if (strobeDark(light, time)) {
                 brightness = 0;
             }
             break;

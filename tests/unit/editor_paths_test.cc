@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/csg.h"
 #include "engine/path_builder.h"
@@ -32,7 +34,7 @@ namespace {
 
     dx::ULevel* makeRoom(const char* packageName)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         dx::ULevel* level = make<dx::ULevel>("Level", package);
         level->model = make<dx::UModel>("Model", package);

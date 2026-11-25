@@ -1,0 +1,23 @@
+# Camera spots for frame recordings, named per map, so runs on the console and the desktop see the
+# same views (BUILD.md, "Test runs from the PC"). Fields separated by tabs or spaces:
+#   <map> <name> at   <x> <y> <z> <pitch> <yaw>
+#   <map> <name> spin <x> <y> <z> <pitch> <yaw> <yaw units a frame>
+#   <map> <name> path <x> <y> <z> <pitch> <yaw> <x> <y> <z> <pitch> <yaw> <frames there>
+# The words after the name are the game's "camera" step ("camera at ..." in --do or --script),
+# which holds the player there from the action's frame on. Places are where the player stands (as "camera where" prints), rotations in Unreal
+# units (65536 a turn).
+
+# Spawn: the hall with the polished floor, seven mirror views a frame.
+00_Training	spawn	at	-1149.2 825.8 -80.2 0 0
+# A lab further in, with three characters and consoles, no mirror in sight.
+00_Training	lab	at	620 1425 -80.9 0 41000
+# Down the hall from spawn and back, turning a little, 300 frames each way.
+00_Training	hall-walk	path	-1149.2 825.8 -80.2 0 0 -450 825.8 -80.2 0 6000 300
+# Spawn, turning slowly: a quarter turn in 600 frames.
+00_Training	spawn-spin	spin	-1149.2 825.8 -80.2 0 0 27
+
+# Spawn on the dock, facing the statue and the city.
+01_NYC_UNATCOIsland	spawn	at	-4760.6 10430.8 -256.2 0 58496
+
+# Spawn in the alley into the market.
+06_HongKong_WanChai_Market	spawn	at	-469 -118.2 47.8 0 0

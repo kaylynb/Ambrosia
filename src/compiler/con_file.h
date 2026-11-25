@@ -60,6 +60,7 @@ namespace dx::compiler {
         std::string label;
 
         std::string speaker;
+        int32_t speakerId = -1;
         std::string speakingTo;
         std::string speech;
         std::string audio;
@@ -174,7 +175,17 @@ namespace dx::compiler {
     std::string conUnitsToText(const std::vector<uint16_t>& units);
     std::vector<uint16_t> conTextToUnits(const std::string& value);
 
-    bool readConFile(const std::vector<uint8_t>& data, ConFile& file, std::string* error);
+    // The editor reads a .con strictly and refuses a damaged one. The package importer reads it
+    // the lax way it always has: no signature check, reads past the end give zeros, an event type
+    // keeps only its low byte and one above End is kept with no payload read for the importer to
+    // skip, a camera type is tested by its low byte, and a comment keeps a trailing odd byte. In
+    // that mode only an obsolete version fails.
+    enum class ConReadMode {
+        Editor,
+        Import,
+    };
+
+    bool readConFile(const std::vector<uint8_t>& data, ConFile& file, std::string* error, ConReadMode mode = ConReadMode::Editor);
     std::vector<uint8_t> writeConFile(const ConFile& file);
     bool loadConFile(const std::filesystem::path& path, ConFile& file, std::string* error);
     bool saveConFile(const std::filesystem::path& path, const ConFile& file, std::string* error);

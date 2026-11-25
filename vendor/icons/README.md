@@ -1,6 +1,6 @@
 # Tabler Icons subset
 
-Subset of the Tabler Icons webfont 3.49.0 (https://tabler.io/icons, MIT, see LICENSE) used by the editor.
+Subset of the Tabler Icons webfont 3.52.0 (https://tabler.io/icons, MIT, see LICENSE) used by the editor.
 
 Icons included:
 
@@ -53,8 +53,8 @@ Icons included:
 Regenerate after changing the list:
 
 ```
-python3 -m fontTools.subset tabler-icons.ttf --unicodes=<codes above> --output-file=subset.ttf --no-hinting --layout-features= --name-IDs='*' --notdef-outline
-binary_to_compressed_c subset.ttf TablerIcons > tabler_icons.h
+python3 -m fontTools.subset tabler-icons.ttf --unicodes=<codes above> --output-file=tabler-icons-subset.ttf --no-hinting --layout-features= --name-IDs='*' --notdef-outline
+binary_to_compressed_c -u8 tabler-icons-subset.ttf TablerIcons > tabler_icons.h
 ```
 
-`binary_to_compressed_c` is `vendor/imgui/misc/fonts/binary_to_compressed_c.cpp`. Prepend `#pragma once` to the output.
+`binary_to_compressed_c` is `vendor/imgui/misc/fonts/binary_to_compressed_c.cpp`. Prepend `#pragma once` and a blank line to the output.

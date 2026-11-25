@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "debugui/imgui_setup.h"
 
 namespace dx::editor {
     namespace {
@@ -19,7 +20,7 @@ namespace dx::editor {
                 continue;
             }
             if (ImGui::BeginTable(category.first.c_str(), 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
-                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 160.0f);
+                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(160.0f));
                 ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
                 for (dx::UProperty* property : category.second) {
                     for (int32_t index = 0; index < property->arrayDim; index++) {
@@ -41,10 +42,10 @@ namespace dx::editor {
             if (issue.severity == dx::mapcheck::Severity::Error) {
                 errors++;
             }
-            std::fprintf(stderr, "MapCheck: %s: %s: %s\n", dx::mapcheck::severityName(issue.severity), issue.actor ? issue.actor->name.str().c_str() : currentMap.c_str(), issue.message.c_str());
+            dx::log::warn("MapCheck", "{}: {}: {}", dx::mapcheck::severityName(issue.severity), issue.actor ? issue.actor->name.str() : currentMap, issue.message);
         }
         status = "map check: " + std::to_string(errors) + " errors, " + std::to_string(checkResults.size() - errors) + " warnings";
-        std::fprintf(stderr, "%s\n", status.c_str());
+        dx::log::info("Log", "{}", status);
         showResults = true;
     }
 
@@ -53,8 +54,8 @@ namespace dx::editor {
         if (!showResults) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(640, 280), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(360, 560), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(640), debugui::scaled(280)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(360), debugui::scaled(560)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Results", &showResults)) {
             ImGui::End();
             return;
@@ -65,8 +66,8 @@ namespace dx::editor {
         ImGui::SameLine();
         ImGui::Text("%zu problems", checkResults.size());
         if (ImGui::BeginTable("results", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY)) {
-            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-            ImGui::TableSetupColumn("Actor", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(60.0f));
+            ImGui::TableSetupColumn("Actor", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(150.0f));
             ImGui::TableSetupColumn("Message", ImGuiTableColumnFlags_WidthStretch);
             ImGui::TableHeadersRow();
             for (size_t i = 0; i < checkResults.size(); i++) {
@@ -96,8 +97,8 @@ namespace dx::editor {
         if (!showLog) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(640, 300), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(360, 120), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(640), debugui::scaled(300)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(360), debugui::scaled(120)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Log", &showLog)) {
             ImGui::End();
             return;
@@ -138,8 +139,8 @@ namespace dx::editor {
         if (!showFind) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(360, 420), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(400, 160), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(360), debugui::scaled(420)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(400), debugui::scaled(160)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Search for Actors", &showFind)) {
             ImGui::End();
             return;
@@ -191,8 +192,8 @@ namespace dx::editor {
         if (!showLevelProperties) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(460, 560), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(420, 80), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(460), debugui::scaled(560)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(420), debugui::scaled(80)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Level Properties", &showLevelProperties)) {
             ImGui::End();
             return;
@@ -234,6 +235,10 @@ namespace dx::editor {
             if (index >= checkResults.size() || !checkResults[index].actor) {
                 return false;
             }
+            if (checkResults[index].actor->destroyed || std::find(actors.begin(), actors.end(), checkResults[index].actor) == actors.end()) {
+                status = "actor is no longer in the level";
+                return false;
+            }
             select(checkResults[index].actor);
             focusSelected();
             status = checkResults[index].actor->name.str() + ": " + checkResults[index].message;
@@ -247,10 +252,10 @@ namespace dx::editor {
             }
             while (input >> item) {
                 size_t equals = item.find('=');
-                std::string key = lower(item.substr(0, equals));
+                std::string key = lowered(item.substr(0, equals));
                 std::string value = equals == std::string::npos ? std::string() : item.substr(equals + 1);
                 for (size_t i = 0; i < findFields.size(); i++) {
-                    if (key == lower(FindLabels[i])) {
+                    if (key == lowered(FindLabels[i])) {
                         std::snprintf(findFields[i].data(), findFields[i].size(), "%s", value.c_str());
                     }
                 }

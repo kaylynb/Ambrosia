@@ -56,7 +56,7 @@ namespace dx {
                 }
             }
 
-            UModel* copyBrushModel(UObject* source, UObject* package, uint32_t flags)
+            UModel* copyBrushModel(UObject* source, UObject* package, uint32_t flags, UObject* defaultTexture)
             {
                 UModel* sourceModel = cast<UModel>(actor::Brush(source));
                 if (!sourceModel) {
@@ -83,7 +83,7 @@ namespace dx {
                 polys->polys = sourceModel->polys->polys;
                 for (Poly& poly : polys->polys) {
                     if (!poly.texture) {
-                        poly.texture = bsp::currentTexture();
+                        poly.texture = defaultTexture;
                     }
                     poly.brushPoly = -1;
                 }
@@ -171,7 +171,7 @@ namespace dx {
             return cls;
         }
 
-        UObject* addBrush(ULevel* level, UObject* builder, uint8_t csgOper, uint32_t polyFlags)
+        UObject* addBrush(ULevel* level, UObject* builder, uint8_t csgOper, uint32_t polyFlags, UObject* defaultTexture)
         {
             if (!level || !builder) {
                 return nullptr;
@@ -185,7 +185,7 @@ namespace dx {
                 return nullptr;
             }
             uint32_t editorOnly = RF_Transactional | LoadFlags | RF_NotForClient | RF_NotForServer;
-            UModel* model = copyBrushModel(builder, package, editorOnly);
+            UModel* model = copyBrushModel(builder, package, editorOnly, defaultTexture);
             if (!model) {
                 return nullptr;
             }
@@ -202,12 +202,12 @@ namespace dx {
             level->actors.push_back(actorObject);
             if (level->model) {
                 bsp::ensureLevelPolys(*level->model);
-                bsp::brushCSG(actorObject, *level->model, polyFlags, csgOper, true);
+                bsp::brushCSG(actorObject, *level->model, polyFlags, csgOper, true, defaultTexture);
             }
             return actorObject;
         }
 
-        UObject* addMover(ULevel* level, UObject* builder, UClass* moverClass)
+        UObject* addMover(ULevel* level, UObject* builder, UClass* moverClass, UObject* defaultTexture)
         {
             if (!level || !builder) {
                 return nullptr;
@@ -220,7 +220,7 @@ namespace dx {
                 return nullptr;
             }
             UObject* package = level->outermost();
-            UModel* model = copyBrushModel(builder, package, RF_Transactional | LoadFlags);
+            UModel* model = copyBrushModel(builder, package, RF_Transactional | LoadFlags, defaultTexture);
             if (!model) {
                 return nullptr;
             }
@@ -268,7 +268,7 @@ namespace dx {
             return mover;
         }
 
-        bool brushFromIntersection(ULevel* level, UObject* builder, bool deintersect)
+        bool brushFromIntersection(ULevel* level, UObject* builder, bool deintersect, UObject* defaultTexture)
         {
             if (!level || !level->model || !builder) {
                 return false;
@@ -277,7 +277,7 @@ namespace dx {
             if (!brush || !brush->polys) {
                 return false;
             }
-            bsp::brushCSG(builder, *level->model, 0, deintersect ? CsgDeintersect : CsgIntersect, false);
+            bsp::brushCSG(builder, *level->model, 0, deintersect ? CsgDeintersect : CsgIntersect, false, defaultTexture);
             return true;
         }
 
@@ -288,7 +288,7 @@ namespace dx {
                 return stats;
             }
             if (options.geometry) {
-                stats = bsp::csgRebuild(level);
+                stats = bsp::csgRebuild(level, options.defaultTexture);
             }
             if (options.bsp) {
                 size_t brushes = stats.brushes;

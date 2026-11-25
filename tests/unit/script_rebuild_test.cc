@@ -1,5 +1,7 @@
 #include "compiler/exporter.h"
+#include "test_paths.h"
 #include "core/objects.h"
+#include "deusex/startup.h"
 #include "engine/world.h"
 
 #include <catch_amalgamated.hpp>
@@ -8,7 +10,7 @@
 
 TEST_CASE("exported string defaults escape backslashes so they import unchanged", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UClass* setup = dx::objects::findClass("UBrowser.UBrowserIRCSetupClient");
     REQUIRE(setup != nullptr);
     dx::UClass* parent = setup->superClass();
@@ -18,7 +20,7 @@ TEST_CASE("exported string defaults escape backslashes so they import unchanged"
 
 TEST_CASE("finding an object by path skips same named objects of another class", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     REQUIRE(dx::objects::loadPackage(dx::Name("Effects")) != nullptr);
     dx::UClass* texture = dx::objects::findClass("Engine.Texture");
     dx::UClass* palette = dx::objects::findClass("Engine.Palette");

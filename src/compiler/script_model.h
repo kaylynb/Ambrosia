@@ -157,7 +157,6 @@ namespace dx::compiler {
         UClass* findClass(std::string_view name);
         UStruct* findStruct(std::string_view name);
         UObject* findObject(UClass* cls, std::string_view path);
-        UObject* findPackage(std::string_view name);
         void add(UObject* object);
 
     private:

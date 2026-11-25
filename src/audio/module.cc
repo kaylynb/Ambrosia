@@ -1,5 +1,7 @@
 #include "audio/module.h"
 
+#include "audio/extended.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -54,18 +56,6 @@ namespace dx::audio {
             default:
                 return static_cast<int32_t>(255.0 * std::sin(2.0 * 3.14159265358979 * static_cast<double>(index) / 64.0));
             }
-        }
-
-        const std::array<int16_t, 32768>& panTable()
-        {
-            static const std::array<int16_t, 32768> table = [] {
-                std::array<int16_t, 32768> values {};
-                for (size_t i = 0; i < values.size(); i++) {
-                    values[i] = static_cast<int16_t>(std::sqrt(static_cast<long double>(i) * static_cast<long double>(1.0 / 32767.0)) * 32767.0L);
-                }
-                return values;
-            }();
-            return table;
         }
 
         constexpr int32_t SurroundPan = 0x8000;
@@ -166,6 +156,14 @@ namespace dx::audio {
         return (flags & 0x04) != 0 && !instruments.empty();
     }
 
+    namespace {
+        // Whether count bytes at offset lie inside a file of size bytes, without the sum wrapping.
+        bool fits(size_t offset, size_t count, size_t size)
+        {
+            return offset <= size && size - offset >= count;
+        }
+    }
+
     bool ItModule::load(const uint8_t* bytes, size_t size)
     {
         if (size < 0xC0 || std::memcmp(bytes, "IMPM", 4) != 0) {
@@ -197,7 +195,7 @@ namespace dx::audio {
         instruments.resize(instrumentCount);
         for (size_t i = 0; i < instrumentCount; i++) {
             uint32_t offset = u32(instrumentOffsets + i * 4);
-            if (compatible < 0x200 || offset + 0x226 > size) {
+            if (compatible < 0x200 || !fits(offset, 0x226, size)) {
                 continue;
             }
             const uint8_t* p = bytes + offset;
@@ -218,7 +216,7 @@ namespace dx::audio {
         samples.resize(sampleCount);
         for (size_t i = 0; i < sampleCount; i++) {
             uint32_t offset = u32(sampleOffsets + i * 4);
-            if (offset + 0x50 > size) {
+            if (!fits(offset, 0x50, size)) {
                 continue;
             }
             const uint8_t* p = bytes + offset;
@@ -249,7 +247,7 @@ namespace dx::audio {
             size_t channelsInFile = (sample.flags & SampleStereo) ? 2 : 1;
             size_t bytesPerSample = wide ? 2 : 1;
             size_t needed = static_cast<size_t>(length) * bytesPerSample * channelsInFile;
-            if (pointer + needed > size) {
+            if (!fits(pointer, needed, size)) {
                 sample.flags = static_cast<uint8_t>(sample.flags & ~SampleExists);
                 continue;
             }
@@ -290,7 +288,7 @@ namespace dx::audio {
         for (size_t i = 0; i < patternCount; i++) {
             uint32_t offset = u32(patternOffsets + i * 4);
             ItPattern& pattern = patterns[i];
-            if (offset == 0 || offset + 8 > size) {
+            if (offset == 0 || !fits(offset, 8, size)) {
                 pattern.rows = 64;
                 pattern.cells.assign(64 * 64, ItCell {});
                 continue;
@@ -874,7 +872,7 @@ namespace dx::audio {
         level = (level * channel.fade) >> 15;
         level = (level * channel.volume) >> 15;
         pan = std::clamp(pan, 0, MaxPan);
-        const std::array<int16_t, 32768>& table = panTable();
+        const std::array<int16_t, 32768>& table = galaxyPanTable();
         int32_t left = (table[static_cast<size_t>(MaxPan - pan)] * level) >> 15;
         int32_t right = (table[static_cast<size_t>(pan)] * level) >> 15;
         channel.outputFrequency = frequency;

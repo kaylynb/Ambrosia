@@ -1,43 +1,88 @@
 file(GLOB UNIT_TEST_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cc)
-add_executable(unit-tests ${UNIT_TEST_SOURCES} ${CMAKE_SOURCE_DIR}/src/editor/script_workspace.cc ${CMAKE_SOURCE_DIR}/src/editor/log_capture.cc)
-target_link_libraries(unit-tests PRIVATE dx-render dx-compiler Catch2 SDL2::SDL2-static)
-target_compile_definitions(unit-tests PRIVATE DEUSEX_GAME_DATA="${DEUSEX_GAME_DATA}" UCC_PATH="$<TARGET_FILE:ucc>")
+add_executable(unit-tests ${UNIT_TEST_SOURCES} ${CMAKE_SOURCE_DIR}/src/editor/script_workspace.cc ${CMAKE_SOURCE_DIR}/src/editor/log_capture.cc ${CMAKE_SOURCE_DIR}/src/game/gamepad_input.cc ${CMAKE_SOURCE_DIR}/src/game/${DX_PLATFORM}/switch_gyro.cc ${CMAKE_SOURCE_DIR}/src/game/touch_cursor.cc ${CMAKE_SOURCE_DIR}/src/game/menu_options.cc ${CMAKE_SOURCE_DIR}/src/game/pad_prompts.cc)
+target_link_libraries(unit-tests PRIVATE dx-render dx-compiler dx-deusex dx-debugui Catch2 SDL3::SDL3-static)
 add_dependencies(unit-tests ucc)
-if(DX_NETWORKING)
-    target_compile_definitions(unit-tests PRIVATE DEUSEX_PATH="$<TARGET_FILE:deusex>")
-    add_dependencies(unit-tests deusex)
-endif()
-if(EXISTS "${DEUSEX_GAME_DATA}/System/Core.u")
-    add_test(NAME unit-tests COMMAND unit-tests)
-    add_test(NAME editor-scripts COMMAND unit-tests "[editor-scripts]")
-    if(TARGET deused)
-        function(add_editor_test name expected)
-            add_test(NAME editor-${name} COMMAND deused --new EditorTest --width 1280 --height 800 ${ARGN})
-            set_tests_properties(editor-${name} PROPERTIES ENVIRONMENT SDL_VIDEODRIVER=offscreen PASS_REGULAR_EXPRESSION "expectations: ${expected} passed, 0 failed")
-        endfunction()
-        add_editor_test(face-extrude 5 --frames 30
-            --at "3:exec camera -600 0 0 0 0" --at "4:exec editmode face" --at "6:clickview perspective 0.5 0.5" --at "10:expect status selected 1 face"
-            --at "11:exec extrude 128" --at "12:expect vertex -256 128 128" --at "13:expect novertex -128 128 128"
-            --at "14:exec undo" --at "15:expect vertex -128 128 128" --at "16:expect status undo done")
-        add_editor_test(extrude-drag-snaps 4 --frames 40
-            --at "2:exec grid 16 1" --at "3:exec camera -600 -350 0 0 7100" --at "4:exec editmode face" --at "6:clickview perspective 0.5 0.5" --at "9:expect status selected 1 face"
-            --at "10:exec gizmo extrude" --at "14:dragview perspective 0.5 0.5 0.4 0.5" --at "28:expect status extruded 1 face" --at "29:expect novertex -128 128 128" --at "30:expect grid 16")
-        add_editor_test(vertex-drag-snaps-absolute 5 --frames 50
-            --at "2:exec grid 16 0" --at "3:exec camera -628 -528 528 -5825 7038" --at "4:exec editmode vertex" --at "6:clickview perspective 0.5 0.5" --at "9:expect status selected 1 vertex"
-            --at "10:dragview perspective 0.5 0.5 0.6 0.45" --at "24:expect offgrid 16" --at "25:expect novertex -128 -128 128"
-            --at "26:exec grid 16 1" --at "28:dragview perspective 0.6 0.45 0.7 0.5" --at "42:expect grid 16" --at "43:expect status edited 1 brush vertices")
-        add_editor_test(overlapping-handles-cycle 3 --frames 30
-            --at "3:exec camera 128 0 400 -5825 7038" --at "4:exec zoom 0.5" --at "5:exec editmode edge"
-            --at "6:clickview top 0.5 0.5" --at "10:expect status selected 1 edge" --at "12:clickview top 0.5 0.5" --at "16:expect status cycled to 2 of 2 overlapping"
-            --at "18:clickview top 0.5 0.5" --at "22:expect status cycled to 1 of 2 overlapping")
-        add_editor_test(escape-ignored-while-popup-open 2 --frames 40
-            --at "4:exec editmode vertex" --at "6:rclick 400 200" --at "10:key Escape" --at "14:expect status Vertex mode"
-            --at "16:click 600 390" --at "20:key Escape" --at "24:expect status Object mode")
-        add_editor_test(scale-gizmo-scales-every-selected-brush 2 --frames 40
-            --at "2:exec csgadd" --at "4:exec moveto 512 0 0" --at "5:exec csgadd" --at "6:exec select Brush1" --at "7:exec selectadd Brush2" --at "8:expect status selected 2 actors"
-            --at "9:exec camera -500 -400 400 -5825 7038" --at "10:exec gizmo scale" --at "12:dragview perspective 0.5 0.5 0.62 0.45" --at "26:expect mainscale 1.05")
-    endif()
+deusex_target_options(unit-tests)
+
+# One ctest entry per test file, so a crash or hang is pinned to a file. -# tags every test
+# with [#<file>]. Hidden tests ([.editor-scripts]) are left to their own entry.
+# The tests tagged [data] fail, saying the game data is missing, when they cannot find it at run
+# time (tests/unit/test_paths.h); AMBROSIA_DATA_TESTS=OFF leaves them out where there is none.
+if(AMBROSIA_DATA_TESTS)
+    set(UNIT_TEST_FILTER "~[.]")
 else()
-    message(STATUS "No game data in ${DEUSEX_GAME_DATA}, tests tagged [data] are skipped")
-    add_test(NAME unit-tests COMMAND unit-tests "~[data]")
+    message(STATUS "AMBROSIA_DATA_TESTS is off, tests tagged [data] are not registered")
+    set(UNIT_TEST_FILTER "~[.]~[data]")
+endif()
+# Timeouts in seconds; a Release run takes 80 s for compiler_test and a few seconds for the rest.
+if(SANITIZER STREQUAL "none")
+    set(UNIT_TEST_TIMEOUT 300)
+else()
+    set(UNIT_TEST_TIMEOUT 1200)
+endif()
+set(UNIT_TESTS "")
+foreach(source ${UNIT_TEST_SOURCES})
+    file(STRINGS ${source} cases REGEX "(TEST_CASE|SCENARIO)")
+    if(cases)
+        get_filename_component(stem ${source} NAME_WE)
+        # A file whose tests all need the game data runs none without it.
+        add_test(NAME unit-${stem} COMMAND unit-tests "-#" --allow-running-no-tests "[#${stem}]${UNIT_TEST_FILTER}")
+        list(APPEND UNIT_TESTS unit-${stem})
+    endif()
+endforeach()
+set_tests_properties(${UNIT_TESTS} PROPERTIES TIMEOUT ${UNIT_TEST_TIMEOUT})
+
+if(AMBROSIA_DATA_TESTS)
+    add_test(NAME editor-scripts COMMAND unit-tests "[editor-scripts]")
+    set_tests_properties(editor-scripts PROPERTIES TIMEOUT ${UNIT_TEST_TIMEOUT})
+    list(APPEND UNIT_TESTS editor-scripts)
+endif()
+# The licences the build ships (cmake/licenses.cmake), checked by section heading.
+set(DX_LICENSE_SECTIONS "Ambrosia (GNU AGPL, version 3 or later)" "OpenDE by jarmitage99, the code Ambrosia started from (MIT)" "SDL 3" "miniaudio" "Dear ImGui" "ImPlot" "ImGuizmo" "Input Prompts by Kenney" "Controller illustrations by Zacksly")
+if(AMBROSIA_STEAM_AUDIO)
+    list(APPEND DX_LICENSE_SECTIONS "Steam Audio")
+endif()
+add_test(NAME licenses COMMAND ${CMAKE_COMMAND} "-DLICENSES=$<TARGET_FILE_DIR:ambrosia>/LICENSES.txt" "-DSECTIONS=${DX_LICENSE_SECTIONS}" -P ${CMAKE_SOURCE_DIR}/tests/check_licenses.cmake)
+
+# SDL's offscreen driver needs EGL, which Windows lacks, so tests use a hidden window there.
+# With ASan, lsan.supp leaves out what Mesa's EGL setup keeps; the tests that open a GL context
+# also take full malloc stacks, which reach SDL's frame through the unloaded libEGL.
+set(OFFSCREEN_TEST_ENV SDL_VIDEODRIVER=offscreen)
+set(GL_TEST_ENV SDL_VIDEODRIVER=offscreen)
+if(SANITIZER STREQUAL "asan" AND NOT MSVC)
+    list(APPEND OFFSCREEN_TEST_ENV LSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/lsan.supp)
+    list(APPEND GL_TEST_ENV LSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/lsan.supp ASAN_OPTIONS=fast_unwind_on_malloc=0)
+endif()
+# With TSan, tsan.supp leaves out what Mesa's and Steam Audio's own threads do inside them.
+if(SANITIZER STREQUAL "tsan")
+    list(APPEND OFFSCREEN_TEST_ENV TSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/tsan.supp)
+    list(APPEND GL_TEST_ENV TSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/tsan.supp)
+endif()
+if(NOT WIN32)
+    set_tests_properties(${UNIT_TESTS} PROPERTIES ENVIRONMENT "${OFFSCREEN_TEST_ENV}")
+    # The tests that open a GL context (SDL_GL_CreateContext).
+    foreach(gl_test unit-scene_pass_test unit-ambient_occlusion_test unit-mesh_modulated_test unit-gc_render_test)
+        if(TEST ${gl_test})
+            set_tests_properties(${gl_test} PROPERTIES ENVIRONMENT "${GL_TEST_ENV}")
+        endif()
+    endforeach()
+endif()
+
+if(AMBROSIA_DATA_TESTS AND TARGET dented)
+    function(add_editor_test name expected)
+        if(WIN32)
+            add_test(NAME editor-${name} COMMAND dented --new EditorTest --width 1280 --height 800 --hidden --script ${CMAKE_SOURCE_DIR}/tests/editor/${name}.txt)
+        else()
+            add_test(NAME editor-${name} COMMAND dented --new EditorTest --width 1280 --height 800 --script ${CMAKE_SOURCE_DIR}/tests/editor/${name}.txt)
+            set_tests_properties(editor-${name} PROPERTIES ENVIRONMENT "${GL_TEST_ENV}")
+        endif()
+        set_tests_properties(editor-${name} PROPERTIES PASS_REGULAR_EXPRESSION "expectations: ${expected} passed, 0 failed" TIMEOUT 120)
+    endfunction()
+    # Each test's steps are in tests/editor/<name>.txt; the number is how many of its expects pass.
+    add_editor_test(escape-ignored-while-popup-open 2)
+    add_editor_test(extrude-drag-snaps 4)
+    add_editor_test(face-extrude 5)
+    add_editor_test(overlapping-handles-cycle 3)
+    add_editor_test(scale-gizmo-scales-every-selected-brush 2)
+    add_editor_test(vertex-drag-snaps-absolute 5)
 endif()

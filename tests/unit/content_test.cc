@@ -1,11 +1,13 @@
 #include "audio/audio.h"
+#include "test_paths.h"
 #include "compiler/asset_package.h"
 #include "compiler/package_dump.h"
 #include "compiler/script_package.h"
 #include "core/config.h"
 #include "core/objects.h"
+#include "deusex/startup.h"
 #include "engine/mesh.h"
-#include "engine/package.h"
+#include "core/package.h"
 #include "engine/resources.h"
 #include "engine/world.h"
 
@@ -41,12 +43,6 @@ namespace {
     {
         std::ofstream out(file, std::ios::binary);
         out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    }
-
-    std::vector<uint8_t> readFile(const std::filesystem::path& file)
-    {
-        std::ifstream in(file, std::ios::binary);
-        return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     }
 
     void put16(std::vector<uint8_t>& bytes, uint32_t value)
@@ -145,7 +141,7 @@ namespace {
 
 TEST_CASE("imported BMP textures with mips, masking and detail survive a utx save and reload", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     std::filesystem::path directory = scratch("textures");
     writeFile(directory / "Checker.bmp", bitmap(16, checker));
     writeFile(directory / "Ramp.bmp", bitmap(16, gradient));
@@ -194,7 +190,7 @@ TEST_CASE("imported BMP textures with mips, masking and detail survive a utx sav
 
 TEST_CASE("TEXTURE NEW creates fire and wave textures that save and reload with their fractal settings", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UObject* package = dx::objects::packageObject(dx::Name("ContentFireTest"));
     REQUIRE(run(package, {}, "TEXTURE NEW NAME=Flames CLASS=FireTexture PACKAGE=ContentFireTest GROUP=Fx USIZE=128 VSIZE=64"));
     REQUIRE(run(package, {}, "TEXTURE NEW NAME=Ripples CLASS=Fire.WaveTexture PACKAGE=ContentFireTest USIZE=64 VSIZE=64"));
@@ -251,15 +247,15 @@ TEST_CASE("saving shipped texture and sound packages reproduces every export", "
         { "Textures", "DXFonts.utx", "Font", 2 },
         { "Sounds", "MoverSFX.uax", "Sound", 60 },
     }));
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     std::string stem = std::filesystem::path(packageName).stem().string();
     dx::UObject* package = dx::objects::packageObject(dx::Name(stem));
     REQUIRE(dx::objects::loadPackage(dx::Name(stem)) != nullptr);
     std::filesystem::path file = scratch("shipped") / packageName;
     std::string error;
     REQUIRE(dx::compiler::saveAssetPackage(package, file, &error));
-    std::filesystem::path system = std::filesystem::path(DEUSEX_GAME_DATA) / "System";
-    auto expected = dx::compiler::dumpPackage(std::filesystem::path(DEUSEX_GAME_DATA) / folder / packageName, system);
+    std::filesystem::path system = std::filesystem::path(dx::test::gameData()) / "System";
+    auto expected = dx::compiler::dumpPackage(std::filesystem::path(dx::test::gameData()) / folder / packageName, system);
     std::map<std::string, dx::compiler::DumpedExport> actual;
     for (auto& [path, entry] : dx::compiler::dumpPackage(file, system)) {
         actual[lowerText(path)] = entry;
@@ -285,7 +281,7 @@ TEST_CASE("saving shipped texture and sound packages reproduces every export", "
 
 TEST_CASE("imported WAV sounds survive a uax save and reload", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     std::filesystem::path directory = scratch("sounds");
     std::vector<uint8_t> wave = { 'R', 'I', 'F', 'F' };
     put32(wave, 36 + 200);
@@ -330,7 +326,7 @@ TEST_CASE("imported WAV sounds survive a uax save and reload", "[data]")
 
 TEST_CASE("imported _a.3d and _d.3d meshes with sequences survive a package save and reload", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     std::filesystem::path directory = scratch("meshes");
     const int16_t corners[4][3] = { { 0, 0, 0 }, { 100, 0, 0 }, { 0, 100, 0 }, { 0, 0, 100 } };
     std::vector<uint8_t> aniv;
@@ -402,7 +398,16 @@ TEST_CASE("imported _a.3d and _d.3d meshes with sequences survive a package save
     CHECK(mesh->scale.y == Catch::Approx(0.25f));
     CHECK(mesh->scale.z == Catch::Approx(2.0f));
 
-    dx::ULodMesh* lod = dx::cast<dx::ULodMesh>(reload("ContentMeshTest", file, "TetraLod", "LodMesh"));
+    // Read from the copy already loaded. Loading the file again would retire that copy, and
+    // level release never frees a retired package that holds a mesh, so later tests would see
+    // it in the linker counts.
+    dx::Linker* linker = dx::objects::findLinker(dx::Name("ContentMeshTest"));
+    REQUIRE(linker != nullptr);
+    int32_t lodRef = linker->findExport(dx::Name("TetraLod"), dx::Name("LodMesh"), "*");
+    REQUIRE(lodRef != 0);
+    dx::ULodMesh* lod = dx::cast<dx::ULodMesh>(linker->object(lodRef));
+    dx::objects::ensureLoaded(lod);
+    dx::objects::flushLoads();
     REQUIRE(lod != nullptr);
     CHECK(lod->faces.size() == 4);
     CHECK(lod->triangles().size() == 4);

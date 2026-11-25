@@ -90,6 +90,16 @@ namespace dx::editor {
             return false;
         }
         dx::UModel* model = dx::cast<dx::UModel>(dx::actor::Brush(target));
+        if (model) {
+            dx::objects::ensureLoaded(model);
+            dx::objects::flushLoads();
+        }
+        if (!model || !model->polys) {
+            status = "brush has no polygons";
+            return false;
+        }
+        dx::objects::ensureLoaded(model->polys);
+        dx::objects::flushLoads();
         std::vector<dx::Poly> original = model->polys->polys;
         dx::UObject* copy = nullptr;
         bool done = brushPolysEdit("Brush split", [&](dx::UObject* actor, dx::UModel& kept) {
@@ -142,6 +152,7 @@ namespace dx::editor {
         if (verb == "clipmode") {
             clipMode = rest.empty() ? !clipMode : rest != "0";
             if (clipMode) {
+                cancelComponentDrag();
                 editMode = 0;
                 componentSelection.clear();
             }

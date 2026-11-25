@@ -1,7 +1,9 @@
 #include "compiler/asset_package.h"
+#include "test_paths.h"
 #include "compiler/script_package.h"
 #include "core/config.h"
 #include "core/objects.h"
+#include "deusex/startup.h"
 #include "engine/fractal_paint.h"
 #include "engine/mesh.h"
 #include "engine/props_fire.h"
@@ -16,7 +18,7 @@
 namespace {
     dx::UObject* newTexture(const std::string& packageName, const std::string& name, const std::string& className)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         std::vector<std::string> log;
         REQUIRE(dx::compiler::runAssetCommand(package, {}, "TEXTURE NEW NAME=" + name + " CLASS=" + className + " PACKAGE=" + packageName + " USIZE=64 VSIZE=64", log));

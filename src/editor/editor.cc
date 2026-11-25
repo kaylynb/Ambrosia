@@ -1,5 +1,10 @@
 #include "editor/editor.h"
 
+#include "core/log.h"
+#include "core/sdl_handles.h"
+#include "debugui/imgui_setup.h"
+#include "deusex/startup.h"
+
 #include <ImGuizmo.h>
 
 #ifdef _WIN32
@@ -16,6 +21,7 @@ namespace dx::editor {
     Editor::Editor(SDL_Window* target, const Options& settings, const std::filesystem::path& gameExecutable)
         : window(target)
         , options(settings)
+        , steps(settings.steps)
         , gamePath(gameExecutable)
     {
         orthoViews[0] = { "Top", 0, 1, 1.0f };
@@ -28,8 +34,6 @@ namespace dx::editor {
 
     Editor::~Editor()
     {
-        releasePanes();
-        releaseFramebuffer();
         if (audioReady) {
             dx::audio::shutdown();
         }
@@ -41,23 +45,23 @@ namespace dx::editor {
         ImGuizmo::GetStyle().Colors[ImGuizmo::TEXT_SHADOW] = ImVec4(0, 0, 0, 0);
         log.start();
         dx::objects::setEditorMode(true);
-        std::filesystem::path gameRoot = dx::config::findGameRoot(DEUSEX_GAME_DATA);
+        std::filesystem::path gameRoot = dx::config::findGameRoot();
         dx::engine::initialize(gameRoot.string());
         renderer = std::make_unique<dx::SceneRenderer>();
         for (const auto& entry : std::filesystem::directory_iterator(gameRoot / "Maps")) {
             if (entry.path().extension() == ".dx") {
-                mapNames.push_back(entry.path().stem().string());
+                mapNames.push_back(utf8String(entry.path().stem()));
             }
         }
         std::sort(mapNames.begin(), mapNames.end());
         for (const auto& entry : std::filesystem::directory_iterator(gameRoot / "Textures")) {
-            if (lower(entry.path().extension().string()) == ".utx") {
-                texturePackages.push_back(entry.path().stem().string());
+            if (lowered(utf8String(entry.path().extension())) == ".utx") {
+                texturePackages.push_back(utf8String(entry.path().stem()));
             }
         }
         std::sort(texturePackages.begin(), texturePackages.end());
         buildClassTree();
-        std::filesystem::path mapFile = options.map;
+        std::filesystem::path mapFile = utf8Path(options.map);
         if (!options.blankMap.empty()) {
             newMap(options.blankMap);
         } else if (mapFile.has_parent_path() && std::filesystem::is_regular_file(mapFile)) {
@@ -65,19 +69,20 @@ namespace dx::editor {
         } else {
             openMap(options.map);
         }
-        if (!options.select.empty()) {
-            command("select " + options.select);
-        }
-        for (const auto& [frame, action] : options.actions) {
-            scheduleAction(frame, action);
-        }
     }
 
     bool Editor::openMapFile(const std::filesystem::path& file)
     {
-        std::string name = file.stem().string();
-        if (!dx::objects::loadPackageFile(dx::Name(name), file, false)) {
-            status = "cannot open " + file.string();
+        std::string name = utf8String(file.stem());
+        dx::Linker* linker = nullptr;
+        try {
+            linker = dx::objects::loadPackageFile(dx::Name(name), file, false);
+        } catch (const std::exception& failure) {
+            // The package reader names packages with path::string(), which throws for names outside the code page.
+            dx::log::error("Log", "{}", failure.what());
+        }
+        if (!linker) {
+            status = "cannot open " + utf8String(file);
             return false;
         }
         if (!openMap(name)) {
@@ -92,14 +97,21 @@ namespace dx::editor {
         dx::Linker* linker = dx::objects::loadPackage(dx::Name(mapName));
         if (!linker) {
             status = "map not found: " + mapName;
-            std::fprintf(stderr, "%s\n", status.c_str());
+            dx::log::error("Log", "{}", status);
             return false;
         }
         int32_t ref = linker->findExport(dx::Name("MyLevel"), dx::Name("Level"), "*");
         dx::ULevel* newLevel = dx::cast<dx::ULevel>(linker->object(ref));
+        if (newLevel && newLevel == level) {
+            // The open map's package is still loaded, so this is the edited level; read it from disk again.
+            dx::objects::unloadPackage(dx::Name(mapName));
+            linker = dx::objects::loadPackage(dx::Name(mapName));
+            ref = linker ? linker->findExport(dx::Name("MyLevel"), dx::Name("Level"), "*") : -1;
+            newLevel = linker ? dx::cast<dx::ULevel>(linker->object(ref)) : nullptr;
+        }
         if (!newLevel) {
             status = "no level in " + mapName;
-            std::fprintf(stderr, "%s\n", status.c_str());
+            dx::log::error("Log", "{}", status);
             return false;
         }
         return useLevel(newLevel, mapName);
@@ -108,7 +120,8 @@ namespace dx::editor {
     bool Editor::useLevel(dx::ULevel* newLevel, const std::string& mapName)
     {
         renderer->flushLevel();
-        if (level && level != newLevel) {
+        // A reload has already replaced the package of the same name; unloading it here would drop the new one.
+        if (level && level != newLevel && level->outermost()->name != newLevel->outermost()->name) {
             dx::objects::unloadPackage(level->outermost()->name);
         }
         level = newLevel;
@@ -118,7 +131,20 @@ namespace dx::editor {
         selectedActors.clear();
         contextActor = nullptr;
         selectedSurfs.clear();
+        surfMemory.clear();
+        cancelComponentDrag();
+        componentSelection.clear();
+        clipMarkers.clear();
+        checkResults.clear();
+        dragging = false;
+        gizmoActive = false;
+        vertexDragging = false;
+        boxSelecting = false;
+        propertiesTexture = nullptr;
+        editingKey = nullptr;
+        colorEditKey = nullptr;
         history.clear();
+        markClean();
         savedRegions.clear();
         dx::objects::ensureLoaded(level);
         dx::objects::flushLoads();
@@ -200,6 +226,7 @@ namespace dx::editor {
     {
         if (selected != actor) {
             editingKey = nullptr;
+            cancelComponentDrag();
             componentSelection.clear();
         }
         selected = actor;
@@ -240,7 +267,9 @@ namespace dx::editor {
             if (ImGui::BeginMenu(withIcon(icons::Open, "Open Map").c_str())) {
                 for (const std::string& mapName : mapNames) {
                     if (ImGui::MenuItem(mapName.c_str(), nullptr, mapName == currentMap)) {
-                        pendingCommand = "open " + mapName;
+                        guardLevel([this, mapName]() {
+                            pendingCommand = "open " + mapName;
+                        });
                     }
                 }
                 ImGui::EndMenu();
@@ -248,16 +277,21 @@ namespace dx::editor {
             if (ImGui::BeginMenu(withIcon(icons::Open, "Open User Map").c_str())) {
                 std::error_code error;
                 if (std::filesystem::is_directory(userMapsDirectory(), error)) {
-                    for (const auto& entry : std::filesystem::directory_iterator(userMapsDirectory(), error)) {
-                        if (entry.path().extension() == ".dx" && ImGui::MenuItem(entry.path().stem().string().c_str())) {
-                            pendingCommand = "openfile " + entry.path().string();
+                    for (std::filesystem::directory_iterator entry(userMapsDirectory(), error), end; !error && entry != end; entry.increment(error)) {
+                        if (entry->path().extension() == ".dx" && ImGui::MenuItem(utf8String(entry->path().stem()).c_str())) {
+                            std::string file = utf8String(entry->path());
+                            guardLevel([this, file]() {
+                                pendingCommand = "openfile " + quoteArg(file);
+                            });
                         }
                     }
                 }
                 ImGui::EndMenu();
             }
             if (ImGui::MenuItem(withIcon(icons::New, "New Map").c_str())) {
-                pendingCommand = "new Untitled";
+                guardLevel([this]() {
+                    pendingCommand = "new Untitled";
+                });
             }
             if (ImGui::MenuItem(withIcon(icons::Save, "Save").c_str(), "Ctrl+S")) {
                 command("save");
@@ -265,7 +299,7 @@ namespace dx::editor {
             if (ImGui::BeginMenu("Save As")) {
                 ImGui::InputText("Name", saveName.data(), saveName.size());
                 if (ImGui::Button("Save") && saveName[0]) {
-                    command(std::string("saveas ") + saveName.data());
+                    command("saveas " + quoteArg(saveName.data()));
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::EndMenu();
@@ -276,7 +310,7 @@ namespace dx::editor {
                 command("play");
             }
             if (ImGui::MenuItem("Quit")) {
-                running = false;
+                quit();
             }
             ImGui::EndMenu();
         }
@@ -350,6 +384,19 @@ namespace dx::editor {
             ImGui::MenuItem("Show Links", nullptr, &showPaths);
             ImGui::MenuItem("Actor Icons", nullptr, &showActorIcons);
             selectionViewItems();
+            if (ImGui::BeginMenu("UI Scale")) {
+                std::string automatic = "Auto (" + std::to_string(static_cast<int>(std::lround(debugui::autoScale(window) * 100))) + "%)";
+                if (ImGui::MenuItem(automatic.c_str(), nullptr, uiScale == 0)) {
+                    uiScale = 0;
+                }
+                for (float choice : debugui::scaleChoices()) {
+                    std::string label = std::to_string(static_cast<int>(std::lround(choice * 100))) + "%";
+                    if (ImGui::MenuItem(label.c_str(), nullptr, uiScale == choice)) {
+                        uiScale = choice;
+                    }
+                }
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu(withIcon(icons::Layout, "Layout").c_str())) {
                 if (ImGui::MenuItem("2x2 Views", nullptr, maximizedPane < 0)) {
                     maximizedPane = -1;
@@ -393,12 +440,12 @@ namespace dx::editor {
             ImGui::InputText("File", brushFile.data(), brushFile.size());
             ImGui::Checkbox("Merge coplanars on import", &brushMerge);
             if (ImGui::Button("Import") && brushFile[0]) {
-                command(std::string("brushimport ") + brushFile.data() + (brushMerge ? " 1" : " 0"));
+                command("brushimport " + quoteArg(brushFile.data()) + (brushMerge ? " 1" : " 0"));
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
             if (ImGui::Button("Export") && brushFile[0]) {
-                command(std::string("brushexport ") + brushFile.data());
+                command("brushexport " + quoteArg(brushFile.data()));
                 ImGui::CloseCurrentPopup();
             }
             brushMenuItems();
@@ -428,8 +475,8 @@ namespace dx::editor {
         float top = ImGui::GetFrameHeight();
         float w = static_cast<float>(width);
         float h = static_cast<float>(height) - top;
-        float leftWidth = std::clamp(w * 0.2f, 180.0f, 320.0f);
-        float rightWidth = std::clamp(w * 0.24f, 220.0f, 400.0f);
+        float leftWidth = std::clamp(w * 0.2f, debugui::scaled(180.0f), debugui::scaled(320.0f));
+        float rightWidth = std::clamp(w * 0.24f, debugui::scaled(220.0f), debugui::scaled(400.0f));
         ImGuiWindowFlags fixed = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
         ImGui::SetNextWindowPos(ImVec2(0, top));
         ImGui::SetNextWindowSize(ImVec2(leftWidth, h));
@@ -477,6 +524,7 @@ namespace dx::editor {
         ImGui::Begin("Properties", nullptr, fixed);
         propertiesPanel();
         ImGui::End();
+        viewportActive = false;
         viewLayout(ImVec2(leftWidth, top), ImVec2(w - leftWidth - rightWidth, h));
         rebuildWindow();
         gridWindow();
@@ -488,6 +536,7 @@ namespace dx::editor {
         toolsWindows();
         conversationWindow();
         builderWindows();
+        confirmWindow();
         if (ImGui::IsKeyPressed(ImGuiKey_F7, false)) {
             pendingCommand = "compilescripts changed";
         }
@@ -604,38 +653,37 @@ namespace dx::editor {
         std::string error;
         bool ok = dx::mapwriter::saveMap(level, file, &error);
         restoreRegions(false);
-        status = ok ? "saved " + file.filename().string() : "save failed: " + error;
+        status = ok ? "saved " + utf8String(file.filename()) : "save failed: " + error;
         if (ok) {
             currentFile = file;
+            markClean();
         }
-        std::fprintf(stderr, "%s\n", status.c_str());
+        if (ok) {
+            dx::log::info("Log", "{}", status);
+        } else {
+            dx::log::error("Log", "{}", status);
+        }
         return ok;
     }
 
     void Editor::launchGame(const std::filesystem::path& file)
     {
+#ifdef _WIN32
+        std::wstring quotedExecutable = L"\"" + gamePath.wstring() + L"\"";
+        std::wstring quotedMap = L"\"" + file.wstring() + L"\"";
+        const wchar_t* args[] = { quotedExecutable.c_str(), quotedMap.c_str(), nullptr };
+        bool started = _wspawnv(_P_NOWAIT, gamePath.c_str(), args) != -1;
+#else
         std::string executable = gamePath.string();
         std::string map = file.string();
-#ifdef _WIN32
-        std::string quotedExecutable = "\"" + executable + "\"";
-        std::string quotedMap = "\"" + map + "\"";
-        const char* args[] = { quotedExecutable.c_str(), quotedMap.c_str(), nullptr };
-        bool started = _spawnv(_P_NOWAIT, executable.c_str(), args) != -1;
-#else
         char* args[] = { executable.data(), map.data(), nullptr };
         pid_t pid = 0;
-        posix_spawn_file_actions_t actions;
-        posix_spawn_file_actions_init(&actions);
-        if (log.originalStderr() >= 0) {
-            posix_spawn_file_actions_adddup2(&actions, log.originalStderr(), 2);
-        }
-        bool started = posix_spawn(&pid, executable.c_str(), &actions, nullptr, args, environ) == 0;
-        posix_spawn_file_actions_destroy(&actions);
+        bool started = posix_spawn(&pid, executable.c_str(), nullptr, nullptr, args, environ) == 0;
 #endif
         if (started) {
-            status = "playing " + file.filename().string();
+            status = "playing " + utf8String(file.filename());
         } else {
-            status = "cannot start " + executable;
+            status = "cannot start " + utf8String(gamePath);
         }
     }
 
@@ -657,7 +705,106 @@ namespace dx::editor {
         refreshActors();
         buildEdges();
         selectedSurfs.clear();
+        surfMemory.clear();
         brushCache.clear();
+    }
+
+    bool Editor::levelDirty()
+    {
+        return levelChanged || history.revision() != cleanRevision;
+    }
+
+    void Editor::markClean()
+    {
+        levelChanged = false;
+        cleanRevision = history.revision();
+    }
+
+    void Editor::askConfirm(const std::string& message, const std::string& button, const std::function<void()>& action, const std::function<bool()>& save)
+    {
+        confirmMessage = message;
+        confirmButton = button;
+        confirmAction = action;
+        confirmSave = save;
+        confirmRequested = true;
+    }
+
+    void Editor::guardLevel(const std::function<void()>& action)
+    {
+        if (!levelDirty()) {
+            action();
+            return;
+        }
+        askConfirm(currentMap + " has unsaved changes.", "Discard", action, [this]() {
+            return command("save");
+        });
+    }
+
+    void Editor::guardConversation(const std::function<void()>& action)
+    {
+        if (!conDirty) {
+            action();
+            return;
+        }
+        std::function<bool()> save;
+        if (!conPath.empty()) {
+            save = [this]() {
+                return conSave(conPath);
+            };
+        }
+        askConfirm("The conversation file has unsaved changes.", "Discard", action, save);
+    }
+
+    void Editor::quit()
+    {
+        guardLevel([this]() {
+            guardConversation([this]() {
+                bool scriptEdits = std::any_of(documents.begin(), documents.end(), [](const ScriptDocument& document) {
+                    return document.text != document.compiled;
+                });
+                if (!scriptEdits) {
+                    running = false;
+                    return;
+                }
+                askConfirm("Script edits that have not been compiled will be lost.", "Discard", [this]() { running = false; }, nullptr);
+            });
+        });
+    }
+
+    void Editor::confirmWindow()
+    {
+        if (confirmRequested) {
+            ImGui::OpenPopup("Confirm");
+            confirmRequested = false;
+        }
+        if (!ImGui::BeginPopupModal("Confirm", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            return;
+        }
+        ImGui::TextUnformatted(confirmMessage.c_str());
+        std::function<void()> chosen;
+        if (confirmSave) {
+            if (ImGui::Button("Save")) {
+                if (confirmSave()) {
+                    chosen = confirmAction;
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+        }
+        if (ImGui::Button(confirmButton.c_str())) {
+            chosen = confirmAction;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+        if (chosen) {
+            confirmAction = nullptr;
+            confirmSave = nullptr;
+            chosen();
+        }
     }
 
     void Editor::run()
@@ -666,9 +813,9 @@ namespace dx::editor {
         while (running) {
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
-                ImGui_ImplSDL2_ProcessEvent(&event);
-                if (event.type == SDL_QUIT) {
-                    running = false;
+                ImGui_ImplSDL3_ProcessEvent(&event);
+                if (event.type == SDL_EVENT_QUIT) {
+                    quit();
                 }
             }
             if (!pendingCommand.empty()) {
@@ -678,9 +825,10 @@ namespace dx::editor {
             }
             int width = 0;
             int height = 0;
-            SDL_GL_GetDrawableSize(window, &width, &height);
+            SDL_GetWindowSizeInPixels(window, &width, &height);
+            debugui::setScale(uiScale > 0 ? uiScale : debugui::autoScale(window));
             ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplSDL2_NewFrame();
+            ImGui_ImplSDL3_NewFrame();
             applyInput(frameCount);
             ImGui::NewFrame();
             frame(width, height);
@@ -690,12 +838,10 @@ namespace dx::editor {
             glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-            runScript(frameCount, width, height);
+            // The map opens before the first frame, so a wait loaded never holds the editor.
+            steps.tick([] { return true; }, [&](const std::string& step) { runStep(frameCount + 1, step, width, height); });
             frameCount++;
-            if (options.frames > 0 && frameCount >= options.frames) {
-                if (!options.screenshot.empty()) {
-                    screenshot(width, height, options.screenshot);
-                }
+            if (steps.quitting() || (options.frames >= 0 && frameCount >= options.frames)) {
                 running = false;
             }
             SDL_GL_SwapWindow(window);
@@ -712,6 +858,8 @@ namespace dx::editor {
         for (size_t y = 0; y < static_cast<size_t>(height); y++) {
             std::copy_n(raw.data() + y * stride, stride, rgba.data() + (static_cast<size_t>(height) - 1 - y) * stride);
         }
-        saveBmp(path, rgba, width, height);
+        if (!dx::sdl::saveBmp(path, rgba, width, height)) {
+            dx::log::error("Log", "cannot save {}: {}", path, SDL_GetError());
+        }
     }
 }

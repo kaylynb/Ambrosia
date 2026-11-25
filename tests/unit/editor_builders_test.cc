@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/bsp.h"
 #include "engine/csg.h"
@@ -22,7 +24,7 @@ namespace {
 
     dx::UObject* makeBuilderBrush(const char* packageName)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         dx::UObject* brush = make<dx::UObject>("Brush", package);
         dx::UModel* model = make<dx::UModel>("Model", package);

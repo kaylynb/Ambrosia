@@ -2,7 +2,7 @@
 
 #include "core/objects.h"
 #include "core/vm.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 #include <climits>
@@ -430,6 +430,7 @@ namespace dx::compiler::detail {
 
     int ScriptCompiler::compileExpr(PropertyBase requiredType, const char* errorTag, Token* resultToken, int maxPrecedence, PropertyBase* hintType)
     {
+        RecursionGuard guard(*this, "Expression");
         RetryPoint lowRetry = initRetry();
         Token token { PropertyBase(CptNone) };
         const Names& n = names();
@@ -523,8 +524,9 @@ namespace dx::compiler::detail {
                 fail("'new': Invalid class");
             }
             token = Token(PropertyBase(newClass.metaClass));
-            if (!parentClass || !parentClass->isChildOf(newClass.metaClass->within)) {
-                fail("'new': " + newClass.metaClass->name.str() + " objects must reside in " + newClass.metaClass->within->name.str() + " objects, not " + (parentClass ? parentClass->name.str() : std::string("None")) + " objects");
+            UClass* within = newClass.metaClass->within ? newClass.metaClass->within : objects::objectClass();
+            if (!parentClass || !parentClass->isChildOf(within)) {
+                fail("'new': " + newClass.metaClass->name.str() + " objects must reside in " + within->name.str() + " objects, not " + (parentClass ? parentClass->name.str() : std::string("None")) + " objects");
             }
             if (matchSymbol("(")) {
                 requireSymbol(")", "'new' constructor parameters");

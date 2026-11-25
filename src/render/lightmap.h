@@ -1,6 +1,8 @@
 #pragma once
 
+#include "core/gc.h"
 #include "engine/resources.h"
+#include "render/gl_handle.h"
 
 #include <cstdint>
 #include <functional>
@@ -8,7 +10,7 @@
 #include <vector>
 
 namespace dx {
-    class RenderDevice;
+    class GLRenderDevice;
 
     struct LightmapPlacement {
         int32_t page = -1;
@@ -76,7 +78,7 @@ namespace dx {
 
     class LightmapAtlas {
     public:
-        explicit LightmapAtlas(RenderDevice& renderDevice, int32_t size = 1024);
+        explicit LightmapAtlas(GLRenderDevice& renderDevice, int32_t size = 1024);
         ~LightmapAtlas();
         LightmapAtlas(const LightmapAtlas&) = delete;
         LightmapAtlas& operator=(const LightmapAtlas&) = delete;
@@ -89,6 +91,10 @@ namespace dx {
         uint32_t texture(int32_t page) const;
         void uploadFog(const BspSurf& surf, int32_t width, int32_t height, const std::vector<uint8_t>& bytes);
         uint32_t fogTexture(int32_t page) const;
+        // Stops animating the lights that are collected; the surfaces they lit are drawn on
+        // without them from the next animate. Its owner passes this on.
+        void objectsReleased(const gc::ReleasedSet& released);
+        bool holdsLight(const UObject* light) const;
 
     private:
         struct Page {
@@ -113,15 +119,15 @@ namespace dx {
         void store(UModel* model, size_t surfIndex, const Vector& ambient, float time, const LightmapTransform& transform, const std::vector<UObject*>* lights, LightmapPlacement& placement, int32_t variant, std::vector<int32_t>* surfAnimated);
         const LightmapPlacement* placementFor(int32_t lightMap, int32_t zone) const;
 
-        RenderDevice& device;
+        GLRenderDevice& device;
         int32_t PageSize = 1024;
         bool isBuilt = false;
         std::vector<LightmapPlacement> placements;
         std::vector<std::pair<uint64_t, LightmapPlacement>> variantPlacements;
         std::unordered_map<uint64_t, size_t> variantIndex;
         std::vector<Page> pages;
-        std::vector<uint32_t> textures;
-        std::vector<uint32_t> fogTextures;
+        std::vector<TextureHandle> textures;
+        std::vector<TextureHandle> fogTextures;
         std::vector<uint8_t> fogPixels;
         std::vector<Animated> animated;
     };

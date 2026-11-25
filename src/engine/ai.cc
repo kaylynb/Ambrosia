@@ -1,16 +1,19 @@
 #include "engine/ai.h"
 
+#include "core/crc.h"
+#include "core/gc.h"
+#include "core/log.h"
 #include "core/objects.h"
 #include "core/package_writer.h"
+#include "core/random.h"
 #include "core/vm.h"
 #include "engine/actor.h"
-#include "engine/reader.h"
+#include "core/reader.h"
 #include "engine/resources.h"
 #include "engine/world.h"
 
 #include <algorithm>
 #include <cctype>
-#include <chrono>
 #include <cmath>
 #include <map>
 #include <random>
@@ -28,13 +31,12 @@ namespace dx {
 
         World& world()
         {
-            return *World::current;
+            return World::active();
         }
 
         float randomFloat()
         {
-            static std::mt19937 generator(777);
-            return std::uniform_real_distribution<float>(0.0f, 1.0f)(generator);
+            return std::uniform_real_distribution<float>(0.0f, 1.0f)(random::engine(random::Stream::Ai));
         }
 
         bool alive(UObject* a)
@@ -50,23 +52,6 @@ namespace dx {
         UClass* eventClass(const char* name)
         {
             return objects::intrinsicClass(Name(name));
-        }
-
-        const uint32_t* crcTable()
-        {
-            static uint32_t table[256];
-            static bool built = false;
-            if (!built) {
-                for (uint32_t i = 0; i < 256; i++) {
-                    uint32_t value = i << 24;
-                    for (int bit = 0; bit < 8; bit++) {
-                        value = (value & 0x80000000u) ? (value << 1) ^ 0x04C11DB7u : value << 1;
-                    }
-                    table[i] = value;
-                }
-                built = true;
-            }
-            return table;
         }
 
         int compareEventNames(Name a, Name b)
@@ -474,7 +459,10 @@ namespace dx {
             for (const CheckResult& hit : hits) {
                 UObject* hitActor = hit.actor;
                 bool owned = false;
-                for (UObject* a = viewer; a; a = actor::Owner(a)) {
+                // The original walks the Owner chain unbounded and hangs on a cycle that script
+                // made; stop after 64 like the other chain walks.
+                int guard = 0;
+                for (UObject* a = viewer; a && guard < 64; a = actor::Owner(a), guard++) {
                     if (hitActor == a) {
                         owned = true;
                         break;
@@ -613,7 +601,7 @@ namespace dx {
 
     bool lineOfSightTo(UObject* self, UObject* other, bool showSelf, bool ignoreDistance)
     {
-        if (!other || other->destroyed || !World::current) {
+        if (!other || other->destroyed || !World::hasActive()) {
             return false;
         }
         UObject* enemy = pawn::Enemy(self);
@@ -630,8 +618,10 @@ namespace dx {
         float maxDistSq = 0;
         if (showSelf) {
             if (otherPawn) {
-                maxDistSq = pawn::SightRadius(self) * std::min(1.0f, static_cast<float>(pawn::Visibility(other)) * 0.0078125f);
-                maxDistSq = std::min(isPlayer ? 16000000.0f : 12000000.0f, maxDistSq * maxDistSq);
+                // APawn::LineOfSightTo multiplies in this order.
+                float visible = std::min(1.0f, static_cast<float>(pawn::Visibility(other)) * 0.0078125f);
+                maxDistSq = visible * pawn::SightRadius(self) * visible * pawn::SightRadius(self);
+                maxDistSq = std::min(isPlayer ? 16000000.0f : 12000000.0f, maxDistSq);
             } else {
                 maxDistSq = pawn::SightRadius(self) * pawn::SightRadius(self);
             }
@@ -743,11 +733,9 @@ namespace dx {
         return false;
     }
 
-    bool aiTimeBudget = true;
-
     uint32_t aiEventHash(Name eventName)
     {
-        const uint32_t* table = crcTable();
+        const std::array<uint32_t, 256>& table = crcTable;
         uint32_t crc = 0;
         for (const char* text = eventName.c_str(); *text; text++) {
             uint32_t c = static_cast<unsigned char>(*text);
@@ -762,10 +750,10 @@ namespace dx {
 
     UEventManager* aiEventManager()
     {
-        if (!World::current || !World::current->levelInfo) {
+        if (!World::hasActive() || !World::active().levelInfo) {
             return nullptr;
         }
-        return cast<UEventManager>(levelinfo::EventManager(World::current->levelInfo));
+        return cast<UEventManager>(levelinfo::EventManager(World::active().levelInfo));
     }
 
     void UAIEvent::serialize(Reader& reader, Linker& source)
@@ -799,7 +787,7 @@ namespace dx {
         active = reader.i32();
         lastScore = reader.f32();
         lastBestActor = source.readObject(reader);
-        lastSlot = reader.i32();
+        lastSlot = reader.i32() & 15;
         procNext = cast<UAIReceiverEvent>(source.readObject(reader));
         procPrev = cast<UAIReceiverEvent>(source.readObject(reader));
     }
@@ -818,7 +806,7 @@ namespace dx {
         level = cast<ULevel>(source.readObject(reader));
         refProcessing = reader.i32();
         deleteCount = reader.i32();
-        curSlot = reader.i32();
+        curSlot = reader.i32() & 15;
         processHead = cast<UAIReceiverEvent>(source.readObject(reader));
         for (UAIEventType*& bucket : hash) {
             bucket = cast<UAIEventType>(source.readObject(reader));
@@ -1000,11 +988,9 @@ namespace dx {
         World& w = world();
         int32_t processed = 0;
         refProcessing++;
-        auto start = std::chrono::steady_clock::now();
         int32_t newSlot = (curSlot + 1) & 15;
         UAIReceiverEvent* receiver = processHead;
         while (receiver) {
-            bool scored = false;
             if (!receiver->deleted) {
                 if (deleting(receiver->actor)) {
                     safeDelete(receiver);
@@ -1039,13 +1025,12 @@ namespace dx {
                         candidates[count++] = sender;
                     }
                     if (count >= MaxCandidates) {
-                        std::fprintf(stderr, "*** WARNING: Greater than %d objects emitting event \"%s\"! (Some events will be dropped)\n", MaxCandidates - 1, type->name.c_str());
+                        log::warn("DevAI", "*** WARNING: Greater than {} objects emitting event \"{}\"! (Some events will be dropped)", MaxCandidates - 1, type->name.str());
                         break;
                     }
                 }
                 UAISenderEvent* best = nullptr;
                 if (count > 0) {
-                    scored = true;
                     if (count > 1) {
                         std::sort(candidates, candidates + count, [](const UAISenderEvent* a, const UAISenderEvent* b) {
                             if (a->score != b->score) {
@@ -1092,9 +1077,9 @@ namespace dx {
                 receiver->lastBestActor = bestActor;
             }
             processed++;
-            if (scored && aiTimeBudget && std::chrono::steady_clock::now() - start > std::chrono::milliseconds(2)) {
-                break;
-            }
+            // The original stops scoring after 2 ms of real time, leaving the rest of the
+            // receivers for a later tick; every receiver is scored here, so play does not
+            // depend on how fast the machine is.
             receiver = receiver->procNext;
             if (receiver == processHead) {
                 receiver = nullptr;
@@ -1116,23 +1101,8 @@ namespace dx {
                 }
             }
         });
-        UAIReceiverEvent* first = firstProcess();
-        receiver = first;
-        int32_t dropped = 0;
-        while (receiver) {
-            if (!receiver->deleted && receiver->lastSlot == newSlot) {
-                receiver->lastSlot = (newSlot + 1) & 15;
-                dropped++;
-            }
-            receiver = receiver->procNext;
-            if (receiver == first) {
-                break;
-            }
-        }
-        if (dropped > 0) {
-            std::fprintf(stderr, "*** WARNING: Event manager not cycling quickly enough.  %d events have been dropped.\n", dropped);
-            std::fprintf(stderr, "             There may be too many events occurring on this level.\n");
-        }
+        // The original also drops the oldest slot of any receiver 16 ticks behind, with an "Event
+        // manager not cycling quickly enough" warning; with every receiver scored each tick none is.
         receiver = processHead;
         int32_t index = 0;
         while (receiver) {
@@ -1182,6 +1152,7 @@ namespace dx {
                 if (event->deleted) {
                     *link = event->next;
                     objects::destroyObject(event);
+                    unlinked.push_back(event);
                     deleteCount--;
                 } else {
                     link = &event->next;
@@ -1217,10 +1188,62 @@ namespace dx {
         });
     }
 
+    // CleanupSlot deletes each event it unlinks. Nothing but the lists held
+    // them, and no event is ever another object's outer, so they go without anything being
+    // looked through.
+    void UEventManager::releaseUnlinked()
+    {
+        // During a collection freeing does nothing; the events wait for the next tick.
+        if (refProcessing != 0 || unlinked.empty() || gc::isCollecting()) {
+            return;
+        }
+        std::vector<UObject*> events(unlinked.begin(), unlinked.end());
+        unlinked.clear();
+        gc::freeObjects(events, false);
+    }
+
     void UEventManager::tick()
     {
         process();
         cleanupEvents();
+        releaseUnlinked();
+    }
+
+    void UAIEvent::addReferences(ReferenceVisitor& references)
+    {
+        UObject::addReferences(references);
+        references(type);
+        references(actor);
+        references(next);
+    }
+
+    void UAIReceiverEvent::addReferences(ReferenceVisitor& references)
+    {
+        UAIEvent::addReferences(references);
+        references(lastBestActor);
+        references(params.bestActor);
+        references(procNext);
+        references(procPrev);
+    }
+
+    void UAIEventType::addReferences(ReferenceVisitor& references)
+    {
+        UObject::addReferences(references);
+        references(senders);
+        references(receivers);
+        references(nextType);
+    }
+
+    void UEventManager::addReferences(ReferenceVisitor& references)
+    {
+        UObject::addReferences(references);
+        references(level);
+        references(processHead);
+        for (UAIEventType*& bucket : hash) {
+            references(bucket);
+        }
+        references(unlinked);
+        std::erase(unlinked, nullptr);
     }
 
     void aiReferences(UObject* object, const std::function<void(UObject*)>& visit)
@@ -1345,6 +1368,7 @@ namespace dx {
 
     void registerAINatives()
     {
+        gc::reportsReferences<UAIEvent, UAISenderEvent, UAIReceiverEvent, UAIEventType, UEventManager>();
         vm::registerNative(700, nativeGetLightLevel);
         vm::registerNative(701, nativeVisibility);
         vm::registerNative(710, nativeSetEventCallback);

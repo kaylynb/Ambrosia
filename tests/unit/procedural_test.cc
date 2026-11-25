@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/mesh.h"
 #include "engine/props_engine.h"
 #include "engine/props_fire.h"
@@ -12,7 +14,7 @@
 namespace {
     dx::UTexture* loadEffect(const char* name, const char* className)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::Linker* linker = dx::objects::loadPackage(dx::Name("Effects"));
         REQUIRE(linker != nullptr);
         int32_t ref = linker->findExport(dx::Name(name), dx::Name(className), "*");
@@ -233,7 +235,7 @@ TEST_CASE("undisturbed wave texture shades every pixel with the flat surface lig
 namespace {
     dx::UTexture* makeTexture(const char* className, uint32_t size, const std::vector<uint8_t>& pixels)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UClass* cls = dx::objects::findClass(className);
         REQUIRE(cls != nullptr);
         dx::UObject* object = dx::objects::newObject(cls, dx::objects::packageObject(dx::Name("Transient")), dx::Name(), 0);
@@ -375,7 +377,7 @@ TEST_CASE("a wet texture refracts the live frame of a procedural source", "[data
     CHECK(differentFrames > 0);
 }
 
-TEST_CASE("procedural textures with no frame rate limit can be capped at 60 steps per second", "[data]")
+TEST_CASE("with steady frame timing, procedural textures with no frame rate limit step 60 times a second", "[data]")
 {
     SinglePulseFire setup(0, 0, 0, 10);
     std::vector<uint8_t> rgba;
@@ -402,4 +404,68 @@ TEST_CASE("procedural textures with no frame rate limit can be capped at 60 step
         }
     }
     CHECK(cappedSteps == 60);
+}
+
+TEST_CASE("with steady frame timing, a procedural texture ends a second in the same state at a low frame rate as at a high one", "[data]")
+{
+    // 64 steps a second and frames of 1/16 and 1/512 of a second are exact in binary, so
+    // both runs take exactly 64 steps.
+    auto run = [](int framesPerSecond) {
+        SinglePulseFire setup(0, 0, 0, 10);
+        std::vector<uint8_t> rgba;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        dx::ProceduralTextures textures;
+        textures.setConstantRate(64.0f);
+        REQUIRE(textures.update(setup.fire, 1.0, rgba, width, height));
+        for (int i = 1; i <= framesPerSecond; i++) {
+            textures.update(setup.fire, 1.0 + static_cast<double>(i) / framesPerSecond, rgba, width, height);
+        }
+        return rgba;
+    };
+    std::vector<uint8_t> slow = run(16);
+    std::vector<uint8_t> fast = run(512);
+    REQUIRE(!slow.empty());
+    CHECK(slow == fast);
+}
+
+TEST_CASE("with steady frame timing, a procedural texture with a frame rate of its own steps at exactly that rate", "[data]")
+{
+    // 32 steps a second, exact in binary. At 8 fps that is 4 steps a frame, which the
+    // original's one step a frame could not do; at 1024 fps it is one step every 32 frames.
+    // Either way the texture ends the second in the same state.
+    auto run = [](int framesPerSecond) {
+        SinglePulseFire setup(0, 0, 0, 10);
+        dx::texture::MaxFrameRate(setup.fire) = 32.0f;
+        dx::texture::MinFrameRate(setup.fire) = 0.0f;
+        std::vector<uint8_t> rgba;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        dx::ProceduralTextures textures;
+        textures.setConstantRate(60.0f);
+        textures.update(setup.fire, 1.0, rgba, width, height);
+        for (int i = 1; i <= framesPerSecond; i++) {
+            textures.update(setup.fire, 1.0 + static_cast<double>(i) / framesPerSecond, rgba, width, height);
+        }
+        return rgba;
+    };
+    std::vector<uint8_t> slow = run(8);
+    std::vector<uint8_t> fast = run(1024);
+    REQUIRE(!slow.empty());
+    CHECK(slow == fast);
+    // And not the same as stepping at the steady rate for textures without one.
+    auto unlimited = [] {
+        SinglePulseFire setup(0, 0, 0, 10);
+        std::vector<uint8_t> rgba;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        dx::ProceduralTextures textures;
+        textures.setConstantRate(60.0f);
+        textures.update(setup.fire, 1.0, rgba, width, height);
+        for (int i = 1; i <= 128; i++) {
+            textures.update(setup.fire, 1.0 + i / 128.0, rgba, width, height);
+        }
+        return rgba;
+    };
+    CHECK(unlimited() != fast);
 }

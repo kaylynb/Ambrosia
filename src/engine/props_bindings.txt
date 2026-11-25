@@ -1,0 +1,1167 @@
+# Property bindings the engine's C++ reads from script objects.
+#
+# List only properties C++ actually reads. Every entry is checked against the
+# loaded packages, so an unused one only stops modded packages from loading,
+# packages the original engine would load because it never relied on that layout.
+#
+# `ucc genprops src/engine/props_bindings.txt src/engine` regenerates
+# src/engine/props_<file>.h and .cc from this list and the loaded packages.
+# The generated files are checked in; regenerate after editing this list.
+#
+# Each property's type, element size and array length come from the loaded
+# package. A script struct gets a typed accessor only when it has a C++
+# mirror below; any other struct gets a raw uint8_t* accessor.
+#
+#   mirror <script struct> <C++ type>
+#   file <name>                        starts props_<name>.h/.cc
+#   class <Package.Class> [as <ns>]    namespace defaults to the lowercase class name
+#       <Property> [optional]          optional: the package may lack it
+#
+# Each generated entry records the kind, element size and array length its
+# accessor assumes; bindAllProps (src/engine/props_bind.h) checks them against
+# the loaded property at startup and after an editor compile, and fails on a
+# missing class, a missing required property or any mismatch. An optional
+# property the package lacks binds as PropAbsent and its accessor returns a
+# pointer that is null then; required accessors return references.
+
+mirror Vector Vector
+mirror Rotator Rotator
+mirror Color Color
+mirror Plane Plane
+mirror Coords Coords
+
+file engine
+
+class Engine.Actor
+    bStatic
+    bHidden
+    bNoDelete
+    bAnimFinished
+    bAnimLoop
+    bAnimNotify
+    bAnimByOwner
+    bDeleteMe
+    bTicked
+    bLightChanged
+    bDynamicLight
+    bTimerLoop
+    bCollideWhenPlacing
+    bTravel
+    bMovable
+    bStasis
+    bForceStasis
+    bIsPawn
+    bTrailerSameRotation
+    bTrailerPrePivot
+    bBlockSight
+    bDetectable
+    bTransient
+    Physics
+    Role
+    LastRenderTime
+    DistanceFromPlayer
+    Owner
+    Group
+    TimerRate
+    TimerCounter
+    LifeSpan
+    AnimSequence
+    AnimFrame
+    AnimRate
+    TweenRate
+    LODBias
+    BlendAnimSequence
+    BlendAnimFrame
+    BlendAnimRate
+    BlendTweenRate
+    Level
+    XLevel
+    Tag
+    Event
+    Target
+    Instigator
+    Inventory
+    Base
+    Region
+    AttachTag
+    StandingCount
+    LatentFloat
+    Touching
+    LightingTag
+    ExtraTag
+    SpecialTag
+    Location
+    Rotation
+    OldLocation
+    Velocity
+    Acceleration
+    bHiddenEd
+    DrawType
+    Style
+    Sprite
+    Texture
+    Skin
+    Mesh
+    Brush
+    DrawScale
+    PrePivot
+    ScaleGlow
+    AmbientGlow
+    bUnlit
+    bParticles
+    bOwnerNoSee
+    bOnlyOwnerSee
+    bAlwaysTick
+    MultiSkins
+    SoundRadius
+    SoundVolume
+    SoundPitch
+    AmbientSound
+    TransientSoundVolume
+    TransientSoundRadius
+    CollisionRadius
+    CollisionHeight
+    bCollideActors
+    bCollideWorld
+    bBlockActors
+    bBlockPlayers
+    bProjTarget
+    LightType
+    LightEffect
+    LightBrightness
+    LightHue
+    LightSaturation
+    LightRadius
+    LightPeriod
+    LightPhase
+    LightCone
+    VolumeBrightness
+    VolumeRadius
+    bSpecialLit
+    bCorona
+    bBounce
+    bFixedRotationDir
+    bRotateToDesired
+    bInterpolating
+    bJustTeleported
+    Mass
+    Buoyancy
+    RotationRate
+    DesiredRotation
+    PhysAlpha
+    PhysRate
+    PendingTouch
+    AnimLast
+    AnimMinRate
+    OldAnimRate
+    BlendAnimLast
+    BlendAnimMinRate
+    OldBlendAnimRate
+    BindName
+    BarkBindName
+    VisUpdateTime
+    CurrentVisibility
+    LastVisibility
+    RenderIteratorClass
+    RenderInterface
+
+class Engine.Pawn
+    bBehindView
+    bIsPlayer
+    bIsWalking
+    bHitSlopedWall
+    bCanStrafe
+    bReducedSpeed
+    bCanJump
+    bCanWalk
+    bCanSwim
+    bCanFly
+    bCanOpenDoors
+    bCanDoSpecial
+    bLOSflag
+    bFromWall
+    bHunting
+    bJumpOffPawn
+    bShootSpecial
+    bAdvancedTactics
+    bViewTarget
+    bCanGlide
+    SightCounter
+    PainTime
+    SpeechTime
+    AvgPhysicsTime
+    FootRegion
+    HeadRegion
+    MoveTimer
+    MoveTarget
+    FaceTarget
+    Destination
+    Focus
+    DesiredSpeed
+    MaxDesiredSpeed
+    MeleeRange
+    GroundSpeed
+    WaterSpeed
+    AirSpeed
+    AccelRate
+    JumpZ
+    MaxStepHeight
+    AirControl
+    MinHitWall
+    Visibility
+    Alertness
+    Stimulus
+    SightRadius
+    PeripheralVision
+    HearingThreshold
+    LastSeenPos
+    LastSeeingPos
+    LastSeenTime
+    Enemy
+    Weapon
+    ViewRotation
+    BaseEyeHeight
+    EyeHeight
+    Floor
+    FovAngle
+    Health
+    ReducedDamageType
+    Skill
+    SpecialGoal
+    SpecialPause
+    noise1spot
+    noise1time
+    noise1loudness
+    noise2spot
+    noise2time
+    noise2loudness
+    nextPawn
+    bDuck
+    bFire
+    RouteCache
+    PlayerReplicationInfo
+    bIsSpeaking
+    nextPhoneme
+    bOnFire
+    burnTimer
+    AIHorizontalFov
+    AspectRatio
+    MinAngularSize
+    VisibilityThreshold
+    Alliance
+    AIAddViewRotation
+
+class Engine.PlayerPawn
+    Player
+    ViewTarget
+    FlashScale
+    FlashFog
+    myHUD
+    DesiredFlashScale
+    DesiredFlashFog
+    Song
+    SongSection
+    Transition
+    bShowMenu
+    bPressedJump
+    bCheatsEnabled
+    aBaseY
+    aForward
+    aUp
+
+class Engine.LevelInfo
+    TimeDilation
+    TimeSeconds
+    Year
+    Month
+    Day
+    DayOfWeek
+    Hour
+    Minute
+    Second
+    Pauser
+    bBegunPlay
+    bPlayersOnly
+    bHighDetailMode
+    bStartup
+    Brightness
+    DefaultTexture
+    LevelAction
+    ComputerName
+    EngineVersion
+    MinNetVersion
+    DefaultGameType
+    Game
+    NavigationPointList
+    PawnList
+    EventManager
+
+class Engine.ZoneInfo
+    ZoneGravity
+    ZoneVelocity
+    ZoneGroundFriction
+    ZoneFluidFriction
+    ZoneTerminalVelocity
+    DamageType
+    SkyZone
+    bWaterZone
+    bFogZone
+    bPainZone
+    bBounceVelocity
+    AmbientBrightness
+    AmbientHue
+    AmbientSaturation
+    EnvironmentMap
+    TexUPanSpeed
+    TexVPanSpeed
+    bReverbZone
+    bRaytraceReverb
+    SpeedOfSound
+    MasterGain
+    CutoffHz
+    Delay
+    Gain
+
+class Engine.WarpZoneInfo
+    OtherSideURL
+    ThisTag
+    iWarpZone
+    WarpCoords
+
+class Engine.GameInfo
+    bTeamGame
+
+class Engine.Brush
+    CsgOper
+    MainScale
+    PostScale
+    PolyFlags
+
+class Engine.Mover
+    MoverGlideType
+    KeyNum
+    WorldRaytraceKey
+    BrushRaytraceKey
+    bDynamicLightMover
+    KeyPos
+    KeyRot
+    BasePos
+    OldPos
+    SavedPos
+    BaseRot
+    OldRot
+    SavedRot
+    bPlayerOnly
+
+class Engine.NavigationPoint
+    upstreamPaths
+    Paths
+    PrunedPaths
+    VisNoReachPaths
+    visitedWeight
+    bestPathWeight
+    nextNavigationPoint
+    nextOrdered
+    prevOrdered
+    startPath
+    previousPath
+    cost
+    ExtraCost
+    bPlayerOnly
+    bEndPoint
+    bSpecialCost
+    bOneWayPath
+
+class Engine.Inventory
+    ThirdPersonMesh
+    ThirdPersonScale
+    MaxDesireability
+    myMarker
+
+class Engine.Weapon
+    AmmoType
+
+class Engine.Projectile
+    MaxSpeed
+
+class Engine.Decoration
+    bPushable
+    bBobbing
+    numLandings
+
+class Engine.Canvas
+    Font
+    SpaceX
+    OrgX
+    OrgY
+    ClipX
+    ClipY
+    CurX
+    CurY
+    Style
+    CurYL
+    DrawColor
+    bCenter
+    bNoSmooth
+    SizeX
+    SizeY
+    Viewport
+
+class Engine.Console
+    Viewport
+    TypedStr
+    TopLine
+    MsgText
+    ConsoleLines
+    ConsolePos
+    FrameX
+    FrameY
+    bTyping
+
+class Engine.Bitmap
+    Format
+    Palette
+    UBits
+    VBits
+    USize
+    VSize
+    UClamp
+    VClamp
+    MipZero
+
+class Engine.Texture
+    DetailTexture
+    MacroTexture
+    DrawScale
+    Friction
+    bInvisible
+    bMasked
+    bTransparent
+    bNotSolid
+    bEnvironment
+    bSemisolid
+    bModulate
+    bFakeBackdrop
+    bTwoSided
+    bAutoUPan
+    bAutoVPan
+    bNoSmooth
+    bBigWavy
+    bSmallWavy
+    bWaterWavy
+    bCloudWavy
+    bUnlit
+    bMirrored
+    bRealtime
+    bParametric
+    AnimNext
+    PrimeCount
+    MinFrameRate
+    MaxFrameRate
+
+class Engine.Player
+    Actor
+    Console
+
+class Engine.PlayerReplicationInfo
+    PlayerName
+    Team
+
+class Engine.Decal
+    MultiDecalLevel
+    LastRenderedTime
+
+class Engine.Teleporter
+    URL
+
+class Engine.Carcass
+    bSlidingCarcass
+
+class Engine.Ammo
+    AmmoAmount
+
+file fire
+
+class Fire.FractalTexture
+    GlobalPhase
+    DrawPhase
+    AuxPhase
+
+class Fire.FireTexture
+    SparkType
+    RenderHeat
+    bRising
+    FX_Heat
+    FX_Size
+    FX_AuxSize
+    FX_Area
+    FX_Frequency
+    FX_Phase
+    FX_HorizSpeed
+    FX_VertSpeed
+    DrawMode
+    SparksLimit
+    NumSparks
+    StarStatus
+    PenDownX
+    PenDownY
+
+class Fire.WaterTexture
+    DropType
+    WaveAmp
+    FX_Frequency
+    FX_Phase
+    FX_Size
+    FX_Depth
+    NumDrops
+    Drops
+
+class Fire.WaveTexture
+    BumpMapLight
+    BumpMapAngle
+    PhongRange
+    PhongSize
+
+class Fire.WetTexture
+    SourceTexture
+
+class Fire.IceTexture
+    GlassTexture
+    SourceTexture
+    PanningStyle
+    TimeMethod
+    HorizPanSpeed
+    VertPanSpeed
+    Frequency
+    Amplitude
+    MoveIce
+    MasterCount
+    UDisplace
+    VDisplace
+    UPosition
+    VPosition
+    TickAccu
+
+file extension
+
+class Extension.Window
+    parentOwner
+    bIsVisible
+    bIsSensitive
+    bIsSelectable
+    bIsInitialized
+    bBeingDestroyed
+    bDrawRawBackground
+    bStretchBackground
+    bSmoothBackground
+    backgroundStyle
+    TextColor
+    normalFont
+    boldFont
+    textVSpacing
+    tileColor
+    bSpecialText
+    bTextTranslucent
+    X
+    Y
+    Width
+    Height
+    winHAlign
+    winVAlign
+    hMargin0
+    hMargin1
+    vMargin0
+    vMargin1
+    hardcodedWidth
+    hardcodedHeight
+    acceleratorKey
+    bNeedsReconfigure
+    bNeedsQuery
+    bConfigured
+    lastQueryWidth
+    lastQueryHeight
+    bTickEnabled
+    Background
+    defaultCursor
+    defaultCursorShadow
+    defaultHotX
+    defaultHotY
+    defaultCursorColor
+    focusSound
+    unfocusSound
+    visibleSound
+    invisibleSound
+    SoundVolume
+    clientObject
+    winParent
+    firstChild
+    lastChild
+    prevSibling
+    nextSibling
+
+class Extension.Flag
+    FlagName
+    flagHash
+    FlagBase
+    nextFlag
+    flagType
+    expiration
+
+class Extension.GC
+    Style
+    bSmoothed
+    bDrawEnabled
+    bMasked
+    bTranslucent
+    bModulated
+    bTextTranslucent
+    PolyFlags
+    textPolyFlags
+    tileColor
+    TextColor
+    normalFont
+    boldFont
+    underlineHeight
+    baselineOffset
+    textVSpacing
+    HAlign
+    VAlign
+    bWordWrap
+    bParseMetachars
+
+class Extension.ButtonWindow
+    bButtonPressed
+    bMousePressed
+    bAutoRepeat
+    bEnableRightMouseClick
+    activateDelay
+    initialDelay
+    repeatRate
+    curTexture
+    curTileColor
+    curTextColor
+    pressSound
+    clickSound
+    lastInputKey
+
+class Extension.TextWindow
+    HAlign
+    VAlign
+    bWordWrap
+    bTextIsAccelerator
+    hMargin
+    vMargin
+    minLines
+    MaxLines
+    MinWidth
+    Text
+
+class Extension.ScaleWindow
+    orientation
+    scaleTexture
+    thumbTexture
+    tickTexture
+    preCapTexture
+    postCapTexture
+    bRepeatScaleTexture
+    bRepeatThumbTexture
+    bDrawEndTicks
+    bStretchScale
+    bSpanThumb
+    borderPattern
+    scaleBorderSize
+    thumbBorderSize
+    scaleBorderColor
+    thumbBorderColor
+    scaleStyle
+    thumbStyle
+    tickStyle
+    scaleColor
+    thumbColor
+    tickColor
+    scaleWidth
+    scaleHeight
+    ThumbWidth
+    ThumbHeight
+    tickWidth
+    tickHeight
+    preCapWidth
+    preCapHeight
+    postCapWidth
+    postCapHeight
+    startOffset
+    endOffset
+    marginWidth
+    marginHeight
+    numPositions
+    currentPos
+    spanRange
+    thumbStep
+    fromValue
+    toValue
+    valueFmt
+    initialDelay
+    repeatRate
+    initialPos
+    setSound
+    clickSound
+    dragSound
+    scaleX
+    scaleY
+    scaleW
+    scaleH
+    thumbX
+    thumbY
+    thumbW
+    thumbH
+    tickX
+    tickY
+    tickW
+    tickH
+    preCapXOff
+    preCapYOff
+    preCapW
+    preCapH
+    postCapXOff
+    postCapYOff
+    postCapW
+    postCapH
+    absStartScale
+    absEndScale
+    bDraggingThumb
+
+class Extension.RootWindow
+    parentPawn
+    MouseX
+    MouseY
+    prevMouseX
+    prevMouseY
+    lastMouseWindow
+    bMouseMoved
+    bMouseMoveLocked
+    bMouseButtonLocked
+    bCursorVisible
+    defaultEditCursor
+    DefaultMoveCursor
+    defaultHorizontalMoveCursor
+    defaultVerticalMoveCursor
+    defaultTopLeftMoveCursor
+    defaultTopRightMoveCursor
+    bPositionalSound
+    grabbedWindow
+    FocusWindow
+    bRender
+    bStretchRawBackground
+    renderX
+    renderY
+    renderWidth
+    renderHeight
+    rawBackground
+    rawBackgroundWidth
+    rawBackgroundHeight
+    rawColor
+    multiClickTimeout
+    maxMouseDist
+    clickCount
+    snapshotWidth
+    snapshotHeight
+    bShowStats
+    bShowFrames
+
+class Extension.ToggleWindow
+    enableSound
+    disableSound
+
+class Extension.ModalWindow
+    focusMode
+    preferredFocus
+    bDirtyAccelerators
+
+class Extension.PlayerPawnExt
+    FlagBase
+    RootWindow
+    actorCount
+
+class Extension.FlagBase
+    hashTable
+    defaultFlagExpiration
+
+class Extension.LargeTextWindow
+    vSpace
+
+class Extension.ScaleManagerWindow
+    decButton
+    incButton
+    valueField
+    Scale
+    orientation
+    bStretchScaleField
+    bStretchValueField
+    marginWidth
+    marginHeight
+    Spacing
+    childHAlign
+    childVAlign
+
+class Extension.EditWindow
+    bEditable
+    bSingleLine
+    bUppercaseOnly
+    insertPos
+    insertHookPos
+    insertType
+    selectStart
+    selectEnd
+    maxSize
+    insertTexture
+    insertColor
+    selectTexture
+    selectColor
+    inverseColor
+    editCursor
+    editCursorShadow
+    editCursorColor
+    typeSound
+    deleteSound
+    enterSound
+    moveSound
+    maxUndos
+    dragDelay
+    blinkStart
+    blinkPeriod
+    bCursorShowing
+    bDragging
+    bSelectWords
+    insertPrefWidth
+    insertPrefHeight
+    insertPreferredCol
+
+class Extension.ClipWindow
+    childH
+    childV
+    prefHUnits
+    prefVUnits
+    bForceChildWidth
+    bForceChildHeight
+    bSnapToUnits
+    bFillWindow
+    areaHSize
+    areaVSize
+    childHSize
+    childVSize
+    hMult
+    vMult
+
+class Extension.BorderWindow
+    borderLeft
+    borderTopLeft
+    borderTop
+    borderTopRight
+    borderRight
+    borderBottomRight
+    borderBottom
+    borderBottomLeft
+    center
+    MoveCursor
+    hMoveCursor
+    vMoveCursor
+    tlMoveCursor
+    trMoveCursor
+    borderStyle
+    bSmoothBorder
+    bResizeable
+    bMarginsFromBorder
+    childLeftMargin
+    childRightMargin
+    childTopMargin
+    childBottomMargin
+
+class Extension.CheckboxWindow
+    toggleOff
+    toggleOn
+    textureWidth
+    textureHeight
+    checkboxSpacing
+    bRightSide
+    checkboxStyle
+    checkboxColor
+
+class Extension.ComputerWindow
+    eventTimeInterval
+    timeNextEvent
+    timeLastEvent
+    timeCurrent
+    fadeSpeed
+    throttle
+    fadeOutTimer
+    fadeOutStart
+    textCols
+    textRows
+    textFont
+    fontWidth
+    fontHeight
+    FontColor
+    textSound
+    typingSound
+    computerSoundVolume
+    bWordWrap
+    bLastLineWrapped
+    bInvokeComputerStart
+    bComputerStartInvoked
+    bFirstTick
+    cursorTexture
+    cursorColor
+    cursorWidth
+    cursorHeight
+    cursorBlinkSpeed
+    bCursorVisible
+    bShowCursor
+    cursorNextEvent
+    colGraphicTile
+    TextX
+    TextY
+    inputKey
+    inputMask
+    bWaitingForKey
+    bEchoKey
+    bPauseProcessing
+    bIgnoreTick
+    bGamePaused
+    bIgnoreGamePaused
+
+class Extension.ListWindow
+    Delimiter
+    highlightTexture
+    focusTexture
+    highlightColor
+    focusColor
+    focusThickness
+    bAutoSort
+    bAutoExpandColumns
+    bMultiSelect
+    rowMargin
+    bHotKeys
+    hotKeyCol
+    lineSize
+    ActivateSound
+    moveSound
+    numSelected
+    focusLine
+    anchorLine
+    lastIndex
+    hotKeyString
+    hotKeyTimer
+
+class Extension.RadioBoxWindow
+    bOneCheck
+    currentSelection
+
+class Extension.ScrollAreaWindow
+    hScaleMgr
+    vScaleMgr
+    hScale
+    vScale
+    LeftButton
+    RightButton
+    UpButton
+    DownButton
+    ClipWindow
+    marginWidth
+    marginHeight
+    scrollbarDistance
+    bHideScrollbars
+    bHLastShow
+    bVLastShow
+
+class Extension.ExtString
+    speechPage
+    Text
+
+class Extension.TextLogWindow
+    textTimeout
+    bTooTall
+    bPaused
+
+class Extension.TileWindow
+    orientation
+    hDirection
+    vDirection
+    hMargin
+    vMargin
+    minorSpacing
+    majorSpacing
+    hChildAlign
+    vChildAlign
+    bWrap
+    bFillParent
+    bEqualWidth
+    bEqualHeight
+
+class Extension.ViewportWindow
+    bEnableViewport
+    bClearZ
+    bShowActor
+    bShowWeapons
+    bUseViewRotation
+    bUseEyeHeight
+    bWatchEyeHeight
+    FOV
+    DefaultTexture
+    DefaultColor
+    originActor
+    watchActor
+    Location
+    relLocation
+    Rotation
+    relRotation
+    lastLocation
+    lastRotation
+
+file consys
+
+class ConSys.ConEvent
+    eventType
+    nextEvent
+
+class ConSys.ConEventSpeech
+    speaker
+    speakerName
+    speakingTo
+    speakingToName
+
+class ConSys.ConFlagRef
+    FlagName
+    Value
+
+class ConSys.Conversation
+    bFirstPerson
+    eventList
+    audioPackageName
+
+class ConSys.ConEventRandomLabel
+    bCycleEvents
+    bCycleOnce
+    bCycleRandom
+    cycleIndex
+    bLabelsCycled
+
+class ConSys.ConEventAnimation
+    eventOwner
+    eventOwnerName
+
+class ConSys.ConEventTransferObject
+    fromActor
+    fromName
+    toActor
+    toName
+
+class ConSys.ConEventTrade
+    eventOwner
+    eventOwnerName
+
+class ConSys.ConEventMoveCamera
+    cameraActor
+    cameraActorName
+
+file deusex
+
+class DeusEx.DeusExPlayer
+    saveCount
+    saveTime
+
+class DeusEx.ScriptedPawn
+    CarcassCheckTimer
+    PotentialEnemyAlliance
+    PotentialEnemyTimer
+    BeamCheckTimer
+    bAlliancesChanged
+    ReloadTimer
+    DesiredPrePivot
+    PrePivotTime
+    bCanBleed
+    BleedRate
+    DropCounter
+    ClotPeriod
+    bLikesNeutral
+    AgitationDecayRate
+    AgitationTimer
+    AgitationCheckTimer
+    PlayerAgitationTimer
+    FearSustainTime
+    FearDecayRate
+    FearTimer
+    FearLevel
+    AlarmTimer
+    WeaponTimer
+    FireTimer
+    SpecialTimer
+    bDisappear
+    bReverseAlliances
+    bTickVisibleOnly
+    bClearedObstacle
+    TurnDirection
+    NextDirection
+    ActorAvoiding
+    AvoidWallTimer
+    AvoidBumpTimer
+    ObstacleTimer
+    TakeHitTimer
+    BurnPeriod
+    FutzTimer
+    DistressTimer
+    bHasCloak
+    CloakThreshold
+    CloakEMPTimer
+    Carcasses
+    NumCarcasses
+
+class DeusEx.DeusExSaveInfo
+    DirectoryIndex
+    Description
+    MissionLocation
+    MapName
+    Snapshot
+    saveCount
+    saveTime
+    bCheatsEnabled
+
+class DeusEx.GameDirectory
+    gameDirectoryType
+    currentFilter
+    tempSaveInfo
+
+class DeusEx.ParticleIterator
+    nextFreeParticle
+    proxy
+    bOwnerUsesGravity optional
+    bOwnerScales optional
+    bOwnerFades optional
+    OwnerZoneGravity optional
+    OwnerRiseRate optional
+    OwnerLifeSpan optional
+    OwnerDrawScale optional
+
+class DeusEx.DeusExLevelInfo
+    MissionLocation
+    missionNumber
+    ConversationPackage optional
+
+class DeusExText.DeusExTextParser
+    Text
+    textPos
+    tagEndPos
+    lastText
+    lastTag
+    lastName
+    lastColor
+    DefaultColor
+    bParagraphStarted
+    PlayerName
+    playerFirstName
+    lastEmailName
+    lastEmailSubject
+    lastEmailFrom
+    lastEmailTo
+    lastEmailCC
+    lastFileName
+    lastFileDescription

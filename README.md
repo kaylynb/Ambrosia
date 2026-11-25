@@ -1,151 +1,152 @@
-# OpenDE
+# Ambrosia
+
+<img src="assets/icon/ambrosia/64.png" alt="">
 
 An open-source reimplementation of the Deus Ex engine and UnrealEd. It runs
 the original game's UnrealScript bytecode from the shipped `.u` packages on a
-new C++ engine built on SDL2 and OpenGL 3.3.
+new C++ engine built on SDL3 and OpenGL 3.3.
+
+Ambrosia is a fork of [OpenDE](https://github.com/jarmitage99/OpenDE) by
+jarmitage99.
 
 The original game data is required and is not included.
 
+[BUILD.md](BUILD.md) describes building and testing on Windows and Linux.
+
 ## Features
 
-- Runs natively on Linux, Windows, macOS and in the browser
-- Widescreen support with Hor+ field of view
-- imgui-based editor
-- Anisotropic filtering, trilinear filtering
-- MSAA and FXAA
-- Smooth lighting: bicubic filtering of lightmaps
-- Detail textures visible at longer distances
+- Borderless fullscreen.
+- Widescreen support with Hor+ field of view.
+- [Extensive gamepad support](#gamepads).
+- 3D headphone audio (HRTF) on 64-bit Windows and Linux.
+- Many effects are no longer tied to framerate (texture animations, flickering lights, electrical arcs, etc.).
+- [Automatic login and keypad entry](#computers-and-keypads).
+- [A bunch of fixes](#other-fixes).
 
-## Requirements
+## Game Data
 
-Debian/Ubuntu with:
+Game data is searched for in this order:
+- `DEUSEX_GAME_DATA` environment variable.
+- `game-data` directory next to executable.
+- Windows: `%LOCALAPPDATA%\Ambrosia\game-data`, then `%PROGRAMDATA%\Ambrosia\game-data`
+- Linux: `$XDG_DATA_HOME/ambrosia/game-data` (`~/.local/share/ambrosia/game-data` when
+  unset), then `ambrosia/game-data` in each folder of `$XDG_DATA_DIRS`.
+  (`/usr/local/share` and `/usr/share` when unset).
+- Deus Ex in each Steam library (`steamapps/common/Deus Ex`).
 
-    $ sudo apt install build-essential cmake pkg-config libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxkbcommon-dev libgl-dev libegl-dev libasound2-dev libpulse-dev libwayland-dev wayland-protocols libdecor-0-dev libssl-dev
+The game data directory is never modified by Ambrosia.
 
-Every other library dependency is vendored in `vendor/` and built with the project.
+### Deus Ex Versions & Mods
+I have only tested on the GOTY Steam release.
+Only partial and spot checks; not an entire playthrough.
 
-## Game data
+I've also tested with:
 
-Copy the contents of an installed Deus Ex (GOTY 1112fm) into `game-data/`, so
-that `game-data/System`, `game-data/Maps`, `game-data/Textures`,
-`game-data/Sounds` and `game-data/Music` exist. Another location can be given
-at configure time with `-DDEUSEX_GAME_DATA=/path/to/deusex`.
+- [DXM's Deus Ex Maps Patch](https://www.dxm.be/navigator.php?lang=en&content=202)
+- [Confix/LDDP](https://www.moddb.com/mods/confix)
 
-The Deus Ex demo (version 1002f) works too, for example
-`DEUSEX_GAME_DATA=demo-data build/bin/deusex`.
 
-At runtime the game and the editor look for the data in this order: the
-`DEUSEX_GAME_DATA` environment variable, a `game-data` directory next to the
-executable (next to the AppImage file for AppImage builds), the Steam install
-of Deus Ex (`steamapps/common/Deus Ex` in the default Steam directories and
-their library folders), and finally the path given at configure time.
+## Settings and saves
 
-## Building
+Controls, settings and saves live in `$XDG_DATA_HOME/ambrosia` when that is set, and otherwise in
+`%LOCALAPPDATA%\Ambrosia` on Windows and `~/.local/share/ambrosia` on Linux.
 
-    $ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-    $ cmake --build build -j"$(nproc)"
+## Gamepads
 
-Options:
+Gamepad options are in **Settings -> Gamepad**:
+- Button prompts (Xbox, PlayStation, Switch). Defaults to auto detect.
+- Auto pause on disconnect.
+- Aim Assist.
+- Remapping (Only via config file for now) with in-game layout UI.
+- Quickslots mapped to d-pad.
+- Radial menus to select items and augs, change ammo, and configure quickslots.
+- Full inventory support (can move items, apply upgrades, etc. and autosort).
+- Gyro controls: player or local gyro space & flick stick option.
 
-- `-DSKIP_QA=ON` skips clang-format during the build.
-- `-DSKIP_UT=ON` skips building the unit tests.
+## Computers and keypads
 
-`scripts/check-debian.sh` builds the project in clean Debian 12 and Debian 13
-containers with Docker.
+On a login screen, **Autologin** opens a window with known login info. Keypads
+have a button to enter a code you already know. The coverage for mapping
+conversations/datacubes/etc to known logins is currently only partially mapped
+out and has not been hand-verified for each one.
 
-### Windows
+## Enhancement Goals
 
-Windows builds are cross-compiled with MinGW:
+The goal is to *not* do significant graphical or gameplay changes, but to
+create a stable modern version of Deus Ex with full gamepad support and
+optional enhancements where they make sense.
 
-    $ cmake -S . -B build-mingw -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-toolchain.cmake
-    $ cmake --build build-mingw -j"$(nproc)"
+For example, the automatic login and keypad entry is done to support
+playing with a controller and reduce the need to use a keyboard. The HRTF audio
+enhances the audio and improves directionality/awareness without changing the
+style of the original mixer.
 
-## Browser builds
+Bug fixes are mostly around stability and comfort. Bugs aren't kept just
+because they are used in speedruns, but many still do work (super jump, grenade
+climbing).
 
-Requires Emscripten and WebGL 2. The game data given at configure time is
-packaged into `index.data`, without the Windows binaries:
+Some fixes require deviation from the original in ways that possibly change the
+"artistic intent". For example: texture animation speed, and the rate at which
+lights flicker.
 
-    $ emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release -DSKIP_UT=ON -DDEUSEX_GAME_DATA="$PWD/demo-data"
-    $ cmake --build build-web --target deusex -j"$(nproc)"
-    $ python3 -m http.server -d build-web/bin 8000
+## Other Fixes
 
-Then open `http://localhost:8000/`. The game data is LZ4 compressed
-and cached in IndexedDB after the first download, together with settings
-and saved games.
+- Work towards eliminating memory leaks. Both from upstream OpenDE and Deus Ex.
+- A bunch of stability fixes and work on safer resource lifetime management.
+- Character controller fixes: swimming and climbing ladders should behave
+  identically to Deus Ex.
+- Upgrade to SDL3, mostly to allow modern controller support.
 
-## Running
+### Experimental Stuff
+- Switch build. Very low performance. Very wip. To be playable at 60fps will
+  need some challenging multithreading changes in the engine.
+- Raytraced audio. Needs a lot of work. Deus Ex actually carries material type
+  with each of its surfaces so mapping to Steam Audio materials is actually
+  pretty straightforward. Unlike HRTF it does *significantly* change the
+  artistic direction of the audio. Most notably makes cameras much harder to
+  hear. Still has quite a few issues I haven't had the time to work on.
 
-    $ build/bin/deusex
+## DentEd
+<img src="assets/icon/dented/64.png" alt=""> 
 
-This starts at the title screen with the main menu. You can also specify a
-map to be loaded `build/bin/deusex 01_NYC_UNATCOIsland`, or a path
-to a `.dx` file.
+DentEd is Ambrosia's level editor. It opens a game map by name or a `.dx` file
+and edits it with the engine's own renderer.
 
-Controls, settings and saves live in `~/.local/share/deusex` (`%APPDATA%\deusex`
-on Windows): `DeusEx.ini` and `User.ini` are read from there when present
-and otherwise from the game `System` directory, changed settings are
-written there, and saved games are in `Save/`. The game data directory is
-never written to. Key bindings are the original ones from `User.ini`, for
-example keypad `+` for QuickSave and keypad `/` for QuickLoad.
+## License
 
-## Multiplayer
+Ambrosia is licensed under the [GNU Affero General Public License](LICENSE).
 
-To host, open Multiplayer in the main menu, pick LAN Game or Internet Game,
-then Host Game. To join, type the host's address (`192.168.1.20` or
-`192.168.1.20:7790`) into the IP Address field and press Join Game. The LAN
-screen lists games on the local network.
+Original code from fork base is licensed under the original [MIT License](#LICENSE-MIT)
 
-Wont work with the original clients, OpenDE uses a new protocol. There is no
-master server either so the Internet list stays empty.
+## Credits
 
-From the CLI:
+The controller button prompts are Input Prompts (version 1.5) by
+[Kenney](https://www.kenney.nl), released under
+[CC0](http://creativecommons.org/publicdomain/zero/1.0/): the Xbox Series,
+PlayStation Series and Nintendo Switch sets, with the Steam Deck L4/L5/R4/R5
+glyphs for the back paddles. See `assets/gamepad/prompts/LICENSE-kenney.txt`.
 
-    $ build/bin/deusex "DXMP_Smuggler?game=DeusEx.DeathMatchGame?listen?Bots=4?Speed=150"
-    $ build/bin/deusex 192.168.1.20:7790
+The editor uses the fonts embedded in Dear ImGui:
+[ProggyClean](https://github.com/bluescan/proggyfonts) by Tristan Grimmer and
+[ProggyForever](https://github.com/ocornut/proggyforever) by Disco Hello and
+Tristan Grimmer, both under the MIT License. The game's own text uses the
+fonts in the Deus Ex data.
 
-Dedicated server:
+Vendored libraries, each under its own license in `vendor/`:
+[SDL](https://www.libsdl.org) (zlib),
+[Dear ImGui](https://github.com/ocornut/imgui) (MIT),
+[ImPlot](https://github.com/epezent/implot) (MIT),
+[ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) (MIT),
+[stb_image](https://github.com/nothings/stb) (MIT or public domain),
+a subset of [Tabler Icons](https://tabler.io/icons) (MIT),
+[miniaudio](https://miniaud.io) (public domain or MIT-0),
+[glad](https://github.com/Dav1dde/glad) (generated loader, CC0 or WTFPL, with
+Khronos headers under Apache 2.0) and
+[Catch2](https://github.com/catchorg/Catch2) (Boost Software License, tests only).
+[Steam Audio](https://valvesoftware.github.io/steam-audio/) (Apache 2.0) is
+downloaded at configure time for the HRTF mode.
 
-    $ build/bin/deusex --server "DXMP_Smuggler?game=DeusEx.DeathMatchGame"
-
-Servers use UDP port 7790, or `Port` in the `[URL]` section of `DeusEx.ini`,
-or `--port`. LAN discovery uses UDP port 8777 and the port after the game
-port.
-
-## Editor
-
-    $ build/bin/deused 01_NYC_UNATCOIsland
-
-The editor is currently a work in progress. But it works!
-
-## UnrealScript compiler
-
-`ucc` exports and compiles UnrealScript, like the UCC that shipped with the
-original Deus Ex SDK. Sources and compiled packages live in
-`~/.local/share/deusex` and packages in `~/.local/share/deusex/System`
-are loaded in place of the shipped ones with the same name.
-
-To export the sources of a package:
-
-    $ build/bin/ucc batchexport DeusEx.u class uc ~/.local/share/deusex/DeusEx/Classes
-
-Compile:
-
-    $ build/bin/ucc make
-
-## Tests
-
-    $ build/bin/unit-tests
-
-Unit tests that need the game data are tagged `[data]`. You can run the ones
-that dont need game data with:
-
-    $ build/bin/unit-tests "~[data]"
-
-The `[net]` tests run a dedicated server and two `--headless` clients as
-separate processes, driven over stdin with `--control`. `DX_NET_LOSS`
-(percent) and `DX_NET_LAG` (milliseconds) simulate a bad link.
-
-## Thanks
+## Thanks (from upstream OpenDE)
 
 This project would not be possible without the incredible work from these
 legends:

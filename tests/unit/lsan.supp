@@ -1,0 +1,7 @@
+# LeakSanitizer suppressions for the tests (GCC and Clang ASan builds; tests/unit/CMakeLists.txt).
+# Mesa keeps allocations from its one-time setup in eglInitialize, which SDL's offscreen driver
+# calls. SDL unloads libEGL before the leak check, so only SDL's frame names them, and only with
+# fast_unwind_on_malloc=0, which the tests that open a GL context get.
+leak:SDL_EGL_InitializeOffscreen
+# Mesa's software renderer (llvmpipe) keeps a little of what LLVM allocates compiling a shader.
+leak:libLLVM.so

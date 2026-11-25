@@ -1,0 +1,60 @@
+# Optional image: the Switch build image (Containerfile.switch, tagged ambrosia-switch) with
+# devkitPro's Mesa 20.1 replaced by Mesa 26.2 from https://github.com/danfromtico/mesa-switch,
+# built from source: the nvc0 Gallium driver, EGL on NWindow, GL and GLES, on that port's own
+# libnx backend. No Rust or LLVM is needed for this part. `nu x.nu build switch --mesa` builds
+# it as ambrosia-switch-mesa; the normal image is left as it is.
+FROM ambrosia-switch
+
+# Branch main of https://github.com/danfromtico/mesa-switch, pinned (Mesa 26.2.4, 2026-10-12).
+ARG MESA_COMMIT=0ff52079ca9e9e837ed27eb95a8d239f439a1864
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3-pip flex bison pkg-config \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --break-system-packages --no-cache-dir meson mako pyyaml packaging
+
+# The old Mesa's archives and GL/EGL headers would shadow the new ones, so remove that package.
+# switch-libdrm_nouveau stays: the new Gallium winsys is written against its headers (nouveau.h,
+# nvif/*) and implements the functions itself on libnx, so its archive is not used. SDL's static
+# library still names -ldrm_nouveau, which then pulls nothing in.
+RUN dkp-pacman -Rdd --noconfirm switch-mesa
+
+RUN git init -q /tmp/mesa \
+    && git -C /tmp/mesa fetch -q --depth 1 https://github.com/danfromtico/mesa-switch "${MESA_COMMIT}" \
+    && git -C /tmp/mesa checkout -q FETCH_HEAD \
+    && install -m 644 /tmp/mesa/src/nouveau/headers/nv_device_info.h /opt/devkitpro/portlibs/switch/include/ \
+    && cd /tmp/mesa \
+    && meson setup build \
+        --cross-file switch_cross_file.txt \
+        --default-library=static \
+        --prefix=/opt/devkitpro/portlibs/switch \
+        --libdir=lib \
+        --buildtype=release \
+        -Doptimization=2 \
+        -Db_lto=false \
+        -Db_ndebug=true \
+        -Dvulkan-drivers= \
+        -Dgallium-drivers=nouveau \
+        -Dgallium-rusticl=false \
+        -Dplatforms=switch \
+        -Degl-native-platform=switch \
+        -Dglx=disabled \
+        -Degl=enabled \
+        -Dopengl=true \
+        -Dgles1=enabled \
+        -Dgles2=enabled \
+        -Dvideo-codecs= \
+        -Dshader-cache=enabled \
+        -Dxmlconfig=enabled \
+        -Dexpat=enabled \
+        -Dtools=[] \
+        -Dllvm=disabled \
+        -Dshared-llvm=disabled \
+        -Dcpp_rtti=false \
+        -Dbuild-tests=false \
+    && ninja -C build \
+    && meson install -C build \
+    && mkdir -p /opt/devkitpro/portlibs/switch/share/licenses/mesa-switch \
+    && cp -r docs/license.rst licenses /opt/devkitpro/portlibs/switch/share/licenses/mesa-switch/ \
+    && echo "${MESA_COMMIT}" > /opt/devkitpro/portlibs/switch/share/licenses/mesa-switch/COMMIT \
+    && cd / && rm -rf /tmp/mesa

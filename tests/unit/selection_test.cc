@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/actor_selection.h"
 #include "engine/csg.h"
@@ -7,6 +9,7 @@
 #include "engine/resources.h"
 #include "engine/t3d.h"
 #include "engine/world.h"
+#include "fixtures.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -28,7 +31,7 @@ namespace {
 
     dx::ULevel* emptyLevel(const char* packageName)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         dx::ULevel* level = dx::cast<dx::ULevel>(dx::objects::newObject(dx::csg::nativeClass("Level"), package, dx::Name("MyLevel"), 0));
         level->loaded = true;
@@ -143,9 +146,9 @@ TEST_CASE("pasted actor references point at pasted copies or at the existing act
 
 TEST_CASE("a whole level exports to T3D and imports into a new level with the same actors", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::objects::setEditorMode(true);
+    dx::engine::initialize(dx::test::gameData());
+    dx::test::EditorMode editor;
+    dx::test::PackageGuard island("01_NYC_UNATCOIsland");
     dx::Linker* linker = dx::objects::loadPackage(dx::Name("01_NYC_UNATCOIsland"));
     REQUIRE(linker != nullptr);
     dx::ULevel* source = dx::cast<dx::ULevel>(linker->object(linker->findExport(dx::Name("MyLevel"), dx::Name("Level"), "*")));
@@ -219,8 +222,6 @@ TEST_CASE("a whole level exports to T3D and imports into a new level with the sa
     INFO(report.substr(0, 4000));
     CHECK(mismatches == 0);
     CHECK(brushes > 100);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::objects::setEditorMode(false);
 }
 
 TEST_CASE("selection helpers pick actors by class, box, inversion and hidden state", "[data]")

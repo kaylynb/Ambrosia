@@ -1,0 +1,21 @@
+wait 2
+exec csgadd
+wait 2
+exec moveto 512 0 0
+wait 1
+exec csgadd
+wait 1
+exec select Brush1
+wait 1
+exec selectadd Brush2
+wait 1
+expect status selected 2 actors
+wait 1
+exec camera -500 -400 400 -5825 7038
+wait 1
+exec gizmo scale
+wait 1
+dragview perspective 0.5 0.5 0.62 0.45
+wait 15
+expect mainscale 1.05
+quit

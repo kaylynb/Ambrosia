@@ -1,7 +1,9 @@
 #include "render/texture_cache.h"
 
 #include "core/objects.h"
+#include "core/profile.h"
 #include "engine/props_engine.h"
+#include "render/render_debug.h"
 
 #include <glad/gl.h>
 
@@ -33,8 +35,8 @@ namespace dx {
     TextureCache::TextureCache()
     {
         uint8_t pixel[4] = { 255, 255, 255, 255 };
-        glGenTextures(1, &whiteTexture);
-        glBindTexture(GL_TEXTURE_2D, whiteTexture);
+        whiteTexture = gl::createTexture();
+        glBindTexture(GL_TEXTURE_2D, whiteTexture.get());
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
         setParameters(false, 1, false, 1.0f);
         if (GLAD_GL_ARB_texture_filter_anisotropic || GLAD_GL_EXT_texture_filter_anisotropic) {
@@ -45,19 +47,79 @@ namespace dx {
     TextureCache::~TextureCache()
     {
         clear();
-        glDeleteTextures(1, &whiteTexture);
+        deleteRetired();
     }
 
+    void TextureCache::retire(GLTextureInfo& info)
+    {
+        if (info.texture) {
+            retired.push_back(info.texture.release());
+        }
+    }
+
+    void TextureCache::objectsReleased(const gc::ReleasedSet& released)
+    {
+        for (auto* cache : { &textures, &maskedTextures }) {
+            std::erase_if(*cache, [&](auto& entry) {
+                if (!released.count(entry.first)) {
+                    return false;
+                }
+                retire(entry.second);
+                releases++;
+                return true;
+            });
+        }
+        std::erase_if(animations, [&](const auto& entry) {
+            return released.count(entry.first) != 0;
+        });
+        // A frame of a sequence going while its first frame stays starts the sequence over.
+        for (auto& [texture, animation] : animations) {
+            if (animation.current && released.count(animation.current)) {
+                animation.current = nullptr;
+            }
+        }
+        std::erase_if(proceduralFrames, [&](const auto& entry) {
+            return released.count(entry.first) != 0;
+        });
+        procedural.objectsReleased(released);
+    }
+
+    void TextureCache::deleteRetired()
+    {
+        if (!retired.empty()) {
+            glDeleteTextures(static_cast<GLsizei>(retired.size()), retired.data());
+            retired.clear();
+        }
+    }
+
+    uint64_t TextureCache::generation() const
+    {
+        return releases;
+    }
+
+    bool TextureCache::holds(const UObject* texture) const
+    {
+        auto keyed = [&](const auto& cache) {
+            return std::any_of(cache.begin(), cache.end(), [&](const auto& entry) {
+                return entry.first == texture;
+            });
+        };
+        bool current = std::any_of(animations.begin(), animations.end(), [&](const auto& entry) {
+            return entry.second.current == texture;
+        });
+        return keyed(textures) || keyed(maskedTextures) || keyed(animations) || keyed(proceduralFrames) || current || procedural.holds(texture);
+    }
+
+    // The GL textures are retired, not deleted, as a collected texture's are: the editor clears
+    // the cache in the middle of a frame whose ImGui draw list may still name them.
     void TextureCache::clear()
     {
-        for (auto& [texture, info] : textures) {
-            glDeleteTextures(1, &info.id);
+        for (auto* cache : { &textures, &maskedTextures }) {
+            for (auto& [texture, info] : *cache) {
+                retire(info);
+            }
+            cache->clear();
         }
-        textures.clear();
-        for (auto& [texture, info] : maskedTextures) {
-            glDeleteTextures(1, &info.id);
-        }
-        maskedTextures.clear();
         animations.clear();
         proceduralFrames.clear();
         procedural.clear();
@@ -71,11 +133,12 @@ namespace dx {
 
     uint32_t TextureCache::white()
     {
-        return whiteTexture;
+        return whiteTexture.get();
     }
 
     void TextureCache::beginFrame(double now)
     {
+        deleteRetired();
         time = now;
         frame++;
     }
@@ -106,11 +169,21 @@ namespace dx {
             }
             float maxRate = texture::MaxFrameRate(texture);
             float minRate = texture::MinFrameRate(texture);
-            if (maxRate == 0.0f && constantRate > 0.0f) {
-                maxRate = constantRate;
-                minRate = constantRate;
-            }
-            if (maxRate == 0.0f) {
+            if (constantRate > 0.0f) {
+                // Catch up after long frames so animation speed stays constant. Keep the
+                // sequence's own rate if it has one; otherwise use the steady rate.
+                float rate = maxRate == 0.0f ? constantRate : std::clamp(maxRate, 0.01f, 100.0f);
+                float step = 1.0f / rate;
+                animation.accumulator += delta;
+                for (int steps = 0; animation.accumulator >= step; steps++) {
+                    if (steps == steadyCatchUp) {
+                        animation.accumulator = 0;
+                        break;
+                    }
+                    constantTimeTick();
+                    animation.accumulator -= step;
+                }
+            } else if (maxRate == 0.0f) {
                 constantTimeTick();
             } else {
                 float minTime = 1.0f / std::clamp(maxRate, 0.01f, 100.0f);
@@ -140,15 +213,18 @@ namespace dx {
         objects::ensureLoaded(texture);
         auto it = textures.find(texture);
         if (it != textures.end() && !it->second.procedural) {
-            return it->second.id ? &it->second : nullptr;
+            return it->second.texture ? &it->second : nullptr;
         }
         bool isProcedural = it != textures.end() ? it->second.procedural : ProceduralTextures::isProcedural(texture);
         if (isProcedural) {
             uint64_t& lastFrame = proceduralFrames[texture];
-            if (it != textures.end() && lastFrame == frame) {
+            // With procedural updates turned off for debugging, a texture made once keeps that
+            // frame.
+            if (it != textures.end() && (lastFrame == frame || !renderDebug.proceduralTextures)) {
                 return &it->second;
             }
             lastFrame = frame;
+            DX_ZONE_NAMED("Procedural texture");
             std::vector<uint8_t> rgba;
             uint32_t width = 0;
             uint32_t height = 0;
@@ -159,15 +235,17 @@ namespace dx {
             if (rgba.empty()) {
                 return it != textures.end() ? &it->second : nullptr;
             }
+            renderCounters.proceduralUpdates++;
+            renderCounters.textureUploads++;
             GLTextureInfo& info = textures[texture];
             info.procedural = true;
-            if (!info.id) {
-                glGenTextures(1, &info.id);
+            if (!info.texture) {
+                info.texture = gl::createTexture();
             }
             info.width = width;
             info.height = height;
             info.masked = texture->masked();
-            glBindTexture(GL_TEXTURE_2D, info.id);
+            glBindTexture(GL_TEXTURE_2D, info.id());
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
             info.smooth = true;
             info.levels = 1;
@@ -193,7 +271,7 @@ namespace dx {
         }
         auto it = maskedTextures.find(texture);
         if (it != maskedTextures.end()) {
-            return it->second.id ? &it->second : nullptr;
+            return it->second.texture ? &it->second : nullptr;
         }
         GLTextureInfo& info = maskedTextures[texture];
         return upload(texture, info, true) ? &info : nullptr;
@@ -201,14 +279,17 @@ namespace dx {
 
     bool TextureCache::upload(UTexture* texture, GLTextureInfo& info, bool masked)
     {
+        DX_ZONE_NAMED("Texture upload");
+        renderCounters.textureUploads++;
         info.width = texture->width();
         info.height = texture->height();
         info.masked = masked;
         if (uploadReplacement(texture, info)) {
             return true;
         }
-        glGenTextures(1, &info.id);
-        glBindTexture(GL_TEXTURE_2D, info.id);
+        // Kept only once a level is in it.
+        TextureHandle made = gl::createTexture();
+        glBindTexture(GL_TEXTURE_2D, made.get());
         int32_t levels = 0;
         for (size_t mip = 0; mip < texture->mips.size(); mip++) {
             const TextureMip& level = texture->mips[mip];
@@ -242,10 +323,9 @@ namespace dx {
             }
         }
         if (levels == 0) {
-            glDeleteTextures(1, &info.id);
-            info.id = 0;
             return false;
         }
+        info.texture = std::move(made);
         info.smooth = !texture::bNoSmooth(texture);
         info.levels = levels;
         setParameters(info.smooth, levels, trilinear, anisotropy);
@@ -267,8 +347,8 @@ namespace dx {
                 }
             }
         }
-        glGenTextures(1, &info.id);
-        glBindTexture(GL_TEXTURE_2D, info.id);
+        info.texture = gl::createTexture();
+        glBindTexture(GL_TEXTURE_2D, info.id());
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(image.width), static_cast<GLsizei>(image.height), 0, GL_RGBA, GL_UNSIGNED_BYTE, image.rgba.data());
         glGenerateMipmap(GL_TEXTURE_2D);
         info.smooth = !texture::bNoSmooth(texture);
@@ -293,8 +373,8 @@ namespace dx {
         trilinear = newTrilinear;
         for (auto* cache : { &textures, &maskedTextures }) {
             for (auto& [texture, info] : *cache) {
-                if (info.id) {
-                    glBindTexture(GL_TEXTURE_2D, info.id);
+                if (info.texture) {
+                    glBindTexture(GL_TEXTURE_2D, info.id());
                     setParameters(info.smooth, info.levels, trilinear, anisotropy);
                 }
             }

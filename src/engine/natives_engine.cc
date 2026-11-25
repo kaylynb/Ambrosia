@@ -1,18 +1,20 @@
 #include "audio/audio.h"
 #include "core/config.h"
+#include "core/gc.h"
+#include "core/log.h"
 #include "core/objects.h"
+#include "core/random.h"
 #include "core/vm.h"
 #include "engine/actor.h"
 #include "engine/ai.h"
 #include "engine/console.h"
 #include "engine/mesh.h"
-#include "engine/net.h"
 #include "engine/resources.h"
+#include "engine/wall_adjust.h"
 #include "engine/world.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <random>
 
 namespace dx {
@@ -29,13 +31,12 @@ namespace dx {
     namespace {
         World& world()
         {
-            return *World::current;
+            return World::active();
         }
 
         float randomFloat()
         {
-            static std::mt19937 generator(4242);
-            return std::uniform_real_distribution<float>(0.0f, 1.0f)(generator);
+            return std::uniform_real_distribution<float>(0.0f, 1.0f)(random::engine(random::Stream::Engine));
         }
 
         UClass* classParam(Frame& stack)
@@ -103,7 +104,7 @@ namespace dx {
             Rotator rotation = vm::getOpt<Rotator>(stack, actor::Rotation(self));
             vm::finish(stack);
             UObject* spawned = nullptr;
-            if (cls && World::current) {
+            if (cls && World::hasActive()) {
                 spawned = world().spawn(cls, owner, Name(), location, rotation, nullptr, false, actor::Instigator(self));
             }
             if (spawned) {
@@ -115,7 +116,7 @@ namespace dx {
         void nativeDestroy(UObject* self, Frame& stack, void* result)
         {
             vm::finish(stack);
-            vm::retBool(result, World::current && world().destroy(self));
+            vm::retBool(result, World::hasActive() && world().destroy(self));
         }
 
         void nativeSetTimer(UObject* self, Frame& stack, void*)
@@ -140,7 +141,7 @@ namespace dx {
             uint32_t flags = traceActors ? (TRACE_AllColliding | TRACE_OnlyProjActor) : TRACE_World;
             CheckResult hit;
             UObject* hitActor = nullptr;
-            if (World::current && world().lineCheck(hit, start, end, extent, self, flags)) {
+            if (World::hasActive() && world().lineCheck(hit, start, end, extent, self, flags)) {
                 *hitLocation = hit.location;
                 *hitNormal = hit.normal;
                 hitActor = hit.actor;
@@ -156,14 +157,14 @@ namespace dx {
             Vector end = vm::get<Vector>(stack);
             Vector start = vm::getOpt<Vector>(stack, actor::Location(self));
             vm::finish(stack);
-            vm::retBool(result, !World::current || world().fastLineCheck(end, start));
+            vm::retBool(result, !World::hasActive() || world().fastLineCheck(end, start));
         }
 
         void nativeSetLocation(UObject* self, Frame& stack, void* result)
         {
             Vector location = vm::get<Vector>(stack);
             vm::finish(stack);
-            vm::retBool(result, World::current && world().farMoveActor(self, location, false, false));
+            vm::retBool(result, World::hasActive() && world().farMoveActor(self, location, false, false));
         }
 
         void nativeSetRotation(UObject* self, Frame& stack, void* result)
@@ -171,7 +172,7 @@ namespace dx {
             Rotator rotation = vm::get<Rotator>(stack);
             vm::finish(stack);
             CheckResult hit;
-            vm::retBool(result, World::current && world().moveActor(self, {}, rotation, hit, false, false, false, false));
+            vm::retBool(result, World::hasActive() && world().moveActor(self, {}, rotation, hit, false, false, false, false));
         }
 
         void nativeMove(UObject* self, Frame& stack, void* result)
@@ -179,7 +180,7 @@ namespace dx {
             Vector delta = vm::get<Vector>(stack);
             vm::finish(stack);
             CheckResult hit;
-            vm::retBool(result, World::current && world().moveActor(self, delta, actor::Rotation(self), hit, false, false, false, false));
+            vm::retBool(result, World::hasActive() && world().moveActor(self, delta, actor::Rotation(self), hit, false, false, false, false));
         }
 
         void nativeMoveSmooth(UObject* self, Frame& stack, void* result)
@@ -187,7 +188,7 @@ namespace dx {
             Vector delta = vm::get<Vector>(stack);
             vm::finish(stack);
             actor::bJustTeleported(self) = 0;
-            vm::retBool(result, World::current && moveSmooth(self, delta));
+            vm::retBool(result, World::hasActive() && moveSmooth(self, delta));
         }
 
         void nativeSetCollision(UObject* self, Frame& stack, void*)
@@ -206,8 +207,8 @@ namespace dx {
             vm::finish(stack);
             actor::CollisionRadius(self) = radius;
             actor::CollisionHeight(self) = height;
-            if (World::current) {
-                World::current->collisionHash.update(self);
+            if (World::hasActive()) {
+                World::active().collisionHash.update(self);
             }
             vm::retBool(result, true);
         }
@@ -238,14 +239,14 @@ namespace dx {
         {
             float delta = vm::get<float>(stack);
             vm::finish(stack);
-            performPhysics(self, delta);
+            performPhysics(World::hasActive() ? &World::active() : nullptr, self, delta);
         }
 
         void nativeError(UObject* self, Frame& stack, void*)
         {
             std::string message = vm::get<std::string>(stack);
             vm::finish(stack);
-            std::fprintf(stderr, "script error from %s: %s\n", self->name.c_str(), message.c_str());
+            log::error("ScriptWarning", "script error from {}: {}", self->name.str(), message);
         }
 
         template <typename Filter>
@@ -253,7 +254,7 @@ namespace dx {
         {
             size_t index = 0;
             vm::iterate(stack, [&]() {
-                while (World::current && index < world().actors.size()) {
+                while (World::hasActive() && index < world().actors.size()) {
                     UObject* a = world().actors[index++];
                     if (a && !a->destroyed && filter(a)) {
                         *out = a;
@@ -368,7 +369,7 @@ namespace dx {
                 radius = 1000.0f;
             }
             std::vector<UObject*> list;
-            if (World::current) {
+            if (World::hasActive()) {
                 Vector reach { radius, radius, radius };
                 for (UObject* a : world().collisionHash.query(location - reach, location + reach)) {
                     if (a && !a->destroyed && actor::bCollideActors(a) && (actor::Location(a) - location).sizeSquared() < radius * radius) {
@@ -405,7 +406,7 @@ namespace dx {
             Vector extent = vm::getOpt<Vector>(stack, Vector {});
             vm::finish(stack);
             std::vector<CheckResult> hits;
-            if (World::current) {
+            if (World::hasActive()) {
                 hits = world().multiLineCheck(start, end, extent, nullptr, TRACE_AllColliding);
             }
             size_t index = 0;
@@ -435,7 +436,7 @@ namespace dx {
             Vector extent = vm::getOpt<Vector>(stack, Vector {});
             vm::finish(stack);
             std::vector<CheckResult> hits;
-            if (World::current) {
+            if (World::hasActive()) {
                 hits = world().multiLineCheck(start, end, extent, nullptr, TRACE_AllColliding, 4);
             }
             size_t index = 0;
@@ -461,7 +462,7 @@ namespace dx {
             int32_t* index = vm::getRef<int32_t>(stack);
             vm::finish(stack);
             auto count = []() {
-                return World::current ? world().actors.size() : size_t { 0 };
+                return World::hasActive() ? world().actors.size() : size_t { 0 };
             };
             size_t slot = *index >= 0 && static_cast<size_t>(*index) < count() ? static_cast<size_t>(*index) : 0;
             size_t limit = count();
@@ -499,7 +500,7 @@ namespace dx {
             Vector extent = vm::getOpt<Vector>(stack, Vector {});
             vm::finish(stack);
             std::vector<CheckResult> hits;
-            if (World::current) {
+            if (World::hasActive()) {
                 hits = world().multiLineCheck(start, end, extent, nullptr, TRACE_AllColliding);
             }
             size_t index = 0;
@@ -558,16 +559,23 @@ namespace dx {
             return request;
         }
 
-        int32_t hearSound(UObject* hearer, UObject* self, const SoundRequest& request, float radiusSquared)
+        int32_t checkHearSound(UObject* self, const SoundRequest& request, float radiusSquared)
         {
-            int32_t id = static_cast<int32_t>(self->handle * 16u + request.slot * 2u + (request.noOverride ? 1u : 0u));
+            // execPlaySound returns the id whether or not
+            // anyone hears the sound.
+            // The id is built from the actor's index in the object table, its slot here.
+            int32_t id = static_cast<int32_t>(objects::handleSlot(self->handle) * 16u + request.slot * 2u + (request.noOverride ? 1u : 0u));
+            UObject* hearer = World::hasActive() ? world().localPlayer : nullptr;
+            if (!hearer || hearer->destroyed) {
+                return id;
+            }
             Vector parameters { 100.0f * request.volume, request.radius, 100.0f * request.pitch };
             UObject* viewTarget = isPlayerPawn(hearer) ? playerpawn::ViewTarget(hearer) : nullptr;
             Vector hearLocation = viewTarget ? actor::Location(viewTarget) : actor::Location(hearer);
             float threshold = radiusSquared * 0.7692308f;
             float distanceSquared = (hearLocation - actor::Location(self)).sizeSquared();
             if (!(distanceSquared < threshold)) {
-                return 0;
+                return id;
             }
             if (!world().fastLineCheck(hearLocation, actor::Location(self))) {
                 if (actor::Instigator(self) != hearer) {
@@ -575,39 +583,11 @@ namespace dx {
                 }
                 parameters.x *= 0.35f;
                 if (distanceSquared > threshold) {
-                    return 0;
+                    return id;
                 }
             }
-            if (hearer != world().localPlayer) {
-                static const Name nameClientHearSound("ClientHearSound");
-                vm::Call(hearer, nameClientHearSound).obj(self).i(id).obj(request.sound).v(actor::Location(self)).v(parameters).run();
-                return 0;
-            }
-            return clientHearSound(hearer, self, id, request.sound, actor::Location(self), parameters);
-        }
-
-        int32_t checkHearSound(UObject* self, const SoundRequest& request, float radiusSquared, bool owned)
-        {
-            if (!World::current) {
-                return 0;
-            }
-            int32_t played = 0;
-            UObject* local = world().localPlayer;
-            if (local && !local->destroyed) {
-                played = hearSound(local, self, request, radiusSquared);
-            }
-            if (world().net && world().net->server) {
-                UObject* top = self;
-                while (actor::Owner(top)) {
-                    top = actor::Owner(top);
-                }
-                for (UObject* hearer : world().net->remotePlayers()) {
-                    if (!owned || hearer != top) {
-                        hearSound(hearer, self, request, radiusSquared);
-                    }
-                }
-            }
-            return played;
+            clientHearSound(hearer, self, id, request.sound, actor::Location(self), parameters);
+            return id;
         }
 
         void nativePlaySound(UObject* self, Frame& stack, void* result)
@@ -619,7 +599,7 @@ namespace dx {
             if (request.radius <= 0) {
                 request.radius = 800.0f;
             }
-            vm::ret<int32_t>(result, checkHearSound(self, request, request.radius * request.radius, false));
+            vm::ret<int32_t>(result, checkHearSound(self, request, request.radius * request.radius));
         }
 
         void nativePlayOwnedSound(UObject* self, Frame& stack, void*)
@@ -629,14 +609,14 @@ namespace dx {
                 return;
             }
             float radius = request.radius != 0 ? request.radius : 1600.0f;
-            checkHearSound(self, request, radius * radius, true);
+            checkHearSound(self, request, radius * radius);
         }
 
         void nativeStopSound(UObject*, Frame& stack, void*)
         {
             int32_t id = vm::get<int32_t>(stack);
             vm::finish(stack);
-            audio::stopSound(id);
+            audio::stopSoundId(id);
         }
 
         void nativeGetSoundDuration(UObject*, Frame& stack, void* result)
@@ -737,7 +717,7 @@ namespace dx {
             float loudness = vm::get<float>(stack);
             vm::finish(stack);
             UObject* instigator = actor::Instigator(self);
-            if (!World::current || !instigator || !rememberNoise(self, instigator, loudness)) {
+            if (!World::hasActive() || !instigator || !rememberNoise(self, instigator, loudness)) {
                 return;
             }
             UObject* enemy = pawn::Enemy(instigator);
@@ -763,7 +743,7 @@ namespace dx {
         {
             vm::finish(stack);
             bool visible = false;
-            UObject* viewer = World::current ? world().localPlayer : nullptr;
+            UObject* viewer = World::hasActive() ? world().localPlayer : nullptr;
             if (viewer && playerpawn::ViewTarget(viewer) == self) {
                 visible = true;
             } else if (viewer) {
@@ -781,7 +761,7 @@ namespace dx {
         {
             vm::finish(stack);
             std::string map;
-            if (World::current) {
+            if (World::hasActive()) {
                 map = world().url;
                 size_t cut = map.find_first_of("?#");
                 if (cut != std::string::npos) {
@@ -1031,19 +1011,10 @@ namespace dx {
             vm::finish(stack);
             float last = 0;
             uint8_t* address = self->propertyAddress(Name("LastRenderTime"));
-            if (address && World::current) {
+            if (address && World::hasActive()) {
                 last = std::max(world().timeSeconds - *reinterpret_cast<float*>(address), 0.0f);
             }
             vm::ret<float>(result, last);
-        }
-
-        Vector safeNormal(const Vector& v)
-        {
-            float squared = v.sizeSquared();
-            if (squared < 1e-8f) {
-                return {};
-            }
-            return v * static_cast<float>(1.0 / std::sqrt(static_cast<double>(squared)));
         }
 
         PointRegion pointRegionAt(const Vector& location)
@@ -1087,22 +1058,6 @@ namespace dx {
             region = pointRegionAt(location);
         }
 
-        void twoWallAdjust(const Vector& desired, Vector& delta, const Vector& hitNormal, const Vector& oldNormal, float hitTime)
-        {
-            if (oldNormal.dot(hitNormal) <= 0) {
-                Vector direction = safeNormal(hitNormal.cross(oldNormal));
-                delta = direction * (delta.dot(direction) * (1.0f - hitTime));
-                if (desired.dot(delta) < 0) {
-                    delta = delta * -1.0f;
-                }
-            } else {
-                delta = (delta - hitNormal * delta.dot(hitNormal)) * (1.0f - hitTime);
-                if (delta.dot(desired) <= 0) {
-                    delta = {};
-                }
-            }
-        }
-
         Vector bounceVelocity(const Vector& velocity, const Vector& normal, float elasticity)
         {
             return (velocity + normal * (velocity.dot(normal) * -2.0f)) * elasticity;
@@ -1121,7 +1076,7 @@ namespace dx {
             float landingSpeed = vm::getOpt<float>(stack, 60.0f);
             float granularity = vm::getOpt<float>(stack, 0.05f);
             vm::finish(stack);
-            if (!World::current) {
+            if (!World::hasActive()) {
                 *finalLocation = startLocation;
                 vm::ret<float>(result, 0.0f);
                 return;
@@ -1167,7 +1122,7 @@ namespace dx {
                                 if (hit.normal.z > 0.7f && (!bounce || landingSquared > velocity.sizeSquared())) {
                                     done = true;
                                 }
-                                twoWallAdjust(safeNormal(move), adjusted, hit.normal, oldNormal, hit.time);
+                                twoWallAdjust(move.normal(), adjusted, hit.normal, oldNormal, hit.time);
                                 parabolicMove(self, position, adjusted, cylinder, checkActors, region, hit);
                                 if (!done && hit.time < 1.0f && hit.normal.z > 0.7f && (!bounce || landingSquared > adjusted.sizeSquared())) {
                                     done = true;
@@ -1179,7 +1134,7 @@ namespace dx {
                 if (!bounce || !struck) {
                     float terminal = zoneinfo::ZoneTerminalVelocity(region.zone);
                     if (velocity.sizeSquared() > terminal * terminal) {
-                        velocity = safeNormal(velocity) * terminal;
+                        velocity = velocity.normal() * terminal;
                     }
                 }
                 steps++;
@@ -1196,20 +1151,20 @@ namespace dx {
         void nativeInStasis(UObject* self, Frame& stack, void* result)
         {
             vm::finish(stack);
-            vm::retBool(result, World::current && World::current->inStasis(self));
+            vm::retBool(result, World::hasActive() && World::active().inStasis(self));
         }
 
         void nativeGetPlayerPawn(UObject*, Frame& stack, void* result)
         {
             vm::finish(stack);
-            vm::ret<UObject*>(result, World::current ? world().localPlayer : nullptr);
+            vm::ret<UObject*>(result, World::hasActive() ? world().localPlayer : nullptr);
         }
 
         void nativeIsOverlapping(UObject* self, Frame& stack, void* result)
         {
             UObject* other = vm::get<UObject*>(stack);
             vm::finish(stack);
-            vm::retBool(result, other && isOverlapping(self, other));
+            vm::retBool(result, other && isOverlapping(World::hasActive() ? &World::active() : nullptr, self, other));
         }
 
         void nativeRandomBiasedRotation(UObject*, Frame& stack, void* result)
@@ -1327,6 +1282,15 @@ namespace dx {
             registerAINatives();
             registerPawnNatives();
             registerMiscNatives();
+            // Every native class the engine defines. The resource, mesh and AI classes are also
+            // named where their factories are registered, for tools that load packages without
+            // the natives.
+            gc::reportsReferences<UPalette, UTexture, UFont, USound, UMusic, UPolys, UPrimitive, UModel, ULevel, UMesh, ULodMesh, UFireTexture, UAIEvent, UAISenderEvent, UAIReceiverEvent, UAIEventType,
+                UEventManager>();
+            // The world, the engine classes, the brush builders, the reference layout cache and
+            // the editor's undo history are holders; nothing else in the engine keeps an object
+            // pointer past the call that got it.
+            gc::libraryReported("engine");
         }
     }
 }

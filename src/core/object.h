@@ -18,6 +18,7 @@ namespace dx {
     class UEnum;
     class Linker;
     class Reader;
+    class ReferenceVisitor;
     struct Frame;
     struct StateFrame;
 
@@ -91,6 +92,11 @@ namespace dx {
 
         virtual void serialize(Reader& reader, Linker& linker);
         virtual void postLoad();
+        // Hands every object pointer this object holds to the garbage collector (core/gc.h).
+        // The base version covers the class, the state frame and script property data. A
+        // native class with object pointers in C++ fields overrides it, calls its base class's
+        // version, and hands over each such pointer.
+        virtual void addReferences(ReferenceVisitor& references);
 
         bool isA(const UClass* other) const;
         bool isA(Name className) const;
@@ -99,6 +105,34 @@ namespace dx {
         UObject* outermost();
 
         uint8_t* propertyAddress(Name propertyName, int32_t index = 0) const;
+
+        // What cast<> gives for the reflection classes below, without a dynamic_cast: the VM
+        // asks on every property access and function return. Each is overridden only by its own
+        // class, so a subclass inherits the answer, as dynamic_cast would give it.
+        virtual UStruct* asStruct()
+        {
+            return nullptr;
+        }
+
+        virtual UFunction* asFunction()
+        {
+            return nullptr;
+        }
+
+        virtual UState* asState()
+        {
+            return nullptr;
+        }
+
+        virtual UClass* asClass()
+        {
+            return nullptr;
+        }
+
+        virtual UProperty* asProperty()
+        {
+            return nullptr;
+        }
 
         Name name;
         UClass* cls = nullptr;
@@ -109,14 +143,25 @@ namespace dx {
         Linker* linker = nullptr;
         int32_t exportRef = 0;
         bool loaded = true;
+        // Set when loading this export threw; a class marked so refuses instantiation.
+        bool loadFailed = false;
         bool destroyed = false;
+        // Handed to gc::free while KeepFreedObjects held it back; reading it is logged.
+        bool released = false;
+        // In a linker's import table or a linker's package slot: deleting it means looking
+        // through every linker. An object only in its own linker's export slot is not.
+        bool linkerShared = false;
         bool singular = false;
+        // Set once a linker has the object in its export, import or package slot, so deleting it
+        // must make the linkers forget it.
+        bool inLinkerTable = false;
         std::unique_ptr<StateFrame> stateFrame;
     };
 
     class UField : public UObject {
     public:
         void serialize(Reader& reader, Linker& linker) override;
+        void addReferences(ReferenceVisitor& references) override;
 
         UField* superField = nullptr;
         UField* next = nullptr;
@@ -148,6 +193,12 @@ namespace dx {
     class UStruct : public UField {
     public:
         void serialize(Reader& reader, Linker& linker) override;
+        void addReferences(ReferenceVisitor& references) override;
+
+        UStruct* asStruct() override
+        {
+            return this;
+        }
 
         UStruct* superStruct() const;
         UProperty* findProperty(Name propertyName) const;
@@ -159,12 +210,21 @@ namespace dx {
         bool equalsValue(const uint8_t* a, const uint8_t* b) const;
         void link();
 
+        // Drops the name index findProperty keeps; link() calls it, as must anything else that rewrites properties.
+        void invalidatePropertyIndex() const
+        {
+            propertyIndexValid = false;
+        }
+
         UTextBuffer* scriptText = nullptr;
         UField* children = nullptr;
         Name friendlyName;
         uint32_t line = 0;
         uint32_t textPos = 0;
         std::vector<uint8_t> script;
+        // Where in `script` the object handles are, recorded when the bytecode is loaded.
+        std::vector<uint32_t> scriptObjects;
+        bool scriptObjectsKnown = false;
         std::vector<UProperty*> properties;
         std::vector<UProperty*> constructed;
         size_t size = 0;
@@ -173,6 +233,7 @@ namespace dx {
 
     private:
         mutable std::unordered_map<Name, UProperty*> propertyIndex;
+        mutable bool propertyIndexValid = false;
         mutable size_t propertyIndexSize = 0;
         mutable UProperty* const* propertyIndexData = nullptr;
     };
@@ -180,7 +241,13 @@ namespace dx {
     class UFunction : public UStruct {
     public:
         void serialize(Reader& reader, Linker& linker) override;
+        void addReferences(ReferenceVisitor& references) override;
         void linkFunction();
+
+        UFunction* asFunction() override
+        {
+            return this;
+        }
 
         uint16_t nativeIndex = 0;
         uint8_t precedence = 0;
@@ -189,15 +256,20 @@ namespace dx {
         std::vector<UProperty*> params;
         UProperty* returnParm = nullptr;
         NativeFunction native = nullptr;
-        NativeFunction scriptOverride = nullptr;
         std::vector<uint8_t> stub;
     };
 
     class UState : public UStruct {
     public:
         void serialize(Reader& reader, Linker& linker) override;
+        void addReferences(ReferenceVisitor& references) override;
         void linkState();
         UFunction* findStateFunction(Name functionName) const;
+
+        UState* asState() override
+        {
+            return this;
+        }
 
         uint64_t probeMask = 0;
         uint64_t ignoreMask = 0;
@@ -216,10 +288,16 @@ namespace dx {
     public:
         ~UClass() override;
         void serialize(Reader& reader, Linker& linker) override;
+        void addReferences(ReferenceVisitor& references) override;
         void linkClass();
         UFunction* findFunction(Name functionName) const;
         UState* findState(Name stateName) const;
         UClass* superClass() const;
+
+        UClass* asClass() override
+        {
+            return this;
+        }
 
         uint32_t classFlags = 0;
         uint32_t guid[4] = {};
@@ -255,6 +333,12 @@ namespace dx {
     public:
         explicit UProperty(PropType propertyType);
         void serialize(Reader& reader, Linker& linker) override;
+        void addReferences(ReferenceVisitor& references) override;
+
+        UProperty* asProperty() override
+        {
+            return this;
+        }
 
         size_t elementSize() const;
         size_t elementAlignment() const;
@@ -297,4 +381,24 @@ namespace dx {
     {
         return dynamic_cast<const T*>(object);
     }
+
+    // The reflection classes answer through their own virtual functions (UObject::asStruct and
+    // the rest), the same as dynamic_cast without its cost.
+#define DX_FAST_CAST(Type, method)                                        \
+    template <>                                                           \
+    inline Type* cast<Type>(UObject * object)                             \
+    {                                                                     \
+        return object ? object->method() : nullptr;                       \
+    }                                                                     \
+    template <>                                                           \
+    inline const Type* cast<Type>(const UObject* object)                  \
+    {                                                                     \
+        return object ? const_cast<UObject*>(object)->method() : nullptr; \
+    }
+    DX_FAST_CAST(UStruct, asStruct)
+    DX_FAST_CAST(UFunction, asFunction)
+    DX_FAST_CAST(UState, asState)
+    DX_FAST_CAST(UClass, asClass)
+    DX_FAST_CAST(UProperty, asProperty)
+#undef DX_FAST_CAST
 }

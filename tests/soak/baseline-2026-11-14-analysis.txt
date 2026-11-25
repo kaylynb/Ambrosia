@@ -1,0 +1,66 @@
+engine-churn-1: per destroyed actor 3.47 KiB private, 3.14 KiB heap, 2.15 KiB property data, 2.42 objects (12720 destroyed)
+engine-churn-2: per destroyed actor 3.46 KiB private, 3.14 KiB heap, 2.15 KiB property data, 2.42 objects (12720 destroyed)
+engine-churn-3: per destroyed actor 3.44 KiB private, 3.14 KiB heap, 2.15 KiB property data, 2.42 objects (12720 destroyed)
+engine-fire-1: per destroyed actor 3.86 KiB private, 3.52 KiB heap, 2.47 KiB property data, 2.69 objects (13192 destroyed)
+engine-fire-2: per destroyed actor 3.84 KiB private, 3.52 KiB heap, 2.47 KiB property data, 2.69 objects (13192 destroyed)
+engine-fire-3: per destroyed actor 3.86 KiB private, 3.52 KiB heap, 2.47 KiB property data, 2.69 objects (13192 destroyed)
+engine-idle-island-1: per destroyed actor 0.78 KiB private, 0.64 KiB heap, 0.05 KiB property data, 1.00 objects (4523 destroyed)
+engine-idle-island-2: per destroyed actor 0.81 KiB private, 0.64 KiB heap, 0.05 KiB property data, 1.00 objects (4523 destroyed)
+engine-idle-island-3: per destroyed actor 0.81 KiB private, 0.64 KiB heap, 0.05 KiB property data, 1.00 objects (4523 destroyed)
+Engine, per step. Heap = live heap bytes; Images = retired package file images; ObjData = object property data; OtherCpp = Heap - Images - ObjData; Slack = Private - Heap (heap kept for reuse, fragmentation, non-heap)
+
+Scenario                Unit                 N PrivateMiB    HeapMiB       Images ObjData OtherCpp Slack Objects
+--------                ----                 - ----------    -------       ------ ------- -------- ----- -------
+engine-churn-1          game minute          5 8.63 +- 0.76  7.80 +- 0.63  0.00   5.35    2.44     0.83  6144
+engine-churn-2          game minute          5 8.60 +- 0.92  7.80 +- 0.63  0.00   5.35    2.44     0.80  6144
+engine-churn-3          game minute          5 8.54 +- 0.67  7.80 +- 0.63  0.00   5.35    2.44     0.74  6144
+engine-fire-1           game minute         10 4.97 +- 0.59  4.54 +- 0.46  0.00   3.18    1.35     0.44  3548
+engine-fire-2           game minute         10 4.94 +- 0.56  4.54 +- 0.46  0.00   3.18    1.35     0.41  3548
+engine-fire-3           game minute         10 4.97 +- 0.54  4.54 +- 0.46  0.00   3.18    1.35     0.44  3548
+engine-idle-canal-1     game minute         10 0.00 +- 0.00  0.00 +- 0.00  0.00   0.00    0.00     -0.00 3
+engine-idle-canal-2     game minute         10 0.00 +- 0.00  0.00 +- 0.00  0.00   0.00    0.00     -0.00 3
+engine-idle-canal-3     game minute         10 0.00 +- 0.00  0.00 +- 0.00  0.00   0.00    0.00     -0.00 3
+engine-idle-island-1    game minute         10 0.34 +- 0.30  0.28 +- 0.11  0.00   0.02    0.26     0.06  452
+engine-idle-island-2    game minute         10 0.36 +- 0.29  0.28 +- 0.11  0.00   0.02    0.26     0.08  452
+engine-idle-island-3    game minute         10 0.36 +- 0.29  0.28 +- 0.11  0.00   0.02    0.26     0.07  452
+engine-idle-market-1    game minute         10 0.00 +- 0.00  0.00 +- 0.00  0.00   0.00    0.00     -0.00 1
+engine-idle-market-2    game minute         10 0.00 +- 0.00  0.00 +- 0.00  0.00   0.00    0.00     -0.00 1
+engine-idle-market-3    game minute         10 0.00 +- 0.00  0.00 +- 0.00  0.00   0.00    0.00     -0.00 1
+engine-idle-street-1    game minute         10 0.01 +- 0.02  0.00 +- 0.01  0.00   0.00    0.00     0.00  1
+engine-idle-street-2    game minute         10 0.01 +- 0.02  0.00 +- 0.01  0.00   0.00    0.00     0.00  1
+engine-idle-street-3    game minute         10 0.01 +- 0.03  0.00 +- 0.01  0.00   0.00    0.00     0.01  1
+engine-save-1 quicksave quicksave           14 0.05 +- 0.20  0.01 +- 0.00  0.00   0.00    0.01     0.04  17
+engine-save-1 quickload quickload           14 23.88 +- 0.48 23.26 +- 0.38 7.71   4.77    10.78    0.61  4734
+engine-save-1 list      listing of 8 slots 149 0.00 +- 0.00  0.02 +- 0.00  0.00   0.00    0.01     -0.02 16
+engine-save-2 quicksave quicksave           14 0.05 +- 0.20  0.01 +- 0.00  0.00   0.00    0.01     0.04  17
+engine-save-2 quickload quickload           14 23.84 +- 0.50 23.26 +- 0.38 7.71   4.77    10.78    0.58  4734
+engine-save-2 list      listing of 8 slots 149 0.00 +- 0.00  0.02 +- 0.00  0.00   0.00    0.01     -0.02 16
+engine-save-3 quicksave quicksave           14 0.05 +- 0.20  0.01 +- 0.00  0.00   0.00    0.01     0.04  17
+engine-save-3 quickload quickload           14 23.86 +- 0.45 23.26 +- 0.38 7.71   4.77    10.78    0.60  4734
+engine-save-3 list      listing of 8 slots 149 0.00 +- 0.00  0.02 +- 0.00  0.00   0.00    0.01     -0.02 16
+engine-travel-1         round trip          11 31.34 +- 0.42 30.35 +- 0.43 9.50   6.78    14.07    0.99  6543
+engine-travel-2         round trip          11 31.28 +- 0.50 30.35 +- 0.43 9.50   6.78    14.07    0.93  6543
+engine-travel-3         round trip          11 31.32 +- 0.48 30.35 +- 0.43 9.50   6.78    14.07    0.97  6543
+engine-travel-small-1   round trip          11 15.31 +- 0.58 14.79 +- 0.42 4.28   3.32    7.19     0.52  3480
+engine-travel-small-2   round trip          11 15.29 +- 0.50 14.79 +- 0.42 4.28   3.32    7.19     0.51  3480
+engine-travel-small-3   round trip          11 15.29 +- 0.61 14.79 +- 0.42 4.28   3.32    7.19     0.50  3480
+
+
+Exe, mean change per step (MiB for bytes columns, counts otherwise)
+Run,Unit,N,PrivateMiB,table,retired_bytes,data,sound_decoded,sounds,meshdraw_bytes,pose_bytes,light_bytes,meshdraw_dead,queries,destroyed_windows,destroyed_window_data
+exe-fire-1,game minute,4,8.93,2554.50,0.00,2.18,0.00,0.00,2.97,0.23,0.07,809.25,0.00,0.00,0.00
+exe-fire-2,game minute,4,9.00,2554.50,0.00,2.18,0.00,0.00,2.97,0.23,0.07,809.25,0.00,0.00,0.00
+exe-idle-market-1,game minute,9,-0.01,70.33,0.00,0.01,0.16,0.56,0.00,0.00,0.00,0.00,0.00,6.33,0.00
+exe-idle-market-2,game minute,9,-0.00,70.33,0.00,0.01,0.16,0.56,0.00,0.00,0.00,0.00,0.00,6.33,0.00
+exe-menus-1,round of 7 screens,39,0.82,535.85,0.00,0.36,0.01,0.10,0.01,0.00,0.00,0.00,0.08,508.00,0.36
+exe-menus-2,round of 7 screens,39,0.81,535.85,0.00,0.36,0.01,0.10,0.01,0.00,0.00,0.00,0.08,508.00,0.36
+exe-save-1,quicksave,9,-0.01,32.11,0.00,0.00,0.02,0.11,0.02,0.00,0.00,0.00,0.22,0.00,0.00
+exe-save-1,quickload,9,26.27,4778.00,7.71,4.78,0.00,0.00,-0.02,0.00,0.00,0.00,0.00,65.00,0.05
+exe-save-2,quicksave,9,-0.03,32.11,0.00,0.00,0.02,0.11,0.02,0.00,0.00,0.00,0.22,0.00,0.00
+exe-save-2,quickload,9,25.80,4778.00,7.71,4.78,0.00,0.00,-0.01,0.00,0.00,0.00,0.00,65.00,0.05
+exe-talk-1,15 s of conversation,12,4.07,233.58,0.00,0.01,1.12,1.08,0.10,0.01,0.00,0.17,1.33,2.00,0.00
+exe-talk-2,15 s of conversation,12,2.89,233.58,0.00,0.01,1.12,1.08,0.10,0.01,0.00,0.17,1.33,2.00,0.00
+exe-travel-1,round trip,9,35.02,6439.89,9.49,6.53,0.01,0.33,-0.04,-0.00,0.00,0.00,-0.33,137.00,0.10
+exe-travel-2,round trip,9,32.64,6439.89,9.49,6.53,0.01,0.33,-0.02,-0.00,0.00,0.00,-0.33,137.00,0.10
+exe-travel-small-1,round trip,9,16.64,3352.11,4.27,3.06,0.00,0.00,0.00,0.00,0.00,0.00,0.00,130.00,0.09
+exe-travel-small-2,round trip,9,17.74,3352.11,4.27,3.06,0.00,0.00,0.00,0.00,0.00,0.00,0.00,130.00,0.09

@@ -1,8 +1,9 @@
 #include "compiler/assets.h"
 
 #include "compiler/exec_parse.h"
+#include "core/files.h"
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 #include <cctype>
@@ -82,13 +83,12 @@ namespace dx::compiler {
 
         void importFile(ExecContext& context, const std::filesystem::path& file)
         {
-            std::ifstream in(file, std::ios::binary);
-            if (!in) {
+            std::optional<std::string> contents = files::readFile(file);
+            if (!contents) {
                 context.log("DeusExTextImport WARNING: Can't find file '" + file.string() + "' for import");
                 return;
             }
-            std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-            text = text.substr(0, text.find('\0'));
+            std::string text = contents->substr(0, contents->find('\0'));
             Name name(file.stem().string());
             UObject* object = findText(context.package, name);
             if (!object) {
@@ -107,11 +107,7 @@ namespace dx::compiler {
 
         bool writeText(UObject* object, const std::filesystem::path& file)
         {
-            std::filesystem::create_directories(file.parent_path());
-            std::ofstream out(file, std::ios::binary);
-            const std::string& text = textOf(object);
-            out.write(text.data(), static_cast<std::streamsize>(text.size()));
-            return static_cast<bool>(out);
+            return files::writeFile(file, textOf(object));
         }
 
         bool import(ExecContext& context, const std::string& command)
@@ -165,7 +161,8 @@ namespace dx::compiler {
             }
             std::replace(file.begin(), file.end(), '\\', '/');
             UObject* object = findText(context.package, Name(std::filesystem::path(file).stem().string()));
-            return object && writeText(object, context.directory / file);
+            std::filesystem::path path;
+            return object && exportPath(context, context.directory, file, path) && writeText(object, path);
         }
 
         bool exportObject(UObject* object, const std::string& extension, const std::filesystem::path& file)

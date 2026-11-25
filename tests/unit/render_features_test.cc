@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/mesh.h"
 #include "engine/props_engine.h"
 #include "engine/resources.h"
@@ -31,7 +33,7 @@ TEST_CASE("fog maps of several volumetric lights merge like a screen blend in 7 
 
 TEST_CASE("version 61 texture packages load names and mip data", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::Linker* linker = dx::objects::loadPackage(dx::Name("CoreTexDetail"));
     REQUIRE(linker != nullptr);
     CHECK(linker->file().version() == 61);
@@ -53,7 +55,7 @@ TEST_CASE("version 61 texture packages load names and mip data", "[data]")
 namespace {
     dx::UObject* meshDefaults(const char* className, dx::UMesh*& mesh)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UClass* cls = dx::objects::findClass(className);
         dx::objects::flushLoads();
         REQUIRE(cls != nullptr);
@@ -123,7 +125,7 @@ TEST_CASE("environment map coordinates come from the world space reflection vect
 
 TEST_CASE("the sky frame comes from the viewer zone's linked SkyZone, not the first sky actor", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("00_Intro"));
     {
         dx::World world;
@@ -171,7 +173,7 @@ TEST_CASE("only DT_Sprite and DT_SpriteAnimOnce actors are drawn as sprites")
 
 TEST_CASE("sprite anim once frames, matrix mode textures and surface decals follow the original renderer", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     {
         dx::World world;
@@ -239,7 +241,7 @@ TEST_CASE("sprite anim once frames, matrix mode textures and surface decals foll
 
 TEST_CASE("pawn shadows attach to the floor surfaces through the AttachDecal native", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     {
         dx::World world;

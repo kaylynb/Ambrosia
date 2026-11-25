@@ -1,6 +1,7 @@
 #include "extension/windows.h"
 
 #include "core/objects.h"
+#include "engine/props_engine.h"
 #include "engine/resources.h"
 
 #include <algorithm>
@@ -401,10 +402,8 @@ namespace dx::extension {
         gc::tileColor(this) = { 255, 255, 255, 255 };
         gc::normalFont(this) = nullptr;
         gc::boldFont(this) = nullptr;
-        specialText = false;
         if (window) {
-            specialText = window::bSpecialText(window) != 0;
-            gc::bParseMetachars(this) = specialText ? 1 : 0;
+            gc::bParseMetachars(this) = window::bSpecialText(window) != 0 ? 1 : 0;
             gc::bTextTranslucent(this) = window::bTextTranslucent(window);
             gc::baselineOffset(this) = window->baselineOffset;
             gc::underlineHeight(this) = window->underlineHeight;
@@ -500,14 +499,6 @@ namespace dx::extension {
             return;
         }
         objects::ensureLoaded(tex);
-        if (drawScale != 1.0f) {
-            float scaledLeft = std::round(offsetX + (destX - offsetX) * drawScale);
-            float scaledTop = std::round(offsetY + (destY - offsetY) * drawScale);
-            destWidth = std::round(offsetX + (destX + destWidth - offsetX) * drawScale) - scaledLeft;
-            destHeight = std::round(offsetY + (destY + destHeight - offsetY) * drawScale) - scaledTop;
-            destX = scaledLeft;
-            destY = scaledTop;
-        }
         float left = destX;
         float top = destY;
         float right = destX + destWidth;
@@ -581,7 +572,7 @@ namespace dx::extension {
         if (glyph.texture && glyph.width > 0 && glyph.height > 0) {
             drawTile(glyph.texture, std::trunc(x + 0.1f), std::trunc(y + 0.1f), glyph.width, glyph.height, glyph.u, glyph.v, glyph.width, glyph.height, color, style, false);
             if (underline && gc::underlineHeight(this) > 0) {
-                static UObject* solid = nullptr;
+                UObject*& solid = state().solid;
                 if (!solid) {
                     solid = objects::loadObject("Extension.Solid", nullptr);
                     objects::ensureLoaded(solid);
@@ -603,7 +594,7 @@ namespace dx::extension {
         }
         TextContext context = textContext();
         float wrap = gc::bWordWrap(this) ? std::trunc(destWidth) : 0.0f;
-        pushClip(offsetX + destX, offsetY + destY, destWidth, destHeight);
+        ClipScope clip(this, offsetX + destX, offsetY + destY, destWidth, destHeight);
         float y = offsetY + destY;
         uint8_t valign = gc::VAlign(this);
         if (valign == VALIGN_Center || valign == VALIGN_Bottom) {
@@ -640,7 +631,6 @@ namespace dx::extension {
             }
             y += lineHeight + context.vSpacing;
         });
-        popClip();
     }
 
     void UGC::drawTextRow(float destX, float destY, const std::string& text, const TextRow& row)
@@ -745,6 +735,39 @@ namespace dx::extension {
         stretched(topRight, x + destWidth - textureWidth(topRight), y, textureWidth(topRight), textureHeight(topRight));
         stretched(bottomLeft, x, y + destHeight - textureHeight(bottomLeft), textureWidth(bottomLeft), textureHeight(bottomLeft));
         stretched(bottomRight, x + destWidth - textureWidth(bottomRight), y + destHeight - textureHeight(bottomRight), textureWidth(bottomRight), textureHeight(bottomRight));
+    }
+
+    void drawActorAs(const ActorDrawRequest& request, uint8_t style, const std::function<void()>& draw)
+    {
+        // As GC.DrawActor draws: in the GC's style (the draw styles number as the render styles
+        // do), unlit if asked, at drawScale times its own size, with scaleGlow for its glow and
+        // the skin if one is given, leaving the actor as it was afterwards. The vision
+        // augmentation draws heat sources translucent through this, with a glow of 2 that it
+        // compares with the actor's own ScaleGlow, and the actor display's mesh view draws grid
+        // skins translucent over the actor.
+        UObject* drawn = request.actor;
+        uint8_t oldStyle = actor::Style(drawn);
+        uint32_t oldUnlit = actor::bUnlit(drawn);
+        float oldDrawScale = actor::DrawScale(drawn);
+        float oldScaleGlow = actor::ScaleGlow(drawn);
+        UObject* oldSkin = actor::Skin(drawn);
+        actor::Style(drawn) = style;
+        if (request.unlit) {
+            actor::bUnlit(drawn) = 1;
+        }
+        actor::DrawScale(drawn) = oldDrawScale * request.drawScale;
+        actor::ScaleGlow(drawn) = request.scaleGlow;
+        if (request.skin) {
+            actor::Skin(drawn) = request.skin;
+        }
+        draw();
+        if (!drawn->destroyed && drawn->data) {
+            actor::Style(drawn) = oldStyle;
+            actor::bUnlit(drawn) = oldUnlit;
+            actor::DrawScale(drawn) = oldDrawScale;
+            actor::ScaleGlow(drawn) = oldScaleGlow;
+            actor::Skin(drawn) = oldSkin;
+        }
     }
 
     void UGC::setStyle(uint8_t style)
@@ -869,18 +892,12 @@ namespace dx::extension {
 
         void nativeEnableSpecialText(UObject* object, Frame& stack, void*)
         {
-            bool value = vm::getBool(stack);
-            vm::finish(stack);
-            if (UGC* gc = self(object)) {
-                gc->specialText = value;
-            }
+            boolSetter(object, stack, gc::bParseMetachars);
         }
 
         void nativeIsSpecialTextEnabled(UObject* object, Frame& stack, void* result)
         {
-            vm::finish(stack);
-            UGC* gc = self(object);
-            vm::retBool(result, gc && gc->specialText);
+            boolGetter(object, stack, result, gc::bParseMetachars);
         }
 
         void nativeSetTileColor(UObject* object, Frame& stack, void*)
@@ -1064,7 +1081,6 @@ namespace dx::extension {
                 gc->cls->copyValue(gc->data, source->data);
                 gc->offsetX = source->offsetX;
                 gc->offsetY = source->offsetY;
-                gc->specialText = source->specialText;
             }
         }
 
@@ -1080,7 +1096,6 @@ namespace dx::extension {
             saved.data.assign(gc->data, gc->data + gc->cls->size);
             saved.offsetX = gc->offsetX;
             saved.offsetY = gc->offsetY;
-            saved.specialText = gc->specialText;
             gc->savedStates.push_back(std::move(saved));
             gc->clipStack.push_back({ gc->clipLeft, gc->clipTop, gc->clipRight, gc->clipBottom });
             vm::ret<int32_t>(result, static_cast<int32_t>(gc->savedStates.size()));
@@ -1104,7 +1119,6 @@ namespace dx::extension {
             std::memcpy(gc->data, saved.data.data(), std::min(saved.data.size(), gc->cls->size));
             gc->offsetX = saved.offsetX;
             gc->offsetY = saved.offsetY;
-            gc->specialText = saved.specialText;
             gc->savedStates.pop_back();
             gc->popClip();
         }
@@ -1146,10 +1160,12 @@ namespace dx::extension {
 
         void nativeGetFontHeight(UObject* object, Frame& stack, void* result)
         {
-            bool includeSpace = optionalBoolDefault(stack, true);
+            // execGetFontHeight: the spacing is left out
+            // unless asked for.
+            bool includeSpace = optionalBoolDefault(stack, false);
             vm::finish(stack);
             UGC* gc = self(object);
-            float height = gc ? fontHeight(gc::normalFont(gc)) : 0.0f;
+            float height = gc ? lineFontHeight(gc::normalFont(gc), gc::boldFont(gc)) : 0.0f;
             if (gc && includeSpace) {
                 height += gc::textVSpacing(gc);
             }
@@ -1262,12 +1278,17 @@ namespace dx::extension {
             if (!gc || !s.canvas || !s.actorDrawer || !request.actor) {
                 return;
             }
+            if (!gc::bDrawEnabled(gc) || gc::Style(gc) == DSTY_None || !request.actor->data) {
+                return;
+            }
             float scale = virtualScale();
             request.x = gc->clipLeft * scale;
             request.y = gc->clipTop * scale;
             request.width = (gc->clipRight - gc->clipLeft) * scale;
             request.height = (gc->clipBottom - gc->clipTop) * scale;
-            s.actorDrawer(*s.canvas, request);
+            drawActorAs(request, gc::Style(gc), [&s, &request] {
+                s.actorDrawer(*s.canvas, request);
+            });
         }
 
         void nativeDrawBorders(UObject* object, Frame& stack, void*)

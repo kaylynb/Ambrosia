@@ -4,7 +4,7 @@
 #include "compiler/exec_parse.h"
 #include "compiler/script_parser.h"
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 #include <cctype>
@@ -13,6 +13,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace dx::compiler {
@@ -33,33 +34,6 @@ namespace dx::compiler {
                 }
             }
             return lines;
-        }
-
-        bool parseCommand(const std::string& line, const char* word)
-        {
-            size_t start = line.find_first_not_of(" \t");
-            if (start == std::string::npos) {
-                return false;
-            }
-            size_t length = std::strlen(word);
-            if (line.size() - start < length || !iequals(std::string_view(line).substr(start, length), word)) {
-                return false;
-            }
-            size_t after = start + length;
-            return after >= line.size() || !detail::isAlnum(line[after]);
-        }
-
-        size_t findNoCase(const std::string& haystack, const char* needle)
-        {
-            std::string lowered = haystack;
-            std::string target = needle;
-            for (char& c : lowered) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
-            for (char& c : target) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
-            return lowered.find(target);
         }
 
         std::string parseToken(const std::string& line, size_t at)
@@ -101,10 +75,7 @@ namespace dx::compiler {
                 context.log("Warning: OBJ LOAD could not load " + file);
                 return;
             }
-            for (size_t i = 0; i < linker->file().exports().size(); i++) {
-                objects::ensureLoaded(linker->object(static_cast<int32_t>(i + 1)));
-            }
-            objects::flushLoads();
+            objects::loadAllExports(linker);
         }
 
         void runExecs(PackageCompiler::Impl& context)
@@ -123,6 +94,7 @@ namespace dx::compiler {
                 if (!importAsset(exec, command)) {
                     context.log("Warning: unsupported #exec " + command);
                 }
+                context.errorCount += exec.errors;
             }
             context.pendingExecs.clear();
         }
@@ -157,7 +129,7 @@ namespace dx::compiler {
         std::vector<std::string> lines = splitLines(text);
         for (size_t i = 0; i < lines.size(); i++) {
             std::string line = lines[i];
-            if (parseCommand(line, "defaultproperties")) {
+            if (std::string_view command = line; parseCommand(command, "defaultproperties")) {
                 for (i++; i < lines.size(); i++) {
                     size_t first = lines[i].find_first_not_of(" \t");
                     if (first != std::string::npos && lines[i][first] == '}') {
@@ -173,10 +145,10 @@ namespace dx::compiler {
                 line = line.substr(0, comment);
             }
             size_t at = std::string::npos;
-            if (className.empty() && (at = findNoCase(line, "class")) != std::string::npos) {
+            if (className.empty() && (at = findKey(line, "class")) != std::string::npos) {
                 className = parseToken(line, at + 6);
             }
-            if (baseClassName.empty() && ((at = findNoCase(line, "expands")) != std::string::npos || (at = findNoCase(line, "extends")) != std::string::npos)) {
+            if (baseClassName.empty() && ((at = findKey(line, "expands")) != std::string::npos || (at = findKey(line, "extends")) != std::string::npos)) {
                 baseClassName = parseToken(line, at + 7);
                 while (!baseClassName.empty() && baseClassName.back() == ';') {
                     baseClassName.pop_back();
@@ -214,12 +186,13 @@ namespace dx::compiler {
             result->defaultObject = nullptr;
             result->linked = false;
             result->properties.clear();
+            result->invalidatePropertyIndex();
             result->size = 0;
             result->alignment = 1;
         }
         if (!result) {
             Name classObjectName = iequals(className, expected) ? fileName : Name(className);
-            result = detail::createField(new UClass(), impl->package, classObjectName, nullptr, RF_Public | RF_Standalone);
+            result = detail::createField(std::make_unique<UClass>(), impl->package, classObjectName, nullptr, RF_Public | RF_Standalone);
             lookup.add(result);
         }
         if (std::find(impl->nativeClasses.begin(), impl->nativeClasses.end(), result->name) != impl->nativeClasses.end()) {
@@ -231,13 +204,13 @@ namespace dx::compiler {
                 base = lookup.findClass(baseClassName);
             }
             if (!base && !baseClassName.empty()) {
-                base = detail::createField(new UClass(), impl->package, Name(baseClassName), nullptr, RF_Public | RF_Standalone);
+                base = detail::createField(std::make_unique<UClass>(), impl->package, Name(baseClassName), nullptr, RF_Public | RF_Standalone);
                 base->superField = result;
                 lookup.add(base);
             }
             result->superField = base;
         }
-        UTextBuffer* buffer = detail::createField(new UTextBuffer(), result, Name("ScriptText"), "TextBuffer", RF_NotForClient | RF_NotForServer);
+        UTextBuffer* buffer = detail::createField(std::make_unique<UTextBuffer>(), result, Name("ScriptText"), "TextBuffer", RF_NotForClient | RF_NotForServer);
         buffer->text = scriptText;
         result->scriptText = buffer;
         result->classFlags &= ~(CLASS_Parsed | CLASS_Compiled);
@@ -250,6 +223,25 @@ namespace dx::compiler {
     bool PackageCompiler::compile()
     {
         Impl& context = *impl;
+        bool missingSuper = false;
+        for (UClass* cls : context.imported) {
+            std::unordered_set<UClass*> seen;
+            UClass* current = cls;
+            while (current && seen.insert(current).second) {
+                current = current->superClass();
+            }
+            UClass* super = cls->superClass();
+            if (current && super && !super->scriptText) {
+                // The original compiler stopped here. Count the error and keep its message
+                // format (no filename prefix).
+                context.log("Superclass " + super->name.str() + " of class " + cls->name.str() + " not found");
+                context.errorCount++;
+                missingSuper = true;
+            }
+        }
+        if (missingSuper) {
+            return false;
+        }
         std::vector<UClass*> allClasses;
         for (UObject* object : objects::all()) {
             if (UClass* cls = cast<UClass>(object)) {
@@ -305,6 +297,7 @@ namespace dx::compiler {
         finish.package = context.package;
         finish.log = context.log;
         finishAssets(finish);
+        context.errorCount += finish.errors;
         return success && context.errorCount == 0;
     }
 }

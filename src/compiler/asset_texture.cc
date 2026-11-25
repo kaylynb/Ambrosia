@@ -1,9 +1,11 @@
 #include "compiler/assets.h"
 
 #include "compiler/exec_parse.h"
+#include "core/files.h"
 #include "core/objects.h"
+#include "core/text.h"
 #include "engine/mesh.h"
-#include "engine/package.h"
+#include "core/package.h"
 #include "engine/resources.h"
 
 #include <algorithm>
@@ -381,10 +383,7 @@ namespace dx::compiler {
         void seedCounters(UObject* package)
         {
             static std::set<std::string> seeded;
-            std::string key = package->name.str();
-            std::transform(key.begin(), key.end(), key.begin(), [](char c) {
-                return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            });
+            std::string key = lowered(package->name.str());
             if (!seeded.insert(key).second) {
                 return;
             }
@@ -414,16 +413,6 @@ namespace dx::compiler {
             }
         }
 
-        UObject* findChild(UObject* outer, Name name, UClass* cls)
-        {
-            for (UObject* object : objects::all()) {
-                if (object && !object->destroyed && object->outer == outer && object->name == name && (!cls || object->cls == cls)) {
-                    return object;
-                }
-            }
-            return nullptr;
-        }
-
         Name uniqueObjectName(UObject* outer, const std::string& base)
         {
             uint32_t& counter = classUnique()[base];
@@ -451,57 +440,6 @@ namespace dx::compiler {
         UClass* textureClass()
         {
             return engineClass("Texture");
-        }
-
-        std::filesystem::path resolveFile(const std::filesystem::path& directory, std::string text)
-        {
-            std::replace(text.begin(), text.end(), '\\', '/');
-            std::filesystem::path current = directory;
-            std::filesystem::path relative(text);
-            for (const std::filesystem::path& part : relative) {
-                std::filesystem::path exact = current / part;
-                if (std::filesystem::exists(exact) || !std::filesystem::is_directory(current)) {
-                    current = exact;
-                    continue;
-                }
-                std::filesystem::path found = exact;
-                for (const auto& item : std::filesystem::directory_iterator(current)) {
-                    if (iequals(item.path().filename().string(), part.string())) {
-                        found = item.path();
-                        break;
-                    }
-                }
-                current = found;
-            }
-            return current;
-        }
-
-        std::filesystem::path sourcePath(const std::filesystem::path& directory, std::string text)
-        {
-            std::replace(text.begin(), text.end(), '\\', '/');
-            return directory / text;
-        }
-
-        bool readFile(const std::filesystem::path& path, std::vector<uint8_t>& bytes)
-        {
-            std::ifstream in(path, std::ios::binary);
-            if (!in) {
-                return false;
-            }
-            bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-            return true;
-        }
-
-        bool writeFile(const std::filesystem::path& path, const std::vector<uint8_t>& bytes)
-        {
-            std::error_code error;
-            std::filesystem::create_directories(path.parent_path(), error);
-            std::ofstream out(path, std::ios::binary | std::ios::trunc);
-            if (!out) {
-                return false;
-            }
-            out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-            return static_cast<bool>(out);
         }
 
         uint16_t read16(const std::vector<uint8_t>& bytes, size_t at)
@@ -699,9 +637,9 @@ namespace dx::compiler {
         {
             std::string extension = file.extension().string();
             if (iequals(extension, ".bmp")) {
-                return writeFile(file, encodeBmp(image));
+                return files::writeFile(file, encodeBmp(image));
             }
-            return writeFile(file, encodePcx(image));
+            return files::writeFile(file, encodePcx(image));
         }
 
         template <typename T>
@@ -1128,12 +1066,13 @@ namespace dx::compiler {
 
         bool loadImage(ExecContext& context, const std::string& file, Image& image)
         {
-            std::vector<uint8_t> bytes;
             std::filesystem::path path = resolveFile(context.directory, file);
-            if (!readFile(path, bytes)) {
+            std::optional<std::string> text = files::readFile(path);
+            if (!text) {
                 context.log("Warning: Can't open file " + path.string());
                 return false;
             }
+            std::vector<uint8_t> bytes(text->begin(), text->end());
             std::string error;
             if (!decodeImage(bytes, image, error)) {
                 context.log("Warning: " + error + " (" + path.string() + ")");
@@ -1763,7 +1702,7 @@ namespace dx::compiler {
                     metrics += std::to_string(character.u) + " " + std::to_string(character.v) + " " + std::to_string(character.width) + " " + std::to_string(character.height) + "\n";
                 }
             }
-            return writeFile(trueTypeMetrics(context.directory, name), std::vector<uint8_t>(metrics.begin(), metrics.end()));
+            return files::writeFile(trueTypeMetrics(context.directory, name), std::vector<uint8_t>(metrics.begin(), metrics.end()));
         }
 
         bool exportSourceCommand(ExecContext& context, const std::string& command)
@@ -1811,7 +1750,10 @@ namespace dx::compiler {
                     return false;
                 }
             }
-            std::filesystem::path path = sourcePath(context.directory, file);
+            std::filesystem::path path;
+            if (!exportPath(context, context.directory, file, path)) {
+                return false;
+            }
             if (!writeImage(image, path)) {
                 context.log("Warning: cannot write " + path.string());
                 return false;
@@ -1830,7 +1772,7 @@ namespace dx::compiler {
                 return false;
             }
             Image image = textureImage(texture);
-            return extension == "bmp" ? writeFile(file, encodeBmp(image)) : writeFile(file, encodePcx(image));
+            return extension == "bmp" ? files::writeFile(file, encodeBmp(image)) : files::writeFile(file, encodePcx(image));
         }
 
         void writeMips(PackageWriter& package, Writer& out, const std::vector<TextureMip>& mips)

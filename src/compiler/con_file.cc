@@ -1,4 +1,5 @@
 #include "compiler/con_file.h"
+#include "core/files.h"
 
 #include <algorithm>
 #include <cctype>
@@ -34,23 +35,27 @@ namespace dx::compiler {
             "End",
         };
 
+        // In lax mode, the package importer's, a read past the end gives zero bytes and moves on
+        // as if they were there, and nothing fails.
         class Input {
         public:
-            explicit Input(const std::vector<uint8_t>& source)
+            Input(const std::vector<uint8_t>& source, bool laxReads)
                 : data(source)
+                , lax(laxReads)
             {
             }
 
             int32_t integer()
             {
-                if (at + 4 > data.size()) {
+                if (at + 4 > data.size() && !lax) {
                     failed = true;
                     at = data.size();
                     return 0;
                 }
                 uint32_t value = 0;
                 for (int i = 0; i < 4; i++) {
-                    value |= static_cast<uint32_t>(data[at + static_cast<size_t>(i)]) << (8 * i);
+                    size_t index = at + static_cast<size_t>(i);
+                    value |= static_cast<uint32_t>(index < data.size() ? data[index] : 0) << (8 * i);
                 }
                 at += 4;
                 return static_cast<int32_t>(value);
@@ -69,8 +74,19 @@ namespace dx::compiler {
                 return value;
             }
 
+            // In lax mode the zeros past the end are left off the result. Every caller stops at
+            // the first zero byte or unit, or pads with zeros, so it reads the same.
             std::vector<uint8_t> bytes(int64_t count)
             {
+                if (lax) {
+                    if (count <= 0) {
+                        return {};
+                    }
+                    size_t start = std::min(at, data.size());
+                    size_t end = std::max(start, std::min(data.size(), at + static_cast<size_t>(count)));
+                    at += static_cast<size_t>(count);
+                    return std::vector<uint8_t>(data.begin() + static_cast<std::ptrdiff_t>(start), data.begin() + static_cast<std::ptrdiff_t>(end));
+                }
                 if (count < 0 || at + static_cast<size_t>(count) > data.size()) {
                     failed = true;
                     at = data.size();
@@ -100,15 +116,26 @@ namespace dx::compiler {
                 return result.substr(0, result.find('\0'));
             }
 
-            std::string actor()
+            std::string actor(int32_t* id = nullptr)
             {
-                if (integer() > -1) {
+                int32_t value = integer();
+                if (id) {
+                    *id = value;
+                }
+                if (value > -1) {
                     return string();
                 }
                 return {};
             }
 
+            // The importer's way past the actor table, which a negative length moves back over.
+            void skip(int32_t count)
+            {
+                at = static_cast<size_t>(std::max<int64_t>(0, static_cast<int64_t>(at) + count));
+            }
+
             const std::vector<uint8_t>& data;
+            const bool lax;
             size_t at = 0;
             bool failed = false;
         };
@@ -167,7 +194,7 @@ namespace dx::compiler {
         {
             switch (event.type) {
             case ConEventType::Speech:
-                event.speaker = in.actor();
+                event.speaker = in.actor(&event.speakerId);
                 event.speakingTo = in.actor();
                 event.speech = in.string();
                 event.audio = in.string();
@@ -217,23 +244,25 @@ namespace dx::compiler {
                 event.toName = in.actor();
                 event.failLabel = in.string();
                 break;
-            case ConEventType::MoveCamera:
+            case ConEventType::MoveCamera: {
                 event.cameraType = in.integer();
                 event.cameraPosition = in.integer();
                 event.cameraTransition = in.integer();
-                if (event.cameraType == 1) {
+                int32_t cameraType = in.lax ? static_cast<uint8_t>(event.cameraType) : event.cameraType;
+                if (cameraType == 1) {
                     for (int32_t& value : event.cameraRotation) {
                         value = in.integer();
                     }
                     event.heightModifier = in.real();
                     event.centerModifier = in.real();
                     event.distanceMultiplier = in.real();
-                } else if (event.cameraType == 2) {
+                } else if (cameraType == 2) {
                     for (float& value : event.cameraOffset) {
                         value = in.real();
                     }
                 }
                 break;
+            }
             case ConEventType::Animation:
                 event.ownerName = in.actor();
                 event.sequence = in.string();
@@ -288,8 +317,9 @@ namespace dx::compiler {
             case ConEventType::Comment: {
                 std::vector<uint8_t> raw = in.bytes(in.integer());
                 std::vector<uint16_t> units;
-                for (size_t i = 0; i + 1 < raw.size(); i += 2) {
-                    uint16_t unit = static_cast<uint16_t>(raw[i] | (raw[i + 1] << 8));
+                size_t whole = in.lax ? raw.size() : raw.size() & ~size_t { 1 };
+                for (size_t i = 0; i < whole; i += 2) {
+                    uint16_t unit = static_cast<uint16_t>(raw[i] | (i + 1 < raw.size() ? raw[i + 1] << 8 : 0));
                     if (unit == 0) {
                         break;
                     }
@@ -335,6 +365,14 @@ namespace dx::compiler {
                 event.id = in.integer();
                 int32_t type = in.integer();
                 event.label = in.string();
+                if (in.lax) {
+                    type = static_cast<uint8_t>(type);
+                    if (type >= ConEventTypeCount) {
+                        event.type = static_cast<ConEventType>(type);
+                        conversation.events.push_back(event);
+                        continue;
+                    }
+                }
                 if (type < 0 || type >= ConEventTypeCount) {
                     in.failed = true;
                     if (error) {
@@ -739,17 +777,18 @@ namespace dx::compiler {
         return units;
     }
 
-    bool readConFile(const std::vector<uint8_t>& data, ConFile& file, std::string* error)
+    bool readConFile(const std::vector<uint8_t>& data, ConFile& file, std::string* error, ConReadMode mode)
     {
         file = ConFile();
+        bool lax = mode == ConReadMode::Import;
         size_t length = std::strlen(Signature);
-        if (data.size() < length + 1 || std::memcmp(data.data(), Signature, length) != 0) {
+        if (!lax && (data.size() < length + 1 || std::memcmp(data.data(), Signature, length) != 0)) {
             if (error) {
                 *error = "not a Deus Ex conversation file";
             }
             return false;
         }
-        Input in(data);
+        Input in(data, lax);
         in.at = length + 1;
         file.version = in.integer();
         if (file.version < 0x1a) {
@@ -768,8 +807,13 @@ namespace dx::compiler {
         for (int32_t i = 0; i < missions && !in.failed; i++) {
             file.missions.push_back(in.integer());
         }
-        std::vector<uint8_t> table = in.bytes(in.integer());
-        Input actors(table);
+        std::vector<uint8_t> table;
+        if (lax) {
+            in.skip(in.integer());
+        } else {
+            table = in.bytes(in.integer());
+        }
+        Input actors(table, false);
         int32_t actorCount = table.empty() ? 0 : actors.integer();
         for (int32_t i = 0; i < actorCount && !actors.failed; i++) {
             ConActor actor;
@@ -800,14 +844,14 @@ namespace dx::compiler {
 
     bool loadConFile(const std::filesystem::path& path, ConFile& file, std::string* error)
     {
-        std::ifstream in(path, std::ios::binary);
-        if (!in) {
+        std::optional<std::string> bytes = files::readFile(path);
+        if (!bytes) {
             if (error) {
                 *error = "cannot open " + path.string();
             }
             return false;
         }
-        std::vector<uint8_t> data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        std::vector<uint8_t> data(bytes->begin(), bytes->end());
         return readConFile(data, file, error);
     }
 

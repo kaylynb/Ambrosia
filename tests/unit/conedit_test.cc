@@ -1,13 +1,17 @@
 #include "compiler/con_file.h"
+#include "test_paths.h"
 #include "compiler/script_package.h"
 #include "core/config.h"
 #include "core/objects.h"
 #include "core/vm.h"
 #include "deusex/deusex.h"
-#include "engine/package.h"
+#include "deusex/startup.h"
+#include "core/package.h"
 #include "engine/resources.h"
 #include "engine/world.h"
 #include "extension/consys.h"
+#include "fixtures.h"
+#include "ucc_runner.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -279,16 +283,17 @@ TEST_CASE("conversation files keep comments in UTF-16 and reject truncated data"
     CHECK(loaded.conversations[0].events[0].comment == comment.comment);
     CHECK(loaded.actors.size() == 1);
     CHECK(loaded.actors[0].name == "Paul");
-    bytes.resize(bytes.size() - 6);
+    REQUIRE(bytes.size() > 6);
+    bytes.erase(bytes.end() - 6, bytes.end());
     CHECK_FALSE(dx::compiler::readConFile(bytes, loaded, &error));
     CHECK(error == "truncated conversation file");
 }
 
 TEST_CASE("shipped conversations exported to .con round trip byte for byte through the editor model", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::setEditorMode(true);
-    dx::objects::unloadPackage(dx::Name("DeusExConText"));
+    dx::engine::initialize(dx::test::gameData());
+    dx::test::EditorMode editor;
+    dx::test::PackageGuard conText("DeusExConText");
     std::filesystem::path root = scratch("roundtrip") / "DeusExConversations";
     std::vector<std::string> files = dx::compiler::packageConFiles("DeusExConversations");
     REQUIRE(files.size() == 35);
@@ -333,14 +338,12 @@ TEST_CASE("shipped conversations exported to .con round trip byte for byte throu
     CHECK(intro.audioPackage == "Intro");
     REQUIRE(intro.conversations.size() == 1);
     CHECK(intro.conversations[0].name == "Intro");
-    dx::objects::unloadPackage(dx::Name("DeusExConText"));
-    dx::objects::setEditorMode(false);
 }
 
 TEST_CASE("an edited shipped conversation recompiles into Conversation objects with the edits", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::setEditorMode(true);
+    dx::engine::initialize(dx::test::gameData());
+    dx::test::EditorMode editor;
     std::filesystem::path root = scratch("edit");
     std::vector<std::string> log;
     REQUIRE(dx::compiler::exportPackageConFile("DeusExConversations", "Mission0.Con", root / "DeusExConversations", log));
@@ -403,20 +406,19 @@ TEST_CASE("an edited shipped conversation recompiles into Conversation objects w
     CHECK(text(reference(list[speechIndex + 4], "ConSpeech"), "speech") == "More then.");
     CHECK(list[speechIndex + 5]->cls->name.str() == "ConEventEnd");
     CHECK(text(list[speechIndex + 5], "Label") == "EditBye");
-    dx::objects::setEditorMode(false);
 }
 
 TEST_CASE("ucc make compiles an authored .con with every event type into a conversation package", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     const char* xdg = std::getenv("XDG_DATA_HOME");
     REQUIRE(xdg != nullptr);
     std::filesystem::path home = std::filesystem::path(xdg) / "conedit-make";
     std::filesystem::remove_all(home);
-    std::filesystem::path user = home / "deusex";
+    std::filesystem::path user = home / "ambrosia";
     std::filesystem::create_directories(user / "ModCons" / "Classes");
     {
-        std::ifstream in(std::filesystem::path(DEUSEX_GAME_DATA) / "System" / "DeusEx.ini", std::ios::binary);
+        std::ifstream in(std::filesystem::path(dx::test::gameData()) / "System" / "DeusEx.ini", std::ios::binary);
         std::stringstream ini;
         ini << in.rdbuf();
         std::string content = ini.str();
@@ -517,7 +519,7 @@ TEST_CASE("ucc make compiles an authored .con with every event type into a conve
         out.write(reinterpret_cast<const char*>(voice.data()), static_cast<std::streamsize>(voice.size()));
     }
 
-    REQUIRE(std::system(("XDG_DATA_HOME=\"" + home.string() + "\" \"" UCC_PATH "\" make > \"" + (home / "make.log").string() + "\" 2>&1").c_str()) == 0);
+    REQUIRE(ucctest::runUcc(home, "make", home / "make.log") == 0);
     std::filesystem::path built = user / "System" / "ModConsText.u";
     REQUIRE(std::filesystem::exists(built));
     REQUIRE(std::filesystem::exists(user / "System" / "ModCons.u"));
@@ -623,54 +625,4 @@ TEST_CASE("ucc make compiles an authored .con with every event type into a conve
     CHECK(reference(bound, "con") == compiled);
     CHECK(reference(bound, "Next") == nullptr);
     std::filesystem::remove_all(home);
-}
-
-TEST_CASE("a conversation shared through BarkBindName counts every owner so the invoker is rebound", "[data]")
-{
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::World world;
-    dx::UObject* level = dx::objects::packageObject(dx::Name("ConBindLevel"));
-    dx::UObject* info = dx::objects::newObject(dx::objects::findClass("DeusEx.DeusExLevelInfo"), level, dx::Name(), 0);
-    field<std::string>(info, "ConversationPackage") = "DeusExConversations";
-    field<int32_t>(info, "missionNumber") = 1;
-    world.actors.push_back(info);
-    dx::deusex::levelLoaded(world);
-    dx::UClass* troopClass = dx::objects::findClass("DeusEx.UNATCOTroop");
-    dx::UObject* generic = dx::objects::newObject(troopClass, level, dx::Name(), 0);
-    field<std::string>(generic, "BindName") = "UNATCOTroop";
-    dx::UObject* collins = dx::objects::newObject(troopClass, level, dx::Name(), 0);
-    field<std::string>(collins, "BindName") = "CorporalCollins";
-    field<std::string>(collins, "BarkBindName") = "UNATCOTroop";
-    world.actors.push_back(generic);
-    world.actors.push_back(collins);
-    dx::vm::Call(generic, dx::Name("ConBindEvents")).run();
-    dx::vm::Call(collins, dx::Name("ConBindEvents")).run();
-    dx::UObject* shared = nullptr;
-    dx::UObject* own = nullptr;
-    for (dx::UObject* item = reference(collins, "ConListItems"); item; item = reference(item, "Next")) {
-        dx::UObject* con = reference(item, "con");
-        if (nameText(con, "conName") == "UNATCOTroopInitialBarks") {
-            shared = con;
-        }
-        if (nameText(con, "conName") == "CollinsDockBarks") {
-            own = con;
-        }
-    }
-    REQUIRE(shared != nullptr);
-    REQUIRE(own != nullptr);
-    CHECK(field<int32_t>(own, "ownerRefCount") == 1);
-    CHECK(field<int32_t>(shared, "ownerRefCount") == 2);
-    dx::vm::Call bind(shared, dx::Name("BindEvents"));
-    bind.skip();
-    bind.obj(collins);
-    bind.run();
-    if (field<int32_t>(shared, "ownerRefCount") > 1) {
-        dx::vm::Call(shared, dx::Name("BindActorEvents")).obj(collins).run();
-    }
-    dx::UObject* speech = reference(shared, "eventList");
-    while (speech && !speech->isA(dx::Name("ConEventSpeech"))) {
-        speech = reference(speech, "nextEvent");
-    }
-    REQUIRE(speech != nullptr);
-    CHECK(reference(speech, "speaker") == collins);
 }

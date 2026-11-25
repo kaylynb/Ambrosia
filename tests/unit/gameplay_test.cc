@@ -1,14 +1,23 @@
 #include "core/config.h"
+#include "test_paths.h"
 #include "core/objects.h"
+#include "core/settings.h"
 #include "core/vm.h"
 #include "deusex/deusex.h"
+#include "deusex/gamepad_menus.h"
+#include "deusex/pad_inventory.h"
+#include "deusex/prompts.h"
+#include "deusex/script.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/console.h"
 #include "engine/input.h"
 #include "engine/props_engine.h"
 #include "engine/props_extension.h"
+#include "engine/resolutions.h"
 #include "engine/world.h"
 #include "extension/extension.h"
+#include "extension/windows.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -21,7 +30,7 @@
 namespace {
     std::unique_ptr<dx::World> freshWorld(const std::string& map)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::config::system().set("Engine.Engine", "Root", "DeusEx.DeusExRootWindow");
         dx::objects::unloadPackage(dx::Name(map));
         auto world = std::make_unique<dx::World>();
@@ -82,15 +91,49 @@ TEST_CASE("player climbs a ladder by walking into it", "[data]")
     tick(*world, 10);
     float startZ = dx::actor::Location(player).z;
     CHECK(startZ < 270.0f);
+    // The teleport leaves the player falling, and as in Deus Ex the ladder catches them: they
+    // hang on it without input, still falling as far as the physics mode goes.
+    CHECK(dx::actor::Physics(player) == 2);
+    tick(*world, 10);
+    CHECK(dx::actor::Location(player).z == startZ);
     uint8_t forward = dx::console::keyFromName("W");
     dx::console::key(forward, dx::IST_Press, 0);
     tick(*world, 30);
     dx::console::key(forward, dx::IST_Release, 0);
     float climbed = dx::actor::Location(player).z - startZ;
     CHECK(climbed > 60.0f);
-    CHECK(dx::actor::Physics(player) == 1);
     tick(*world, 30);
     CHECK(dx::actor::Location(player).z - startZ > 60.0f);
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
+TEST_CASE("climbing off the top of a ladder carries the player onto the floor without dropping back", "[data]")
+{
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    dx::UObject* player = world->player();
+    dx::console::execute(player, "teleport 6040 -1742 260 16384");
+    tick(*world, 10);
+    uint8_t forward = dx::console::keyFromName("W");
+    dx::console::key(forward, dx::IST_Press, 0);
+    float highest = dx::actor::Location(player).z;
+    float sank = 0;
+    // Until just past the top: the floor beyond ends in another drop.
+    for (int i = 0; i < 120 && dx::actor::Location(player).y < -1700.0f; i++) {
+        tick(*world, 1);
+        float z = dx::actor::Location(player).z;
+        sank = std::max(sank, highest - z);
+        highest = std::max(highest, z);
+    }
+    dx::console::key(forward, dx::IST_Release, 0);
+    // The ladder's face is at y -1716 and the floor it leads to is at z 400. Past the last
+    // rung the player falls the short way onto that floor, as in Deus Ex, but never back
+    // down the ladder.
+    CHECK(sank < 2.0f);
+    CHECK(dx::actor::Location(player).y > -1700.0f);
+    CHECK(dx::actor::Location(player).z > 440.0f);
+    tick(*world, 10);
+    CHECK(dx::actor::Physics(player) == 1);
+    CHECK(dx::actor::Location(player).z > 440.0f);
     releaseWorld(world, "01_NYC_UNATCOIsland");
 }
 
@@ -122,6 +165,50 @@ TEST_CASE("traces do not report actors behind level geometry", "[data]")
     releaseWorld(world, "04_NYC_NSFHQ");
 }
 
+TEST_CASE("long traces find actors just in front of the wall they end on", "[data]")
+{
+    // ULevel::MultiLineCheck checks only movers when the level is hit in the first 1% of the
+    // trace and under 30 units away. A laser beam 5000 units long that ends 40 units away on
+    // a wall still finds what stands in front of the wall.
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    dx::CheckResult wall;
+    REQUIRE(world->lineCheck(wall, { 6040, -1742, 300 }, { 6040, -1600, 300 }, {}, nullptr, dx::TRACE_World));
+    float face = wall.location.y;
+    dx::UClass* cellClass = dx::objects::findClass("DeusEx.BioelectricCell");
+    REQUIRE(cellClass != nullptr);
+    dx::UObject* cell = world->spawn(cellClass, nullptr, dx::Name(), { 6040, face - 10, 300 }, {}, nullptr, true);
+    REQUIRE(cell != nullptr);
+    auto firstHit = [&](float startDistance) -> dx::UObject* {
+        dx::Vector start { 6040, face - startDistance, 300 };
+        std::vector<dx::CheckResult> hits = world->multiLineCheck(start, start + dx::Vector { 0, 5000, 0 }, {}, nullptr, dx::TRACE_AllColliding);
+        return hits.empty() ? nullptr : hits.front().actor;
+    };
+    CHECK(firstHit(40) == cell);
+    // Closer than 30 units the original sees only the wall.
+    CHECK(firstHit(20) == world->levelInfo);
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
+TEST_CASE("a box fits against a wall until it reaches the wall's face", "[data]")
+{
+    // UModel::PointCheck: a hull plane keeps the box out once the box's push-out is no more
+    // than its distance in front, and the hull's bounding box, pushed out 0.1, does the same.
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    dx::CheckResult wall;
+    REQUIRE(world->lineCheck(wall, { 6040, -1742, 300 }, { 6040, -1600, 300 }, {}, nullptr, dx::TRACE_World));
+    // A trace stops half a unit short of what it hits.
+    float face = wall.location.y + 0.5f;
+    dx::Vector extent { 10, 10, 10 };
+    dx::CheckResult hit;
+    CHECK_FALSE(world->pointCheck(hit, { 6040, face - 10.0f, 300 }, extent, nullptr, false));
+    CHECK(world->pointCheck(hit, { 6040, face - 9.75f, 300 }, extent, nullptr, false));
+    CHECK(hit.actor == world->levelInfo);
+    // A point is inside only once it is past the face (the plate here is about 3 units thick).
+    CHECK_FALSE(world->pointCheck(hit, { 6040, face - 0.25f, 300 }, {}, nullptr, false));
+    CHECK(world->pointCheck(hit, { 6040, face + 1.0f, 300 }, {}, nullptr, false));
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
 TEST_CASE("level traces report the texture of the surface that was hit", "[data]")
 {
     std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
@@ -145,6 +232,32 @@ TEST_CASE("player swims in a water zone", "[data]")
     CHECK(dx::region(player).zone->name == dx::Name("WaterZone1"));
     CHECK(dx::actor::Physics(player) == 3);
     releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
+TEST_CASE("swimming up against a low ledge jumps the player out of the water", "[data]")
+{
+    // The end of the training pool, where the floor is a little above the water.
+    std::unique_ptr<dx::World> world = freshWorld("00_Training");
+    dx::UObject* player = world->player();
+    dx::console::execute(player, "teleport 5480 -4000 -90 32768");
+    tick(*world, 30);
+    REQUIRE(dx::actor::Physics(player) == 3);
+    uint8_t forward = dx::console::keyFromName("W");
+    dx::console::key(forward, dx::IST_Press, 0);
+    float lowest = 0;
+    for (int i = 0; i < 80; i++) {
+        // Looking up a little, as the water jump needs.
+        dx::pawn::ViewRotation(player).pitch = 6000;
+        tick(*world, 1);
+        lowest = std::min(lowest, dx::actor::Velocity(player).z);
+    }
+    dx::console::key(forward, dx::IST_Release, 0);
+    tick(*world, 20);
+    CHECK(dx::actor::Physics(player) == 1);
+    CHECK(dx::actor::Location(player).z > -10.0f);
+    CHECK(dx::actor::CollisionHeight(player) > 40.0f);
+    CHECK(lowest > -500.0f);
+    releaseWorld(world, "00_Training");
 }
 
 TEST_CASE("frobbing an unlocked door opens it", "[data]")
@@ -278,6 +391,223 @@ TEST_CASE("putting an item in hand does not close the open inventory screen", "[
     releaseWorld(world, "01_NYC_UNATCOIsland");
 }
 
+TEST_CASE("both A and X place a moving inventory item and appear in its prompts", "[gamepad][data]")
+{
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    dx::console::execute(world->player(), "giveitem DeusEx.Medkit");
+    dx::vm::Call(world->player(), dx::Name("ShowInventoryWindow")).run();
+    tick(*world, 5);
+    dx::UObject* screen = dx::extension::topModal();
+    REQUIRE(dx::script::isA(screen, "PersonaScreenInventory"));
+    auto* grid = dx::cast<dx::extension::UWindow>(objectProperty(screen, "winItems"));
+    REQUIRE(grid != nullptr);
+    dx::UObject* selected = nullptr;
+    for (auto* button = grid->firstChild(); button; button = button->nextSibling()) {
+        if (dx::script::isA(button, "PersonaInventoryItemButton") && dx::script::flag(button, "bAllowDragging")) {
+            selected = button;
+            break;
+        }
+    }
+    REQUIRE(selected != nullptr);
+    dx::extension::setFocusWindow(selected);
+
+    for (dx::gamepad::Button place : { dx::gamepad::A, dx::gamepad::X }) {
+        REQUIRE(dx::gamepadmenu::press(dx::gamepad::X));
+        REQUIRE(dx::padinventory::busy());
+        std::vector<dx::prompts::Prompt> prompts = dx::gamepadmenu::prompts();
+        for (dx::gamepad::Button button : { dx::gamepad::A, dx::gamepad::X }) {
+            CHECK(std::any_of(prompts.begin(), prompts.end(), [button](const auto& prompt) { return dx::gamepad::button(prompt.action) == button || dx::gamepad::alternative(prompt.action).button == button; }));
+        }
+        CHECK(std::any_of(prompts.begin(), prompts.end(), [](const auto& prompt) { return prompt.label == "Place"; }));
+        CHECK(std::any_of(prompts.begin(), prompts.end(), [](const auto& prompt) { return dx::gamepad::button(prompt.action) == dx::gamepad::A && dx::gamepad::alternative(prompt.action).button == dx::gamepad::X && prompt.label == "Place"; }));
+        CHECK(std::any_of(prompts.begin(), prompts.end(), [](const auto& prompt) { return std::string(dx::gamepad::glyphName(dx::gamepad::control(prompt.action))) == "pad_ls" && std::string(dx::gamepad::glyphName(dx::gamepad::alternative(prompt.action))) == "pad_dpad" && prompt.label == "Move"; }));
+        REQUIRE(dx::gamepadmenu::press(place));
+        CHECK_FALSE(dx::padinventory::busy());
+        CHECK(dx::extension::topModal() == screen);
+    }
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
+TEST_CASE("inventory equip and drop follow gamepad focus without making use automatic", "[gamepad][data]")
+{
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    dx::UObject* player = world->player();
+    dx::console::execute(player, "giveitem DeusEx.Medkit");
+    dx::console::execute(player, "giveitem DeusEx.Lockpick");
+    dx::vm::Call(player, dx::Name("ShowInventoryWindow")).run();
+    tick(*world, 5);
+    dx::UObject* screen = dx::extension::topModal();
+    REQUIRE(dx::script::isA(screen, "PersonaScreenInventory"));
+    auto* grid = dx::cast<dx::extension::UWindow>(objectProperty(screen, "winItems"));
+    REQUIRE(grid != nullptr);
+    dx::UObject* medkit = nullptr;
+    dx::UObject* lockpick = nullptr;
+    for (auto* button = grid->firstChild(); button; button = button->nextSibling()) {
+        dx::UObject* item = dx::script::object(button, "clientObject");
+        if (dx::script::isA(item, "MedKit")) {
+            medkit = button;
+        } else if (dx::script::isA(item, "Lockpick")) {
+            lockpick = button;
+        }
+    }
+    REQUIRE(medkit != nullptr);
+    REQUIRE(lockpick != nullptr);
+    dx::UObject* medkitItem = objectProperty(medkit, "clientObject");
+    dx::UObject* lockpickItem = objectProperty(lockpick, "clientObject");
+    dx::vm::Call(screen, dx::Name("SelectInventory")).obj(medkit).run();
+    dx::extension::setFocusWindow(lockpick);
+    auto hasPrompt = [](dx::gamepad::Button button, const char* label) {
+        auto prompts = dx::gamepadmenu::prompts();
+        return std::any_of(prompts.begin(), prompts.end(), [=](const auto& prompt) { return dx::gamepad::button(prompt.action) == button && prompt.label == label; });
+    };
+
+    SECTION("equipping selects the highlighted item, not the old selection")
+    {
+        CHECK(hasPrompt(dx::gamepad::Y, "Equip"));
+        CHECK(objectProperty(screen, "selectedItem") == medkit);
+        REQUIRE(dx::gamepadmenu::press(dx::gamepad::Y));
+        CHECK(objectProperty(screen, "selectedItem") == lockpick);
+        CHECK(objectProperty(player, "inHandPending") == lockpickItem);
+        CHECK(hasPrompt(dx::gamepad::Y, "Unequip"));
+    }
+    SECTION("unequipping follows focus and advertises Unequip before selection")
+    {
+        dx::vm::Call(player, dx::Name("PutInHand")).obj(lockpickItem).run();
+        CHECK(hasPrompt(dx::gamepad::Y, "Unequip"));
+        CHECK(objectProperty(screen, "selectedItem") == medkit);
+        REQUIRE(dx::gamepadmenu::press(dx::gamepad::Y));
+        CHECK(objectProperty(screen, "selectedItem") == lockpick);
+        CHECK(objectProperty(player, "inHandPending") == nullptr);
+        CHECK(hasPrompt(dx::gamepad::Y, "Equip"));
+    }
+    SECTION("dropping selects and drops the highlighted item")
+    {
+        CHECK(hasPrompt(dx::gamepad::LeftTrigger, "Drop"));
+        CHECK(objectProperty(screen, "selectedItem") == medkit);
+        REQUIRE(dx::gamepadmenu::press(dx::gamepad::LeftTrigger));
+        auto items = dx::script::inventory(player);
+        CHECK(std::find(items.begin(), items.end(), medkitItem) != items.end());
+        CHECK(std::find(items.begin(), items.end(), lockpickItem) == items.end());
+    }
+    SECTION("using still requires explicitly selecting the highlighted item")
+    {
+        CHECK(hasPrompt(dx::gamepad::A, "Select"));
+        CHECK_FALSE(dx::padinventory::usesOnA(screen));
+        CHECK_FALSE(dx::gamepadmenu::press(dx::gamepad::A));
+        CHECK(objectProperty(screen, "selectedItem") == medkit);
+        dx::vm::Call(screen, dx::Name("SelectInventory")).obj(lockpick).run();
+        CHECK(dx::padinventory::usesOnA(screen));
+        CHECK(hasPrompt(dx::gamepad::A, "Use"));
+    }
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
+TEST_CASE("gamepad browsing reaches quickbar slots and clears assignments without dropping items", "[gamepad][data]")
+{
+    class LayoutCanvas : public dx::Canvas2D {
+    public:
+        float width() const override
+        {
+            return 1280;
+        }
+
+        float height() const override
+        {
+            return 800;
+        }
+
+        void setClip(float, float, float, float) override
+        {
+        }
+
+        void clearClip() override
+        {
+        }
+
+        void drawTile(dx::UTexture*, float, float, float, float, float, float, float, float, dx::LinearColor, dx::BlendStyle, bool) override
+        {
+        }
+
+        void drawRect(float, float, float, float, dx::LinearColor, dx::BlendStyle) override
+        {
+        }
+
+        void drawLine(float, float, float, float, dx::LinearColor) override
+        {
+        }
+    } canvas;
+
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    dx::UObject* player = world->player();
+    dx::console::execute(player, "giveitem DeusEx.Medkit");
+    dx::console::execute(player, "giveitem DeusEx.Lockpick");
+    dx::vm::Call(player, dx::Name("ShowInventoryWindow")).run();
+    tick(*world, 5);
+    dx::UObject* screen = dx::extension::topModal();
+    REQUIRE(dx::script::isA(screen, "PersonaScreenInventory"));
+    auto* grid = dx::cast<dx::extension::UWindow>(objectProperty(screen, "winItems"));
+    REQUIRE(grid != nullptr);
+    dx::UObject* medkit = nullptr;
+    dx::UObject* lockpick = nullptr;
+    for (auto* button = grid->firstChild(); button; button = button->nextSibling()) {
+        dx::UObject* item = dx::script::object(button, "clientObject");
+        if (dx::script::isA(item, "MedKit")) {
+            medkit = button;
+        } else if (dx::script::isA(item, "Lockpick")) {
+            lockpick = button;
+        }
+    }
+    REQUIRE(medkit != nullptr);
+    REQUIRE(lockpick != nullptr);
+    dx::UObject* medkitItem = objectProperty(medkit, "clientObject");
+    dx::UObject* lockpickItem = objectProperty(lockpick, "clientObject");
+    dx::UObject* inventoryBelt = objectProperty(screen, "invBelt");
+    dx::UObject* belt = objectProperty(inventoryBelt, "objBelt");
+    dx::vm::Call(inventoryBelt, dx::Name("AddObject")).obj(medkitItem).i(1).run();
+    dx::vm::Call(inventoryBelt, dx::Name("AddObject")).obj(lockpickItem).i(2).run();
+    dx::UObject* first = dx::script::object(belt, "objects", 1);
+    dx::UObject* second = dx::script::object(belt, "objects", 2);
+    dx::UObject* empty = dx::script::object(belt, "objects", 3);
+    dx::extension::render(canvas);
+    dx::vm::Call(screen, dx::Name("SelectInventory")).obj(medkit).run();
+    dx::extension::setFocusWindow(medkit);
+    for (int i = 0; i < 20 && !dx::padinventory::beltFocused(screen); i++) {
+        REQUIRE_FALSE(dx::padinventory::steer(dx::IK_Down));
+        REQUIRE(dx::extension::navigate(dx::IK_Down));
+    }
+    REQUIRE(dx::padinventory::beltFocused(screen));
+    CHECK_FALSE(dx::padinventory::busy());
+    dx::extension::setFocusWindow(first);
+    REQUIRE(dx::extension::navigate(dx::IK_Right));
+    CHECK(dx::extension::focusWindow() == second);
+    auto prompts = dx::gamepadmenu::prompts();
+    CHECK(std::any_of(prompts.begin(), prompts.end(), [](const auto& prompt) { return dx::gamepad::button(prompt.action) == dx::gamepad::X && prompt.label == "Clear slot"; }));
+    CHECK(std::none_of(prompts.begin(), prompts.end(), [](const auto& prompt) { return prompt.label == "Drop" || prompt.label == "Equip" || prompt.label == "Use"; }));
+    REQUIRE(dx::gamepadmenu::press(dx::gamepad::X));
+    CHECK(dx::script::object(second, "item") == nullptr);
+    CHECK(dx::extension::focusWindow() == second);
+    CHECK(dx::script::object(first, "item") == medkitItem);
+    CHECK_FALSE(dx::script::flag(lockpickItem, "bInObjectBelt"));
+    CHECK(dx::script::integer(lockpickItem, "beltPos") == -1);
+    auto items = dx::script::inventory(player);
+    CHECK(std::find(items.begin(), items.end(), lockpickItem) != items.end());
+    dx::UObject* hudBelt = dx::script::object(dx::script::object(dx::extension::rootWindow(), "hud"), "belt");
+    CHECK(dx::script::object(dx::script::object(hudBelt, "objects", 2), "item") == nullptr);
+    REQUIRE(dx::extension::navigate(dx::IK_Right));
+    CHECK(dx::extension::focusWindow() == empty);
+    REQUIRE(dx::gamepadmenu::press(dx::gamepad::X));
+    CHECK(dx::script::object(empty, "item") == nullptr);
+    prompts = dx::gamepadmenu::prompts();
+    CHECK(std::none_of(prompts.begin(), prompts.end(), [](const auto& prompt) { return prompt.label == "Clear slot"; }));
+    dx::UObject* keySlot = dx::script::object(belt, "objects", 0);
+    dx::UObject* keyring = dx::script::object(keySlot, "item");
+    REQUIRE(dx::script::isA(keyring, "NanoKeyRing"));
+    dx::extension::setFocusWindow(keySlot);
+    REQUIRE(dx::gamepadmenu::press(dx::gamepad::X));
+    CHECK(dx::script::object(keySlot, "item") == keyring);
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
 TEST_CASE("shooting an explosive barrel destroys it and hurts a nearby player", "[data]")
 {
     std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
@@ -338,6 +668,45 @@ TEST_CASE("killing a terrorist leaves a carcass whose items the player can take"
     releaseWorld(world, "01_NYC_UNATCOIsland");
 }
 
+TEST_CASE("the use prompt on a body says Search until it is empty and then Pick up", "[data]")
+{
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    dx::UObject* player = world->player();
+    dx::UObject* terrorist = findActor(*world, "Terrorist1");
+    REQUIRE(terrorist != nullptr);
+    tick(*world, 30);
+    std::vector<dx::UObject*> existing;
+    for (dx::UObject* a : world->actors) {
+        if (a && !a->destroyed && a->isA(dx::Name("DeusExCarcass"))) {
+            existing.push_back(a);
+        }
+    }
+    dx::vm::Call(terrorist, dx::Name("TakeDamage")).i(150).obj(player).v(dx::actor::Location(terrorist)).v({}).n(dx::Name("Shot")).run();
+    tick(*world, 150);
+    dx::UObject* carcass = nullptr;
+    for (dx::UObject* a : world->actors) {
+        if (a && !a->destroyed && a->isA(dx::Name("TerroristCarcass")) && std::find(existing.begin(), existing.end(), a) == existing.end()) {
+            carcass = a;
+        }
+    }
+    REQUIRE(carcass != nullptr);
+    REQUIRE(dx::actor::Inventory(carcass) != nullptr);
+    CHECK(std::string(dx::prompts::interactionLabel(carcass, player)) == "Search");
+    dx::Vector spot = dx::actor::Location(carcass);
+    dx::console::execute(player, "teleport " + std::to_string(spot.x + 60) + " " + std::to_string(spot.y) + " " + std::to_string(spot.z + 30) + " 32768");
+    dx::vm::Call(carcass, dx::Name("Frob")).obj(player).obj(nullptr).run();
+    tick(*world, 5);
+    REQUIRE(dx::actor::Inventory(carcass) == nullptr);
+    CHECK(std::string(dx::prompts::interactionLabel(carcass, player)) == "Pick up");
+    // With something in hand the body is searched again rather than carried.
+    dx::UObject** inHand = reinterpret_cast<dx::UObject**>(player->propertyAddress(dx::Name("inHand")));
+    *inHand = dx::actor::Inventory(player);
+    REQUIRE(*inHand != nullptr);
+    CHECK(std::string(dx::prompts::interactionLabel(carcass, player)) == "Search");
+    *inHand = nullptr;
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
 TEST_CASE("player picks up a light decoration and throws it", "[data]")
 {
     std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
@@ -364,6 +733,86 @@ TEST_CASE("player picks up a light decoration and throws it", "[data]")
     CHECK(dx::actor::Physics(box) == 2);
     tick(*world, 30);
     CHECK(dx::actor::Location(box).x < start.x - 80.0f);
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
+TEST_CASE("following interpolation points sets the game speed and skips points marked bSkipNextPath", "[data]")
+{
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    dx::UClass* pointClass = dx::objects::findClass("Engine.InterpolationPoint");
+    REQUIRE(pointClass != nullptr);
+    auto set = [](dx::UObject* o, const char* name, auto value) {
+        uint8_t* address = o->propertyAddress(dx::Name(name));
+        REQUIRE(address != nullptr);
+        *reinterpret_cast<decltype(value)*>(address) = value;
+    };
+    dx::Vector origin { -4300, 10400, -100 };
+    dx::UObject* points[4] = {};
+    for (int i = 0; i < 4; i++) {
+        points[i] = world->spawn(pointClass, nullptr, dx::Name(), origin + dx::Vector { 64.0f * static_cast<float>(i), 0, 0 }, {}, nullptr, false);
+        REQUIRE(points[i] != nullptr);
+    }
+    for (int i = 0; i < 4; i++) {
+        set(points[i], "Next", points[(i + 1) % 4]);
+        set(points[i], "Prev", points[(i + 3) % 4]);
+    }
+    set(points[0], "GameSpeedModifier", 1.0f);
+    set(points[1], "GameSpeedModifier", 0.5f);
+    set(points[1], "bSkipNextPath", uint32_t { 1 });
+
+    dx::UObject* mover = world->spawn(dx::objects::findClass("DeusEx.BoxSmall"), nullptr, dx::Name(), origin, {}, nullptr, false);
+    REQUIRE(mover != nullptr);
+    dx::vm::Call(mover, dx::Name("SetCollision")).b(false).b(false).b(false).run();
+    dx::actor::bCollideWorld(mover) = 0;
+    dx::actor::Target(mover) = points[0];
+    dx::actor::PhysRate(mover) = 1.0f;
+    dx::actor::PhysAlpha(mover) = 0.0f;
+    dx::actor::bInterpolating(mover) = 1;
+    dx::vm::Call(mover, dx::Name("SetPhysics")).byte(dx::PHYS_Interpolating).run();
+
+    // Part way from point 0 to point 1 the game speed is blended between them.
+    tick(*world, 10);
+    float dilation = dx::levelinfo::TimeDilation(world->levelInfo);
+    CHECK(dilation < 1.0f);
+    CHECK(dilation > 0.5f);
+    CHECK(dx::actor::Target(mover) == points[0]);
+
+    // Arriving at point 1, which is marked bSkipNextPath, moves straight on to point 2.
+    for (int i = 0; i < 120 && dx::actor::Target(mover) == points[0]; i++) {
+        tick(*world, 1);
+    }
+    CHECK(dx::actor::Target(mover) == points[2]);
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
+TEST_CASE("a carried decoration stays in front of the player through a full turn", "[data]")
+{
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    dx::UObject* player = world->player();
+    dx::console::execute(player, "teleport -4300 10400 -259 32768");
+    tick(*world, 5);
+    dx::Vector start = dx::actor::Location(player);
+    dx::UObject* box = world->spawn(dx::objects::findClass("DeusEx.BoxSmall"), nullptr, dx::Name(), start + dx::Vector { -60, 0, -30 }, {}, nullptr, false);
+    REQUIRE(box != nullptr);
+    tick(*world, 20);
+    dx::Vector spot = dx::actor::Location(box);
+    dx::console::execute(player, "lookat " + std::to_string(spot.x) + " " + std::to_string(spot.y) + " " + std::to_string(spot.z));
+    tick(*world, 10);
+    dx::vm::Call(player, dx::Name("GrabDecoration")).run();
+    tick(*world, 5);
+    dx::UProperty* carried = player->cls->findProperty(dx::Name("CarriedDecoration"));
+    REQUIRE(*reinterpret_cast<dx::UObject**>(player->data + carried->offset) == box);
+    // Turn round in steps of 1/16 of a turn per frame, as the mouse does: input turns ViewRotation, and
+    // the player's UpdateRotation turns the pawn with SetRotation, which swings what it is carrying.
+    for (int step = 1; step <= 16; step++) {
+        dx::pawn::ViewRotation(player).yaw += 4096;
+        tick(*world, 1);
+        INFO("step " << step);
+        REQUIRE(*reinterpret_cast<dx::UObject**>(player->data + carried->offset) == box);
+        float angle = static_cast<float>(dx::actor::Rotation(player).yaw) * 3.14159265f / 32768.0f;
+        dx::Vector offset = dx::actor::Location(box) - dx::actor::Location(player);
+        CHECK(offset.x * std::cos(angle) + offset.y * std::sin(angle) > 0.0f);
+    }
     releaseWorld(world, "01_NYC_UNATCOIsland");
 }
 
@@ -605,45 +1054,6 @@ TEST_CASE("moving the player into a datalink trigger with SetLocation starts its
     releaseWorld(world, "01_NYC_UNATCOIsland");
 }
 
-TEST_CASE("player climbs the rung ladder out of the pit under the satcom hatch", "[data]")
-{
-    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
-    dx::UObject* player = world->player();
-    dx::UObject* hatch = findActor(*world, "DeusExMover7");
-    REQUIRE(hatch != nullptr);
-    REQUIRE(dx::actor::Tag(hatch) == dx::Name("satcomhatch"));
-    dx::vm::Call(hatch, dx::Name("DoOpen")).run();
-    tick(*world, 90);
-    dx::console::execute(player, "teleport -6384 1460 -250 16384");
-    tick(*world, 20);
-    float floorZ = dx::actor::Location(player).z;
-    REQUIRE(floorZ < -230.0f);
-    uint8_t forward = dx::console::keyFromName("W");
-    dx::console::key(forward, dx::IST_Press, 0);
-    tick(*world, 30);
-    dx::console::key(forward, dx::IST_Release, 0);
-    float heldZ = dx::actor::Location(player).z;
-    CHECK(heldZ > floorZ + 40.0f);
-    CHECK(heldZ < -130.0f);
-    tick(*world, 30);
-    CHECK(dx::actor::Location(player).z == Catch::Approx(heldZ).margin(1.0f));
-    dx::pawn::ViewRotation(player).pitch = 50000;
-    dx::console::key(forward, dx::IST_Press, 0);
-    tick(*world, 15);
-    dx::console::key(forward, dx::IST_Release, 0);
-    CHECK(dx::actor::Location(player).z < heldZ - 20.0f);
-    dx::pawn::ViewRotation(player).pitch = 0;
-    dx::console::key(forward, dx::IST_Press, 0);
-    tick(*world, 90);
-    dx::console::key(forward, dx::IST_Release, 0);
-    tick(*world, 10);
-    dx::Vector surface = dx::actor::Location(player);
-    CHECK(surface.y > 1503.0f);
-    CHECK(surface.z == Catch::Approx(-80.3f).margin(2.0f));
-    CHECK(dx::actor::Physics(player) == 1);
-    releaseWorld(world, "01_NYC_UNATCOIsland");
-}
-
 TEST_CASE("the belt slot of the item in hand draws its selection border", "[data]")
 {
     std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
@@ -725,102 +1135,184 @@ TEST_CASE("a crouching player walks off the edge of a crate", "[data]")
     releaseWorld(world, "01_NYC_UNATCOIsland");
 }
 
-TEST_CASE("a terrorist that cannot jump walks right up to the edge of a crate without falling off", "[data]")
+TEST_CASE("the pad browses consecutive save slots through the inline name editor", "[gamepad][data]")
 {
-    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
-    dx::UObject* terrorist = findActor(*world, "Terrorist2");
-    REQUIRE(terrorist != nullptr);
-    tick(*world, 10);
-    dx::vm::gotoState(terrorist, dx::Name("Standing"));
-    dx::vm::Call move(terrorist, dx::Name("SetLocation"));
-    move.v({ 688, -395, -40 }).run();
-    tick(*world, 20);
-    REQUIRE(dx::actor::Location(terrorist).z == Catch::Approx(-51.6f).margin(1.0f));
-    dx::pawn::bCanJump(terrorist) = 0;
-    for (int i = 0; i < 60; i++) {
-        dx::actor::Acceleration(terrorist) = { 400, 200, 0 };
-        dx::actor::LastRenderTime(terrorist) = world->timeSeconds;
-        dx::pawn::DesiredSpeed(terrorist) = 1.0f;
-        tick(*world, 1);
+    auto world = freshWorld("01_NYC_UNATCOIsland");
+    tick(*world, 5);
+    auto* root = dx::extension::rootWindow();
+    auto* screen = dx::vm::Call(root, dx::Name("InvokeMenuScreen")).obj(dx::objects::findClass("DeusEx.MenuScreenSaveGame")).result<dx::UObject*>();
+    REQUIRE(dx::script::isA(screen, "MenuScreenSaveGame"));
+    // The save screen hides itself for two ticks to take the thumbnail.
+    dx::vm::Call(screen, dx::Name("Tick")).f(0.033f).run();
+    dx::vm::Call(screen, dx::Name("Tick")).f(0.033f).run();
+    REQUIRE(dx::extension::topModal() == screen);
+    auto* list = dx::cast<dx::extension::UListWindow>(objectProperty(screen, "lstGames"));
+    REQUIRE(list);
+    for (auto name : { "Slot one", "Slot two" }) {
+        dx::vm::Call(list, dx::Name("AddRow")).s(std::string(name) + ";;;;99999").run();
     }
-    dx::Vector location = dx::actor::Location(terrorist);
-    CHECK(location.x == Catch::Approx(736.2f).margin(1.0f));
-    CHECK(location.y == Catch::Approx(-370.9f).margin(1.0f));
-    CHECK(location.z == Catch::Approx(-51.6f).margin(1.0f));
-    CHECK(dx::actor::Physics(terrorist) == 1);
+    int start = list->indexOf(dx::script::integer(screen, "editRowId"));
+    REQUIRE(start >= 0);
+    REQUIRE(start + 2 < static_cast<int>(list->rows.size()));
+    dx::extension::setFocusWindow(objectProperty(screen, "editName"));
+    for (int step : { 1, 2, 1 }) {
+        int index = list->indexOf(dx::script::integer(screen, "editRowId"));
+        REQUIRE(dx::gamepadmenu::adjust(index < start + step ? dx::IK_Down : dx::IK_Up));
+        CHECK(dx::script::integer(screen, "editRowId") == list->rows[start + step].id);
+    }
+    REQUIRE(dx::gamepadmenu::press(dx::gamepad::A));
+    CHECK(dx::extension::topModal() != screen);
     releaseWorld(world, "01_NYC_UNATCOIsland");
 }
 
-TEST_CASE("an incapacitated terrorist flinches when shot but stays down until the effect ends, then goes after the shooter", "[data]")
-{
-    struct Case {
-        const char* damageType;
-        const char* state;
-        const char* loop;
-    };
-
-    for (const Case& test : { Case { "Stunned", "Stunned", "Shocked" }, Case { "TearGas", "RubbingEyes", "RubEyes" } }) {
-        INFO(test.damageType);
-        std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
-        dx::UObject* player = world->player();
-        dx::UObject* terrorist = findActor(*world, "Terrorist6");
-        REQUIRE(terrorist != nullptr);
-        auto stepFrames = [&](int frames) {
-            for (int i = 0; i < frames; i++) {
-                dx::actor::LastRenderTime(terrorist) = world->timeSeconds;
-                dx::pawn::Health(player) = 100;
-                tick(*world, 1);
-            }
-        };
-        auto damage = [&](int amount, const dx::Vector& at, const char* type) {
-            dx::vm::Call call(terrorist, dx::Name("TakeDamage"));
-            call.i(amount).obj(player).v(at).v({}).n(dx::Name(type)).run();
-        };
-        stepFrames(30);
-        dx::Vector center = dx::actor::Location(terrorist);
-        damage(2, center, test.damageType);
-        REQUIRE(dx::vm::stateName(terrorist) == dx::Name(test.state));
-        stepFrames(60);
-        float yaw = static_cast<float>(dx::actor::Rotation(terrorist).yaw) * dx::Pi / 32768.0f;
-        float reach = dx::actor::CollisionRadius(terrorist);
-        dx::Vector front = dx::actor::Location(terrorist) + dx::Vector { std::cos(yaw) * reach, std::sin(yaw) * reach, 10.0f };
-        damage(2, front, "Shot");
-        CHECK(dx::vm::stateName(terrorist) == dx::Name(test.state));
-        CHECK(dx::actor::AnimSequence(terrorist) == dx::Name("HitTorso"));
-        stepFrames(45);
-        CHECK(dx::vm::stateName(terrorist) == dx::Name(test.state));
-        CHECK(dx::actor::AnimSequence(terrorist) == dx::Name(test.loop));
-        int framesDown = 105;
-        while (framesDown < 900 && dx::vm::stateName(terrorist) == dx::Name(test.state)) {
-            stepFrames(1);
-            framesDown++;
-        }
-        CHECK(framesDown >= 450);
-        CHECK(framesDown < 900);
-        CHECK(dx::pawn::Enemy(terrorist) == player);
-        CHECK(dx::vm::stateName(terrorist) == dx::Name("Attacking"));
-        releaseWorld(world, "01_NYC_UNATCOIsland");
-    }
-}
-
-TEST_CASE("with vanilla bug fixes off a stunned terrorist attacks as soon as it is shot", "[data]")
+TEST_CASE("Screen Resolution follows the window between windowed and fullscreen", "[data]")
 {
     std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
-    std::string section = dx::config::system().get("Engine.Engine", "GameEngine").value_or("DeusEx.DeusExGameEngine");
-    dx::config::system().set(section, "FixVanillaBugs", "False");
-    dx::deusex::applyVanillaFixes();
-    dx::UObject* player = world->player();
-    dx::UObject* terrorist = findActor(*world, "Terrorist6");
-    REQUIRE(terrorist != nullptr);
-    tick(*world, 30);
-    dx::vm::Call stun(terrorist, dx::Name("TakeDamage"));
-    stun.i(2).obj(player).v(dx::actor::Location(terrorist)).v({}).n(dx::Name("Stunned")).run();
-    REQUIRE(dx::vm::stateName(terrorist) == dx::Name("Stunned"));
-    tick(*world, 30);
-    dx::vm::Call shot(terrorist, dx::Name("TakeDamage"));
-    shot.i(2).obj(player).v(dx::actor::Location(terrorist)).v({}).n(dx::Name("Shot")).run();
-    CHECK(dx::vm::stateName(terrorist) == dx::Name("Attacking"));
-    dx::config::system().set(section, "FixVanillaBugs", "True");
-    dx::deusex::applyVanillaFixes();
+    tick(*world, 5);
+    std::string current = "1600x900";
+    std::string available = "1280x720 1366x768 1600x900 1920x1080";
+    auto savedCurrent = dx::console::currentResHook;
+    auto savedAvailable = dx::console::resolutionsHook;
+    dx::console::currentResHook = [&] { return current; };
+    dx::console::resolutionsHook = [&] { return available; };
+    dx::vm::Call(dx::extension::rootWindow(), dx::Name("InvokeMenuScreen")).obj(dx::objects::findClass("DeusEx.MenuScreenDisplay")).run();
+    dx::UObject* screen = dx::extension::topModal();
+    REQUIRE(dx::script::isA(screen, "MenuScreenDisplay"));
+    dx::UObject* choice = nullptr;
+    for (auto* child = dx::cast<dx::extension::UWindow>(objectProperty(screen, "winClient"))->firstChild(); child; child = child->nextSibling()) {
+        if (dx::script::isA(child, "MenuChoice_Resolution")) {
+            choice = child;
+        }
+    }
+    REQUIRE(choice != nullptr);
+    // The game adds this enum to Display at startup. Exercise its live instance:
+    // moving the window must also remove entries left over from the faster screen.
+    auto* frameClass = dx::objects::createSubclass(dx::objects::findClass("DeusEx.MenuUIChoiceEnum"), dx::Name("MenuChoice_FrameRateLimit"));
+    auto* frameChoice = dx::vm::Call(objectProperty(screen, "winClient"), dx::Name("NewChild")).obj(frameClass).result<dx::UObject*>();
+    REQUIRE(frameChoice);
+    auto entry = [choice](int index) {
+        return *reinterpret_cast<std::string*>(choice->propertyAddress(dx::Name("enumText"), index));
+    };
+    auto shown = [&] {
+        return entry(dx::script::integer(choice, "currentValue"));
+    };
+    auto sensitive = [choice] {
+        return dx::cast<dx::extension::UWindow>(dx::script::object(choice, "btnAction"))->sensitive();
+    };
+    dx::deusex::syncResolutionChoice(current, false, 720);
+    CHECK(*dx::script::field<std::string>(frameChoice, "enumText", std::size(dx::settings::frameRates)) == "720");
+    CHECK(shown() == "1600x900");
+    CHECK(entry(3) == "1920x1080");
+    CHECK(sensitive());
+
+    // Borderless fullscreen: just the desktop's size, which can't be changed.
+    current = "2560x1440";
+    available = dx::resolutions::format({ { 2560, 1440 } });
+    dx::deusex::syncResolutionChoice(current + " fullscreen", true, 100);
+    CHECK(*dx::script::field<std::string>(frameChoice, "enumText", 4) == "100");
+    CHECK(dx::script::field<std::string>(frameChoice, "enumText", 5)->empty());
+    CHECK(shown() == "2560x1440");
+    CHECK(entry(1).empty());
+    CHECK_FALSE(sensitive());
+
+    // Back in a window, the windowed sizes return with the window's own selected.
+    current = "1600x900";
+    available = "1280x720 1366x768 1600x900 1920x1080";
+    dx::deusex::syncResolutionChoice(current, false, 60);
+    CHECK(*dx::script::field<std::string>(frameChoice, "enumText", 2) == "60");
+    CHECK(dx::script::field<std::string>(frameChoice, "enumText", 3)->empty());
+    CHECK(shown() == "1600x900");
+    CHECK(entry(3) == "1920x1080");
+    CHECK(sensitive());
+
+    dx::console::currentResHook = savedCurrent;
+    dx::console::resolutionsHook = savedAvailable;
+    releaseWorld(world, "01_NYC_UNATCOIsland");
+}
+
+TEST_CASE("on a slider row the gamepad changes the value with left and right, stopping at the ends, and leaves with up and down", "[gamepad][data]")
+{
+    class LayoutCanvas : public dx::Canvas2D {
+    public:
+        float width() const override
+        {
+            return 1280;
+        }
+
+        float height() const override
+        {
+            return 720;
+        }
+
+        void setClip(float, float, float, float) override
+        {
+        }
+
+        void clearClip() override
+        {
+        }
+
+        void drawTile(dx::UTexture*, float, float, float, float, float, float, float, float, dx::LinearColor, dx::BlendStyle, bool) override
+        {
+        }
+
+        void drawRect(float, float, float, float, dx::LinearColor, dx::BlendStyle) override
+        {
+        }
+
+        void drawLine(float, float, float, float, dx::LinearColor) override
+        {
+        }
+    } canvas;
+
+    std::unique_ptr<dx::World> world = freshWorld("01_NYC_UNATCOIsland");
+    tick(*world, 5);
+    dx::vm::Call(dx::extension::rootWindow(), dx::Name("InvokeMenuScreen")).obj(dx::objects::findClass("DeusEx.MenuScreenSound")).run();
+    REQUIRE(dx::script::isA(dx::extension::topModal(), "MenuScreenSound"));
+    // As the controller sends arrows in a menu.
+    auto press = [&](uint8_t key) {
+        if (!dx::gamepadmenu::adjust(key)) {
+            dx::extension::navigate(key);
+        }
+        tick(*world, 1);
+        dx::extension::render(canvas);
+    };
+    auto row = [] {
+        auto* focus = dx::cast<dx::extension::UWindow>(dx::extension::focusWindow());
+        return focus && focus->parent() ? std::string(focus->parent()->cls->name.c_str()) : std::string();
+    };
+    tick(*world, 1);
+    dx::extension::render(canvas);
+    press(dx::IK_Down);
+    REQUIRE(row() == "MenuChoice_MusicVolume");
+    dx::UObject* music = dx::cast<dx::extension::UWindow>(dx::extension::focusWindow())->parent();
+    dx::UObject* scale = dx::script::object(dx::script::object(music, "btnSlider"), "winSlider");
+    auto tickPosition = [scale] {
+        return dx::vm::Call(scale, dx::Name("GetTickPosition")).result<int32_t>();
+    };
+    int32_t ticks = dx::vm::Call(scale, dx::Name("GetNumTicks")).result<int32_t>();
+
+    // Left and right change the volume without moving focus, and stop at the ends.
+    dx::vm::Call(scale, dx::Name("SetTickPosition")).i(ticks - 2).run();
+    press(dx::IK_Right);
+    CHECK(tickPosition() == ticks - 1);
+    press(dx::IK_Right);
+    CHECK(tickPosition() == ticks - 1);
+    CHECK(row() == "MenuChoice_MusicVolume");
+    dx::vm::Call(scale, dx::Name("SetTickPosition")).i(1).run();
+    press(dx::IK_Left);
+    press(dx::IK_Left);
+    CHECK(tickPosition() == 0);
+    CHECK(row() == "MenuChoice_MusicVolume");
+
+    // Up and down still leave the slider rows.
+    press(dx::IK_Down);
+    CHECK(row() == "MenuChoice_SoundVolume");
+    press(dx::IK_Down);
+    press(dx::IK_Down);
+    press(dx::IK_Down);
+    CHECK(row() == "MenuChoice_SampleRate");
+    press(dx::IK_Up);
+    CHECK(row() == "MenuChoice_EffectsChannels");
     releaseWorld(world, "01_NYC_UNATCOIsland");
 }

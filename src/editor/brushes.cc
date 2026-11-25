@@ -158,7 +158,8 @@ namespace dx::editor {
         std::string name;
         input >> name;
         dx::UObject* builder = builderBrush();
-        if (!builder) {
+        dx::UModel* brush = builderModel();
+        if (!brush) {
             status = "no builder brush";
             return false;
         }
@@ -171,7 +172,7 @@ namespace dx::editor {
             }
         }
         for (dx::UClass* cls : dx::brushbuilder::builderClasses()) {
-            if (lower(cls->name.str()) != lower(name)) {
+            if (lowered(cls->name.str()) != lowered(name)) {
                 continue;
             }
             dx::UObject* object = dx::brushbuilder::builderFor(cls);
@@ -181,30 +182,29 @@ namespace dx::editor {
                     property->fromText(object->data + property->offset, value);
                 }
             }
-            dx::brushbuilder::setTarget(builder);
-            history.begin(level, { builder, dx::actor::Brush(builder), dx::cast<dx::UModel>(dx::actor::Brush(builder))->polys }, "Build " + cls->name.str());
-            bool done = dx::brushbuilder::build(object);
+            history.begin(level, { builder, brush, brush->polys }, "Build " + cls->name.str());
+            std::string error;
+            bool done = dx::brushbuilder::build(object, builder, &error);
             if (done) {
                 history.commit();
             } else {
                 history.cancel();
             }
             brushCache.erase(builder);
-            status = done ? "built " + cls->name.str() : dx::brushbuilder::lastMessage();
+            status = done ? "built " + cls->name.str() : error;
             return done;
         }
         for (dx::brushbuilder::ExtraBuilder extra : dx::brushbuilder::extraBuilders()) {
-            if (lower(extra.name) != lower(name)) {
+            if (lowered(extra.name) != lowered(name)) {
                 continue;
             }
             for (const auto& [key, value] : values) {
                 for (dx::brushbuilder::ExtraParameter& parameter : extra.parameters) {
-                    if (lower(parameter.name) == lower(key)) {
+                    if (lowered(parameter.name) == lowered(key)) {
                         parameter.value = std::strtod(value.c_str(), nullptr);
                     }
                 }
             }
-            dx::UModel* brush = dx::cast<dx::UModel>(dx::actor::Brush(builder));
             history.begin(level, { builder, brush, brush->polys }, "Build " + extra.name);
             std::string error;
             bool done = dx::brushbuilder::buildExtra(extra, builder, &error);

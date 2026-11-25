@@ -82,6 +82,7 @@ namespace dx {
     class UMesh : public UPrimitive {
     public:
         void serialize(Reader& reader, Linker& source) override;
+        void addReferences(ReferenceVisitor& references) override;
 
         const AnimSequence* findSequence(Name sequence) const;
         virtual std::vector<MeshTriangle> triangles() const;

@@ -1,8 +1,10 @@
 #include "engine/path_builder.h"
 
 #include "core/objects.h"
+#include "core/text.h"
 #include "engine/actor.h"
 #include "engine/props_engine.h"
+#include "engine/wall_adjust.h"
 #include "engine/world.h"
 
 #include <algorithm>
@@ -29,39 +31,10 @@ namespace dx {
                 return a && cls && a->isA(cls);
             }
 
-            bool lowerEquals(const std::string& a, const std::string& b)
-            {
-                if (a.size() != b.size()) {
-                    return false;
-                }
-                for (size_t i = 0; i < a.size(); i++) {
-                    if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-
             template <typename T>
             T& property(UObject* a, const char* name)
             {
                 return *reinterpret_cast<T*>(a->propertyAddress(Name(name)));
-            }
-
-            void twoWallAdjust(const Vector& desired, Vector& delta, const Vector& hitNormal, const Vector& oldNormal, float hitTime)
-            {
-                if (oldNormal.dot(hitNormal) <= 0) {
-                    Vector direction = hitNormal.cross(oldNormal).normal();
-                    delta = direction * (delta.dot(direction) * (1.0f - hitTime));
-                    if (desired.dot(delta) < 0) {
-                        delta = delta * -1.0f;
-                    }
-                } else {
-                    delta = (delta - hitNormal * delta.dot(hitNormal)) * (1.0f - hitTime);
-                    if (delta.dot(desired) <= 0) {
-                        delta = {};
-                    }
-                }
             }
 
             constexpr uint32_t MarkerVisible = 0x01;
@@ -86,19 +59,13 @@ namespace dx {
             public:
                 explicit Builder(ULevel* target)
                     : level(target)
-                    , previous(World::current)
+                    , active(world)
                 {
-                    World::current = &world;
                     world.level = level;
                     world.levelInfo = level->actors.empty() ? nullptr : level->actors[0];
                     world.actors = level->actors;
                     world.collisionHash.clear();
                     world.collisionHash.sync(world.actors);
-                }
-
-                ~Builder()
-                {
-                    World::current = previous;
                 }
 
                 Builder(const Builder&) = delete;
@@ -402,11 +369,11 @@ namespace dx {
                             UObject* a = level->actors[i];
                             bool match = false;
                             if (teleporter) {
-                                match = a && !a->destroyed && isA(a, "Teleporter") && a != node && lowerEquals(teleporter::URL(node), actor::Tag(a).str());
+                                match = a && !a->destroyed && isA(a, "Teleporter") && a != node && iequals(teleporter::URL(node), actor::Tag(a).str());
                             } else if (a && !a->destroyed && isA(a, "WarpZoneMarker") && a != node) {
                                 UObject* zone = property<UObject*>(node, "markedWarpZone");
                                 UObject* other = property<UObject*>(a, "markedWarpZone");
-                                match = zone && other && lowerEquals(warpzoneinfo::OtherSideURL(zone), warpzoneinfo::ThisTag(other).str());
+                                match = zone && other && iequals(warpzoneinfo::OtherSideURL(zone), warpzoneinfo::ThisTag(other).str());
                             }
                             if (match) {
                                 addSpec(node, a, specialSpec(node, a, 150, 100));
@@ -1086,7 +1053,8 @@ namespace dx {
                 }
 
                 ULevel* level = nullptr;
-                World* previous = nullptr;
+                // Before world, so that it keeps the world that was in play before this one.
+                World::ActiveScope active;
                 World world;
                 UObject* scout = nullptr;
                 std::vector<PathMarker> markers;

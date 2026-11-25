@@ -10,7 +10,6 @@ namespace dx {
     class GLCanvas : public Canvas2D {
     public:
         GLCanvas(UberShader& shader, TextureCache& textures);
-        ~GLCanvas() override;
 
         void begin(int width, int height);
         void flush();
@@ -38,6 +37,6 @@ namespace dx {
         bool currentMasked = false;
         bool currentSmooth = true;
         uint32_t currentPrimitive = 0;
-        uint32_t nearestSampler = 0;
+        SamplerHandle nearestSampler;
     };
 }

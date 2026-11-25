@@ -3,6 +3,7 @@
 #include "engine/ai.h"
 #include "engine/props_engine.h"
 #include "engine/world.h"
+#include "fixtures.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -22,10 +23,8 @@ namespace {
 
 TEST_CASE("pawn senses follow the original hearing, smell and apparent size rules", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     dx::UObject* paul = findActor(world, "PaulDenton0");
     REQUIRE(player != nullptr);
@@ -47,7 +46,6 @@ TEST_CASE("pawn senses follow the original hearing, smell and apparent size rule
     CHECK(dx::aiCanSee(paul, player, 1.0f, false, false, false, false) == 0.0f);
     dx::pawn::MinAngularSize(paul) = 0.0f;
     dx::pawn::VisibilityThreshold(paul) = 0.0f;
-    double size = (static_cast<double>(r) * r + static_cast<double>(h) * h) / (600.0 * 600.0);
+    double size = (static_cast<double>(r) * static_cast<double>(r) + static_cast<double>(h) * static_cast<double>(h)) / (600.0 * 600.0);
     CHECK(dx::aiCanSee(paul, player, 1.0f, false, false, false, false) == Catch::Approx(size * 64.0).margin(1e-5));
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }

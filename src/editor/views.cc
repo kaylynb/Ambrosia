@@ -8,11 +8,7 @@ namespace dx::editor {
 
     void Editor::swapPaneCamera(ViewPane& pane)
     {
-        std::swap(framebuffer, pane.framebuffer);
-        std::swap(colorTexture, pane.colorTexture);
-        std::swap(depthBuffer, pane.depthBuffer);
-        std::swap(fbWidth, pane.fbWidth);
-        std::swap(fbHeight, pane.fbHeight);
+        std::swap(perspectiveTarget, pane.target);
         if (!pane.shared) {
             std::swap(cameraLocation, pane.location);
             std::swap(cameraRotation, pane.rotation);
@@ -45,6 +41,10 @@ namespace dx::editor {
                 perspectiveMode = pane.mode;
                 perspectiveWindow(panePosition, paneSize);
                 swapPaneCamera(pane);
+                // The pane's menu can change its kind while its target is swapped out above.
+                if (pane.kind != dx::editorviews::PaneKind::Perspective) {
+                    pane.target = {};
+                }
                 if (!pane.shared) {
                     perspectiveOrigin = savedOrigin;
                     perspectiveSize = savedSize;
@@ -97,6 +97,9 @@ namespace dx::editor {
         ViewPane& pane = panes[index];
         pane.kind = kind;
         pane.shared = static_cast<size_t>(kind) == index;
+        if (kind != dx::editorviews::PaneKind::Perspective) {
+            pane.target = {};
+        }
         if (pane.shared) {
             return;
         }
@@ -114,15 +117,6 @@ namespace dx::editor {
             if (!panes[i].shared) {
                 setPaneKind(i, panes[i].kind);
             }
-        }
-    }
-
-    void Editor::releasePanes()
-    {
-        for (ViewPane& pane : panes) {
-            swapPaneCamera(pane);
-            releaseFramebuffer();
-            swapPaneCamera(pane);
         }
     }
 
@@ -154,7 +148,7 @@ namespace dx::editor {
         }
         if (verb == "viewkind") {
             for (size_t kind = 0; kind < 4; kind++) {
-                if (lower(name) == paneKindKeys[kind]) {
+                if (lowered(name) == paneKindKeys[kind]) {
                     setPaneKind(index, static_cast<dx::editorviews::PaneKind>(kind));
                     return true;
                 }
@@ -162,7 +156,7 @@ namespace dx::editor {
             status = "unknown view " + name;
             return false;
         }
-        if (!dx::renderModeNamed(lower(name), panes[index].mode)) {
+        if (!dx::renderModeNamed(lowered(name), panes[index].mode)) {
             status = "unknown render mode " + name;
             return false;
         }
@@ -200,7 +194,7 @@ namespace dx::editor {
             return false;
         }
         float half = dx::editorviews::iconSize(static_cast<float>(icon->width()), dx::actor::DrawScale(actor), zoom) * 0.5f;
-        list->AddImage(static_cast<ImTextureID>(info->id), ImVec2(point.x - half, point.y - half), ImVec2(point.x + half, point.y + half));
+        list->AddImage(static_cast<ImTextureID>(info->id()), ImVec2(point.x - half, point.y - half), ImVec2(point.x + half, point.y + half));
         if (actor == selected) {
             list->AddRect(ImVec2(point.x - half - 1, point.y - half - 1), ImVec2(point.x + half + 1, point.y + half + 1), IM_COL32(255, 255, 0, 255));
         }

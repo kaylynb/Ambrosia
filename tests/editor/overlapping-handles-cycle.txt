@@ -1,0 +1,18 @@
+wait 3
+exec camera 128 0 400 -5825 7038
+wait 1
+exec zoom 0.5
+wait 1
+exec editmode edge
+clickview top 0.5 0.5
+wait 5
+expect status selected 1 edge
+wait 1
+clickview top 0.5 0.5
+wait 5
+expect status cycled to 2 of 2 overlapping
+wait 1
+clickview top 0.5 0.5
+wait 5
+expect status cycled to 1 of 2 overlapping
+quit

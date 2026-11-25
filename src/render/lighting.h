@@ -17,7 +17,9 @@ namespace dx {
     float sinTab(int32_t angle);
     float cosTab(int32_t angle);
     float sqrtApprox(float value);
-    void tickLightRandoms(float timeSeconds);
+    // Once a frame. paused: the level is paused, as behind a menu, where Steady frame timing
+    // holds the flicker lights.
+    void tickLightRandoms(float timeSeconds, bool paused = false);
     float lightRandomBase(int32_t index);
     float lightRandom(int32_t index);
     bool lightEffectSpatialDynamic(uint8_t effect);
@@ -25,6 +27,9 @@ namespace dx {
     bool lightBakedOnSurfaces(UObject* light);
     bool lightMovesOnSurfaces(UObject* light);
     bool lightOnSurfaces(UObject* light);
+    // Whether a light can ever reach surfaces, whatever its type and brightness now: a
+    // TriggerLight or lamp that is off when the lightmaps are made can be turned on later.
+    bool lightMayLightSurfaces(UObject* light);
     float autoPanTexels(float timeSeconds, float speed);
     float smallWavyPanU(float timeSeconds);
     float smallWavyPanV(float timeSeconds);

@@ -16,6 +16,8 @@ namespace dx {
 
         static Name fromIndex(uint32_t index);
         static Name find(std::string_view text);
+        // How many names the table holds, None included.
+        static size_t count();
 
         const std::string& str() const;
         const char* c_str() const;

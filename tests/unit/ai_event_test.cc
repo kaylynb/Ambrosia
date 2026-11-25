@@ -1,13 +1,16 @@
 #include "core/objects.h"
+#include "test_paths.h"
 #include "core/package_writer.h"
 #include "core/vm.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/ai.h"
-#include "engine/package.h"
+#include "core/package.h"
 #include "engine/props_engine.h"
 #include "engine/resources.h"
 #include "engine/savegame.h"
 #include "engine/world.h"
+#include "fixtures.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -52,12 +55,11 @@ namespace {
 
     Scene loadScene()
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::objects::unloadPackage(dx::Name(MapName));
         Scene scene;
         scene.world = std::make_unique<dx::World>();
         REQUIRE(scene.world->loadMap(MapName));
-        dx::aiTimeBudget = false;
         scene.manager = dx::aiEventManager();
         REQUIRE(scene.manager != nullptr);
         scene.turret = findActor(*scene.world, "AutoTurret0");
@@ -74,7 +76,6 @@ namespace {
 
     void releaseScene(Scene& scene)
     {
-        dx::aiTimeBudget = true;
         scene.world.reset();
         dx::objects::unloadPackage(dx::Name(MapName));
     }
@@ -298,13 +299,15 @@ TEST_CASE("a pulse AI event sender expires once all 16 slots are empty", "[data]
     sendAudio(scene.nearSender, "AISendEvent");
     dx::UAISenderEvent* sender = senderOf(scene.manager, TestEvent, scene.nearSender);
     REQUIRE(sender != nullptr);
+    uint32_t senderHandle = sender->handle;
     tick(*scene.world, 15);
     CHECK(senderOf(scene.manager, TestEvent, scene.nearSender) == sender);
     CHECK(sender->deleted == 0);
     CHECK_FALSE(sender->destroyed);
     tick(*scene.world, 1);
     CHECK(senderOf(scene.manager, TestEvent, scene.nearSender) == nullptr);
-    CHECK(sender->destroyed);
+    // UEventManager::CleanupSlot deletes the event it unlinks.
+    CHECK(dx::objects::atHandle(senderHandle) == nullptr);
     CHECK(scene.manager->deleteCount == 0);
     releaseScene(scene);
 }
@@ -323,18 +326,23 @@ TEST_CASE("destroying an AI event sender drops it from the manager at actor clea
     dx::UAISenderEvent* sender = senderOf(scene.manager, TestEvent, box);
     REQUIRE(receiver != nullptr);
     REQUIRE(sender != nullptr);
+    uint32_t senderHandle = sender->handle;
     tick(*scene.world, 1);
     REQUIRE(receiver->lastBestActor == box);
     REQUIRE(turretActive(scene.turret) == "True");
     REQUIRE(scene.world->destroy(box));
+    // ULevel::CleanupDestroyed hands destroyed actors to the event manager only once 128 are
+    // waiting, or when saving or leaving the level forces it.
     tick(*scene.world, 1);
+    CHECK(sender->deleted == 0);
+    scene.world->cleanupDestroyed(true);
     CHECK(receiver->lastBestActor == nullptr);
     CHECK(sender->deleted == 1);
     CHECK(turretActive(scene.turret) == "True");
     tick(*scene.world, 1);
     CHECK(receiver->state == 1);
     CHECK(turretActive(scene.turret) == "False");
-    CHECK(sender->destroyed);
+    CHECK(dx::objects::atHandle(senderHandle) == nullptr);
     releaseScene(scene);
 }
 
@@ -357,7 +365,7 @@ TEST_CASE("AI events are not processed while the level is paused or players only
 
 TEST_CASE("an AIReceiverEvent serializes to the original byte layout and loads back", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UObject* transient = dx::objects::packageObject(dx::Name("Transient"));
     dx::UClass* lightClass = dx::objects::findClass("Engine.Light");
     dx::objects::flushLoads();
@@ -402,7 +410,8 @@ TEST_CASE("an AIReceiverEvent serializes to the original byte layout and loads b
     writer.setNativeSerializer([](dx::PackageWriter& out, dx::UObject* object, dx::Writer& data) {
         dx::aiWriteNative(out, object, data);
     });
-    std::filesystem::path file = std::filesystem::temp_directory_path() / "dx-ai-event-round-trip.dxs";
+    dx::test::TempDir folder("ai-event-round-trip");
+    std::filesystem::path file = folder / "AIRoundTrip.dxs";
     std::string error;
     REQUIRE(writer.save(file, &error));
 
@@ -455,7 +464,51 @@ TEST_CASE("an AIReceiverEvent serializes to the original byte layout and loads b
     CHECK(loadedManager->processHead == loaded);
     CHECK(loadedManager->hash[type->hash & 0xff] == linker->object(2));
     dx::objects::unloadPackage(dx::Name("AIRoundTripPackage"));
-    std::filesystem::remove(file);
+}
+
+TEST_CASE("AI event slot indices read from a file are kept within the 16 slots", "[data]")
+{
+    dx::engine::initialize(dx::test::gameData());
+    dx::UObject* transient = dx::objects::packageObject(dx::Name("Transient"));
+    auto* manager = dx::cast<dx::UEventManager>(dx::objects::newObject(dx::objects::intrinsicClass(dx::Name("EventManager")), transient, dx::Name("SlotRangeManager"), 0));
+    auto* type = dx::cast<dx::UAIEventType>(dx::objects::newObject(dx::objects::intrinsicClass(dx::Name("AIEventType")), manager, dx::Name("SlotRangeType"), 0));
+    auto* receiver = dx::cast<dx::UAIReceiverEvent>(dx::objects::newObject(dx::objects::intrinsicClass(dx::Name("AIReceiverEvent")), manager, dx::Name("SlotRangeReceiver"), 0));
+    REQUIRE(manager != nullptr);
+    REQUIRE(type != nullptr);
+    REQUIRE(receiver != nullptr);
+    type->eventName = dx::Name("SlotRangeEvent");
+    type->hash = dx::aiEventHash(type->eventName);
+    type->receivers = receiver;
+    manager->hash[type->hash & 0xff] = type;
+    manager->curSlot = 35;
+    receiver->type = type;
+    receiver->lastSlot = -9;
+
+    dx::PackageWriter writer(dx::Name("AISlotRange"));
+    writer.addExport(manager, nullptr);
+    writer.addExport(type, manager);
+    writer.addExport(receiver, manager);
+    writer.setFilter([](dx::UObject* object) {
+        return object->linker != nullptr || dx::cast<dx::UClass>(object) != nullptr || !object->outer;
+    });
+    writer.setNativeSerializer([](dx::PackageWriter& out, dx::UObject* object, dx::Writer& data) {
+        dx::aiWriteNative(out, object, data);
+    });
+    dx::test::TempDir folder("ai-event-slot-range");
+    std::filesystem::path file = folder / "AISlotRange.dxs";
+    std::string error;
+    REQUIRE(writer.save(file, &error));
+
+    dx::Linker* linker = dx::objects::loadPackageFile(dx::Name("AISlotRangePackage"), file, true);
+    REQUIRE(linker != nullptr);
+    auto* loadedManager = dx::cast<dx::UEventManager>(linker->object(1));
+    auto* loaded = dx::cast<dx::UAIReceiverEvent>(linker->object(3));
+    dx::objects::flushLoads();
+    REQUIRE(loadedManager != nullptr);
+    REQUIRE(loaded != nullptr);
+    CHECK(loadedManager->curSlot == 3);
+    CHECK(loaded->lastSlot == 7);
+    dx::objects::unloadPackage(dx::Name("AISlotRangePackage"));
 }
 
 TEST_CASE("a saved level restores its AI event manager instead of clearing it", "[data]")
@@ -473,14 +526,13 @@ TEST_CASE("a saved level restores its AI event manager instead of clearing it", 
         }
     }
     REQUIRE(receivers > 0);
-    std::filesystem::path root = std::filesystem::temp_directory_path() / "dx-ai-event-save";
-    std::filesystem::remove_all(root);
-    dx::savegame::setSaveRoot(root);
+    dx::test::SaveRoot saves("ai-event-save");
     std::string error;
     REQUIRE(dx::savegame::saveLevel(*scene.world, dx::savegame::currentDirectory() / (std::string(MapName) + ".dxs"), true, &error));
     int32_t slot = scene.manager->curSlot;
     releaseScene(scene);
 
+    dx::test::PackageGuard saved(MapName);
     REQUIRE(dx::savegame::selectLevel(MapName));
     dx::World world;
     REQUIRE(world.loadMap(MapName));
@@ -505,7 +557,4 @@ TEST_CASE("a saved level restores its AI event manager instead of clearing it", 
     CHECK(receiver->callback == dx::Name("AlarmHeard"));
     CHECK(receiver->active == 1);
     CHECK(receiver->lastBestActor != nullptr);
-    dx::objects::unloadPackage(dx::Name(std::string("SaveGame_") + MapName));
-    dx::objects::unloadPackage(dx::Name(MapName));
-    std::filesystem::remove_all(root);
 }

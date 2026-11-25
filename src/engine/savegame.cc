@@ -1,12 +1,15 @@
 #include "engine/savegame.h"
 
 #include "core/config.h"
+#include "core/files.h"
+#include "core/gc.h"
+#include "core/log.h"
 #include "core/objects.h"
 #include "core/package_writer.h"
+#include "core/text.h"
 #include "core/vm.h"
 #include "engine/actor.h"
 #include "engine/ai.h"
-#include "engine/canvas_hooks.h"
 #include "engine/map_writer.h"
 #include "engine/mesh.h"
 #include "engine/props_deusex.h"
@@ -18,7 +21,9 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
+#include <fstream>
 #include <deque>
 #include <functional>
 #include <unordered_set>
@@ -29,20 +34,16 @@ namespace dx {
             struct State {
                 std::filesystem::path root;
                 std::filesystem::path pending;
+                std::function<std::string()> saveExtras;
+                std::function<void(const std::string&)> restoreExtras;
+                std::function<void()> progressPainter;
+                std::function<UObject*()> snapshotSource;
             };
 
             State& state()
             {
                 static State instance;
                 return instance;
-            }
-
-            std::string lower(std::string text)
-            {
-                for (char& c : text) {
-                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                }
-                return text;
             }
 
             std::filesystem::path defaultRoot()
@@ -130,28 +131,78 @@ namespace dx {
                 return buffer;
             }
 
-            void copyLevels(const std::filesystem::path& from, const std::filesystem::path& to)
+            bool copyLevels(const std::filesystem::path& from, const std::filesystem::path& to)
             {
                 std::error_code error;
                 std::filesystem::create_directories(to, error);
-                if (!std::filesystem::is_directory(from)) {
-                    return;
+                if (error) {
+                    return false;
                 }
-                for (const auto& entry : std::filesystem::directory_iterator(from)) {
-                    if (entry.path().extension() == ".dxs" && entry.path().filename() != "SaveInfo.dxs") {
-                        std::filesystem::copy_file(entry.path(), to / entry.path().filename(), std::filesystem::copy_options::overwrite_existing, error);
+                if (!std::filesystem::is_directory(from, error)) {
+                    return true;
+                }
+                bool copied = true;
+                for (std::filesystem::directory_iterator it(from, error), end; !error && it != end; it.increment(error)) {
+                    const std::filesystem::path& path = it->path();
+                    if (path.extension() == ".dxs" && path.filename() != "SaveInfo.dxs") {
+                        if (!files::copy(path, to / path.filename())) {
+                            copied = false;
+                        }
                     }
                 }
+                return copied && !error;
+            }
+
+            // Ambrosia's state rides on the end of SaveInfo.dxs: the text, its length as four
+            // little-endian bytes, then a tag. A package is read through the offsets in its
+            // header, so the game never looks at bytes past its last export.
+            constexpr char extrasTag[8] = { 'A', 'M', 'B', 'R', 'O', 'S', '0', '1' };
+
+            bool appendExtras(const std::filesystem::path& file, const std::string& text)
+            {
+                std::ofstream out(file, std::ios::binary | std::ios::app);
+                uint32_t length = static_cast<uint32_t>(text.size());
+                const unsigned char size[4] = { static_cast<unsigned char>(length), static_cast<unsigned char>(length >> 8), static_cast<unsigned char>(length >> 16), static_cast<unsigned char>(length >> 24) };
+                out.write(text.data(), static_cast<std::streamsize>(text.size()));
+                out.write(reinterpret_cast<const char*>(size), 4);
+                out.write(extrasTag, sizeof(extrasTag));
+                out.close();
+                return !out.fail();
+            }
+
+            std::string readExtras(const std::filesystem::path& file)
+            {
+                std::ifstream in(file, std::ios::binary | std::ios::ate);
+                std::streamoff end = in ? static_cast<std::streamoff>(in.tellg()) : 0;
+                if (end < 12) {
+                    return {};
+                }
+                char tail[12] = {};
+                in.seekg(end - 12);
+                in.read(tail, 12);
+                if (std::memcmp(tail + 4, extrasTag, sizeof(extrasTag)) != 0) {
+                    return {};
+                }
+                const auto* size = reinterpret_cast<const unsigned char*>(tail);
+                std::streamoff length = size[0] | (size[1] << 8) | (size[2] << 16) | (static_cast<std::streamoff>(size[3]) << 24);
+                if (length > end - 12) {
+                    return {};
+                }
+                std::string text(static_cast<size_t>(length), '\0');
+                in.seekg(end - 12 - length);
+                in.read(text.data(), length);
+                return text;
             }
 
             void clearDirectory(const std::filesystem::path& directory)
             {
                 std::error_code error;
-                if (!std::filesystem::is_directory(directory)) {
+                if (!std::filesystem::is_directory(directory, error)) {
                     return;
                 }
-                for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-                    std::filesystem::remove_all(entry.path(), error);
+                for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end; it.increment(error)) {
+                    std::error_code removeError;
+                    std::filesystem::remove_all(it->path(), removeError);
                 }
             }
         }
@@ -184,9 +235,11 @@ namespace dx {
         std::vector<int32_t> slotIndices()
         {
             std::vector<int32_t> result;
-            for (const auto& entry : std::filesystem::directory_iterator(saveRoot())) {
-                std::string name = entry.path().filename().string();
-                if (!entry.is_directory() || name.size() != 8 || name.compare(0, 4, "Save") != 0) {
+            std::error_code error;
+            for (std::filesystem::directory_iterator it(saveRoot(), error), end; !error && it != end; it.increment(error)) {
+                std::string name = it->path().filename().string();
+                std::error_code typeError;
+                if (!it->is_directory(typeError) || name.size() != 8 || name.compare(0, 4, "Save") != 0) {
                     continue;
                 }
                 bool digits = std::all_of(name.begin() + 4, name.end(), [](char c) {
@@ -210,12 +263,17 @@ namespace dx {
         {
             uint64_t total = 0;
             std::filesystem::path directory = slotDirectory(index);
-            if (!std::filesystem::is_directory(directory)) {
+            std::error_code error;
+            if (!std::filesystem::is_directory(directory, error)) {
                 return 0;
             }
-            for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-                if (entry.is_regular_file()) {
-                    total += static_cast<uint64_t>(entry.file_size());
+            for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end; it.increment(error)) {
+                std::error_code fileError;
+                if (it->is_regular_file(fileError)) {
+                    uintmax_t size = it->file_size(fileError);
+                    if (!fileError) {
+                        total += static_cast<uint64_t>(size);
+                    }
                 }
             }
             return total;
@@ -275,7 +333,8 @@ namespace dx {
             }
 
             auto exportable = [&](UObject* object) {
-                if (!object || object->destroyed || writer.isExport(object) || !object->cls || !object->outer) {
+                // A reference left at an object freed during play is written as None.
+                if (!object || gc::wasFreed(object) || object->destroyed || writer.isExport(object) || !object->cls || !object->outer) {
                     return false;
                 }
                 if (isActor(object) || transientObject(object) || nativeResource(object)) {
@@ -417,6 +476,32 @@ namespace dx {
             return writer.save(file, error);
         }
 
+        namespace {
+            // DDeusExGameEngine::SaveCurrentLevel sets LevelAction to
+            // LEVACT_Saving and calls PaintProgress before it writes the level, for a save and for
+            // the level left at a transition alike. The original leaves the action set while it
+            // writes; here it is put back first, so a saved level never carries it.
+            void paintSaving(World& world)
+            {
+                if (!state().progressPainter || !world.levelInfo || !world.levelInfo->data) {
+                    return;
+                }
+                levelinfo::LevelAction(world.levelInfo) = 2;
+                state().progressPainter();
+                levelinfo::LevelAction(world.levelInfo) = 0;
+            }
+        }
+
+        void setProgressPainter(std::function<void()> painter)
+        {
+            state().progressPainter = std::move(painter);
+        }
+
+        void setSnapshotSource(std::function<UObject*()> source)
+        {
+            state().snapshotSource = std::move(source);
+        }
+
         bool saveGame(World& world, int32_t index, const std::string& description)
         {
             std::string map = mapBaseName(world.url);
@@ -426,25 +511,60 @@ namespace dx {
             if (index == 0) {
                 index = newSlotIndex();
             }
+            // The picture the load screen shows, of the last frame shown, taken before the
+            // SAVING frame below replaces it. The save screen hides its UI first; a quicksave
+            // keeps the HUD, as in the original.
+            UTexture* snapshot = state().snapshotSource ? cast<UTexture>(state().snapshotSource()) : nullptr;
+            UPalette* snapshotPalette = snapshot ? snapshot->palette() : nullptr;
+            auto dropSnapshot = [&snapshot, &snapshotPalette] {
+                if (snapshot) {
+                    objects::destroyObject(snapshot);
+                    snapshot = nullptr;
+                }
+                if (snapshotPalette) {
+                    objects::destroyObject(snapshotPalette);
+                    snapshotPalette = nullptr;
+                }
+            };
+            paintSaving(world);
             UObject* player = world.player();
             bool deusExPlayer = player && engineClasses().deusExPlayer && player->isA(engineClasses().deusExPlayer);
             if (deusExPlayer) {
                 deusexplayer::saveCount(player) += 1;
             }
+            // UGameEngine::SaveGame clears references to destroyed actors first.
+            world.cleanupDestroyed(true);
+            // That can delete a destroyed player, so ask the world again.
+            player = world.player();
+            deusExPlayer = player && engineClasses().deusExPlayer && player->isA(engineClasses().deusExPlayer);
             std::string error;
             std::filesystem::path current = currentDirectory();
             if (!saveLevel(world, current / (map + ".dxs"), true, &error)) {
-                std::fprintf(stderr, "save failed: %s\n", error.c_str());
+                log::error("DevSave", "save failed: {}", error);
+                dropSnapshot();
                 return false;
             }
             std::filesystem::path slot = slotDirectory(index);
+            std::filesystem::path building = slot;
+            building += ".new";
+            std::filesystem::path previous = slot;
+            previous += ".old";
             std::error_code ignored;
-            std::filesystem::remove_all(slot, ignored);
-            copyLevels(current, slot);
+            std::filesystem::remove_all(building, ignored);
+            auto fail = [&](const char* what) {
+                log::error("DevSave", "save failed: {}", what);
+                std::error_code cleanup;
+                std::filesystem::remove_all(building, cleanup);
+                dropSnapshot();
+                return false;
+            };
+            if (!copyLevels(current, building)) {
+                return fail("cannot copy levels");
+            }
 
             UClass* infoClass = objects::findClass("DeusEx.DeusExSaveInfo");
             if (!infoClass) {
-                return false;
+                return fail("no save info class");
             }
             objects::flushLoads();
             UObject* info = objects::newObject(infoClass, objects::packageObject(Name("Transient")), Name("MyDeusExSaveInfo"), 0);
@@ -460,14 +580,26 @@ namespace dx {
             deusexsaveinfo::saveCount(info) = deusExPlayer ? deusexplayer::saveCount(player) : 0;
             deusexsaveinfo::saveTime(info) = deusExPlayer ? static_cast<int32_t>(deusexplayer::saveTime(player)) : 0;
             deusexsaveinfo::bCheatsEnabled(info) = player ? playerpawn::bCheatsEnabled(player) : 0;
-            UTexture* snapshot = snapshotTexture(info->outer, Name("Snapshot"), 160, 120);
             deusexsaveinfo::Snapshot(info) = snapshot;
             PackageWriter infoWriter(Name("SaveInfo"));
             infoWriter.addExport(info, nullptr);
             if (snapshot) {
                 infoWriter.addExport(snapshot, nullptr);
             }
+            if (snapshotPalette) {
+                infoWriter.addExport(snapshotPalette, nullptr);
+            }
+            infoWriter.setFilter([](UObject* object) {
+                return !object->outer || cast<UClass>(object) || (object->linker && !object->linker->savedGame);
+            });
             infoWriter.setNativeSerializer([](PackageWriter& out, UObject* object, Writer& data) {
+                if (UPalette* palette = cast<UPalette>(object)) {
+                    data.index(static_cast<int32_t>(palette->colors.size()));
+                    for (uint32_t color : palette->colors) {
+                        data.u32(color);
+                    }
+                    return;
+                }
                 UTexture* texture = cast<UTexture>(object);
                 if (!texture) {
                     return;
@@ -484,21 +616,36 @@ namespace dx {
                     data.u8(mip.vbits);
                 }
             });
-            infoWriter.setFilter([](UObject* object) {
-                return !object->outer || cast<UClass>(object) || (object->linker && !object->linker->savedGame);
-            });
             infoWriter.setFlagSelector([](UObject*) {
                 return 0x00070000u | RF_Public;
             });
-            bool saved = infoWriter.save(slot / "SaveInfo.dxs", &error);
+            bool saved = infoWriter.save(building / "SaveInfo.dxs", &error);
             objects::destroyObject(info);
-            if (snapshot) {
-                objects::destroyObject(snapshot);
-            }
+            dropSnapshot();
             if (!saved) {
-                std::fprintf(stderr, "save info failed: %s\n", error.c_str());
-                return false;
+                return fail(error.c_str());
             }
+            if (!appendExtras(building / "SaveInfo.dxs", state().saveExtras ? state().saveExtras() : std::string())) {
+                return fail("cannot write save extras");
+            }
+            std::filesystem::remove_all(previous, ignored);
+            std::error_code moveError;
+            bool hadSlot = std::filesystem::exists(slot, moveError);
+            if (hadSlot) {
+                std::filesystem::rename(slot, previous, moveError);
+                if (moveError) {
+                    return fail("cannot move old save aside");
+                }
+            }
+            std::filesystem::rename(building, slot, moveError);
+            if (moveError) {
+                if (hadSlot) {
+                    std::error_code restore;
+                    std::filesystem::rename(previous, slot, restore);
+                }
+                return fail("cannot move new save in place");
+            }
+            std::filesystem::remove_all(previous, ignored);
             return true;
         }
 
@@ -508,16 +655,26 @@ namespace dx {
             return std::filesystem::remove_all(slotDirectory(index), error) > 0;
         }
 
+        void setExtraState(std::function<std::string()> save, std::function<void(const std::string&)> restore)
+        {
+            state().saveExtras = std::move(save);
+            state().restoreExtras = std::move(restore);
+        }
+
         void deleteCurrent()
         {
             clearDirectory(currentDirectory());
             state().pending.clear();
+            if (state().restoreExtras) {
+                state().restoreExtras({});
+            }
         }
 
         UObject* readSaveInfo(int32_t index)
         {
             std::filesystem::path file = slotDirectory(index) / "SaveInfo.dxs";
-            if (!std::filesystem::is_regular_file(file)) {
+            std::error_code error;
+            if (!std::filesystem::is_regular_file(file, error)) {
                 return nullptr;
             }
             try {
@@ -533,14 +690,14 @@ namespace dx {
                     }
                 }
             } catch (const std::exception& failure) {
-                std::fprintf(stderr, "cannot read save info %s: %s\n", file.string().c_str(), failure.what());
+                log::error("DevLoad", "cannot read save info {}: {}", file.string(), failure.what());
             }
             return nullptr;
         }
 
         bool loadRequested(const std::string& url, int32_t& index)
         {
-            std::string options = lower(url.substr(std::min(url.find('?'), url.size())));
+            std::string options = lowered(url.substr(std::min(url.find('?'), url.size())));
             size_t at = options.find("?loadgame=");
             if (at == std::string::npos) {
                 return false;
@@ -557,46 +714,59 @@ namespace dx {
             }
             map = deusexsaveinfo::MapName(info);
             std::filesystem::path slot = slotDirectory(index);
-            if (map.empty() || !std::filesystem::is_regular_file(slot / (map + ".dxs"))) {
+            std::error_code error;
+            if (map.empty() || !std::filesystem::is_regular_file(slot / (map + ".dxs"), error)) {
                 return false;
             }
             std::filesystem::path current = currentDirectory();
             clearDirectory(current);
             copyLevels(slot, current);
+            if (state().restoreExtras) {
+                state().restoreExtras(readExtras(slot / "SaveInfo.dxs"));
+            }
             return true;
         }
 
         void storeDepartingLevel(World& world, const std::string& targetUrl)
         {
+            paintSaving(world);
+            // UGameEngine::LoadMap clears references to destroyed actors before leaving.
+            world.cleanupDestroyed(true);
             std::string map = mapBaseName(world.url);
             std::string target = mapBaseName(targetUrl);
             std::filesystem::path current = currentDirectory();
             std::error_code error;
             UObject* levelInfo = findLevelInfo(world, "DeusExLevelInfo");
             int32_t mission = levelInfo ? deusexlevelinfo::missionNumber(levelInfo) : -1;
-            if (!map.empty() && lower(map) == lower(target)) {
+            if (!map.empty() && lowered(map) == lowered(target)) {
                 std::filesystem::remove(current / (map + ".dxs"), error);
             } else if (!map.empty() && mission >= 0 && mission < 98) {
                 std::string message;
                 if (!saveLevel(world, current / (map + ".dxs"), false, &message)) {
-                    std::fprintf(stderr, "cannot store %s: %s\n", map.c_str(), message.c_str());
+                    log::error("DevSave", "cannot store {}: {}", map, message);
                 }
             }
             std::string prefix = twoDigitPrefix(target);
-            if (prefix.empty() || !std::filesystem::is_directory(current)) {
+            if (prefix.empty() || !std::filesystem::is_directory(current, error)) {
                 return;
             }
-            for (const auto& entry : std::filesystem::directory_iterator(current)) {
-                if (entry.path().extension() == ".dxs" && twoDigitPrefix(entry.path().stem().string()) != prefix) {
-                    std::filesystem::remove(entry.path(), error);
+            std::vector<std::filesystem::path> stale;
+            for (std::filesystem::directory_iterator it(current, error), end; !error && it != end; it.increment(error)) {
+                if (it->path().extension() == ".dxs" && twoDigitPrefix(it->path().stem().string()) != prefix) {
+                    stale.push_back(it->path());
                 }
+            }
+            for (const std::filesystem::path& path : stale) {
+                std::error_code removeError;
+                std::filesystem::remove(path, removeError);
             }
         }
 
         bool selectLevel(const std::string& url)
         {
             std::filesystem::path file = currentDirectory() / (mapBaseName(url) + ".dxs");
-            if (!std::filesystem::is_regular_file(file)) {
+            std::error_code error;
+            if (!std::filesystem::is_regular_file(file, error)) {
                 state().pending.clear();
                 return false;
             }
@@ -612,13 +782,13 @@ namespace dx {
             std::filesystem::path file = state().pending;
             state().pending.clear();
             std::string base = mapBaseName(map);
-            if (lower(file.stem().string()) != lower(base)) {
+            if (lowered(file.stem().string()) != lowered(base)) {
                 return nullptr;
             }
             try {
                 return objects::loadPackageFile(Name("SaveGame_" + base), file, true);
             } catch (const std::exception& failure) {
-                std::fprintf(stderr, "cannot open saved level %s: %s\n", file.string().c_str(), failure.what());
+                log::error("DevLoad", "cannot open saved level {}: {}", file.string(), failure.what());
                 return nullptr;
             }
         }

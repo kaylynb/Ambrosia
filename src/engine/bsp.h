@@ -87,8 +87,6 @@ namespace dx {
             size_t errors = 0;
         };
 
-        void setCurrentTexture(UObject* texture);
-        UObject* currentTexture();
         void ensureLevelPolys(UModel& model);
         int32_t vectorIndex(UModel& model, const Vector& v, bool normal);
         int32_t pointIndex(UModel& model, const Vector& v, bool exact);
@@ -110,7 +108,8 @@ namespace dx {
         void buildFPolys(UModel& model, bool surfLinks, int32_t node);
         void mergeCoplanars(UModel& model, bool remapLinks, bool mergeDisparateTextures);
         int nodeToFPoly(const UModel& model, int32_t node, Poly& poly);
-        int brushCSG(UObject* actor, UModel& model, uint32_t polyFlags, uint8_t oper, bool buildBounds);
+        // Brush polygons without a texture get defaultTexture.
+        int brushCSG(UObject* actor, UModel& model, uint32_t polyFlags, uint8_t oper, bool buildBounds, UObject* defaultTexture);
         void cleanup(UModel& model);
         void refresh(UModel& model, bool noRemapSurfs);
         void optGeom(UModel& model);
@@ -119,9 +118,12 @@ namespace dx {
         void prepMovingBrush(UObject* actor);
         void testVisibility(ULevel* level, UModel& model);
         bool isCsg(const BspNode& node, uint8_t extraFlags);
+        // Whether a walk that goes on to the front (child 1) or back (child 0) of a node is still
+        // outside solid space.
+        bool childOutside(const BspNode& node, int child, bool outside, uint8_t extraFlags = 0);
         int32_t pointLeafZone(const UModel& model, const Vector& point, int32_t* leaf);
 
-        Stats csgRebuild(ULevel* level);
+        Stats csgRebuild(ULevel* level, UObject* defaultTexture);
         Stats bspRebuild(ULevel* level, Optimization opt, int balance, bool zones, bool optimizeGeometry);
     }
 }

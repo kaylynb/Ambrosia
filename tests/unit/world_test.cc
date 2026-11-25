@@ -1,12 +1,17 @@
 #include "core/objects.h"
+#include "test_paths.h"
 #include "core/vm.h"
+#include "deusex/deusex.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/ai.h"
 #include "engine/console.h"
 #include "engine/props_deusex.h"
 #include "engine/props_engine.h"
+#include "engine/resources.h"
 #include "engine/savegame.h"
 #include "engine/world.h"
+#include "fixtures.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -29,10 +34,8 @@ namespace {
 
 TEST_CASE("hostile terrorist acquires and shoots the player", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     REQUIRE(player != nullptr);
     dx::UObject* terrorist = findActor(world, "Terrorist1");
@@ -49,15 +52,12 @@ TEST_CASE("hostile terrorist acquires and shoots the player", "[data]")
     }
     CHECK(acquired);
     CHECK(dx::pawn::Health(player) < 100);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("level tick measures each dynamic actor's distance from the player", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     REQUIRE(player != nullptr);
     dx::UObject* paul = findActor(world, "PaulDenton0");
@@ -67,15 +67,24 @@ TEST_CASE("level tick measures each dynamic actor's distance from the player", "
     dx::actor::DistanceFromPlayer(paul) = 9999.0f;
     world.tick(1.0f / 30.0f);
     CHECK(dx::actor::DistanceFromPlayer(paul) == Catch::Approx(5.0f));
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
-TEST_CASE("frames shorter than five milliseconds advance actors in real time", "[data]")
+TEST_CASE("with steady frame timing, frames shorter than five milliseconds advance actors in real time", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    struct SteadyTiming {
+        SteadyTiming()
+        {
+            dx::frameTiming = dx::FrameTiming::Steady;
+        }
+
+        ~SteadyTiming()
+        {
+            dx::frameTiming = dx::FrameTiming::Original;
+        }
+    } steady;
+
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     REQUIRE(player != nullptr);
     dx::UClass* crateClass = dx::objects::findClass("DeusEx.CrateUnbreakableSmall");
@@ -101,15 +110,12 @@ TEST_CASE("frames shorter than five milliseconds advance actors in real time", "
     float fine = travelled(400.0f, 0.001f, 1000);
     CHECK(coarse == Catch::Approx(100.0f).epsilon(0.02));
     CHECK(fine == Catch::Approx(100.0f).epsilon(0.02));
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("LastRendered reports time since the actor was drawn and never goes negative", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     world.tick(1.0f / 30.0f);
     dx::UObject* paul = findActor(world, "PaulDenton0");
     REQUIRE(paul != nullptr);
@@ -123,15 +129,12 @@ TEST_CASE("LastRendered reports time since the actor was drawn and never goes ne
     dx::vm::Call call(paul, dx::Name("LastRendered"));
     call.run();
     CHECK(*reinterpret_cast<float*>(call.returnValue()) == 0.0f);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("scripted pawns run the native AI timer and fear decay every tick", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* terrorist = findActor(world, "Terrorist1");
     REQUIRE(terrorist != nullptr);
     dx::scriptedpawn::FearTimer(terrorist) = 0.0f;
@@ -145,15 +148,12 @@ TEST_CASE("scripted pawns run the native AI timer and fear decay every tick", "[
     CHECK(dx::scriptedpawn::TakeHitTimer(terrorist) == Catch::Approx(1.75f));
     CHECK(dx::scriptedpawn::PotentialEnemyTimer(terrorist) == 0.0f);
     CHECK(dx::scriptedpawn::PotentialEnemyAlliance(terrorist) == dx::Name());
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("actors that are idle and unseen for five seconds enter stasis", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     for (int i = 0; i < 25; i++) {
         world.tick(0.25f);
     }
@@ -178,29 +178,23 @@ TEST_CASE("actors that are idle and unseen for five seconds enter stasis", "[dat
     CHECK(inStasis());
     dx::actor::bStasis(boat) = 0;
     CHECK_FALSE(inStasis());
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("box traces against level geometry stop short by a tenth of their length", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::CheckResult hit;
     REQUIRE(world.bspLineCheck(hit, { -4760.57f, 10430.81f, -256.25f }, { -4760.57f, 10430.81f, -283.25f }, { 20, 20, 43 }));
     CHECK(hit.time == Catch::Approx(4.75f / 27.0f - 0.1f).margin(0.0005f));
     REQUIRE(world.bspLineCheck(hit, { -4760.57f, 10430.81f, -256.25f }, { -4760.57f, 10430.81f, -356.25f }, {}));
     CHECK(hit.location.z == Catch::Approx(-303.5f).margin(0.01f));
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("pawns settle on the floor at the heights the original game saves", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     world.tick(0.4f);
     for (int i = 0; i < 150; i++) {
         world.tick(1.0f / 30.0f);
@@ -221,15 +215,12 @@ TEST_CASE("pawns settle on the floor at the heights the original game saves", "[
         INFO(name);
         CHECK(dx::actor::Location(pawn).z == Catch::Approx(z).margin(0.002f));
     }
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("an NPC sees a near pawn and loses it beyond 4000 units unless distance is ignored", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     dx::UObject* paul = findActor(world, "PaulDenton0");
     REQUIRE(player != nullptr);
@@ -244,7 +235,6 @@ TEST_CASE("an NPC sees a near pawn and loses it beyond 4000 units unless distanc
     CHECK(dx::lineOfSightTo(paul, player, false, true));
     dx::actor::Location(player) = { -4760, 6000, -256 };
     CHECK_FALSE(dx::lineOfSightTo(paul, player, false, true));
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 namespace {
@@ -298,10 +288,8 @@ namespace {
 
 TEST_CASE("landing on a scripted pawn bounces the lander off instead of basing on it", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     dx::UObject* paul = findActor(world, "PaulDenton0");
     REQUIRE(player != nullptr);
@@ -315,15 +303,12 @@ TEST_CASE("landing on a scripted pawn bounces the lander off instead of basing o
     float sideways = dx::actor::Velocity(player).size2D();
     CHECK(sideways >= 25.0f);
     CHECK(sideways <= 50.0f);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("switching to rotating physics clears velocity and acceleration", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* box = spawnBox(world, dx::actor::Location(world.player()) + dx::Vector { 0, 0, 300 });
     REQUIRE(box != nullptr);
     dx::actor::Physics(box) = dx::PHYS_Falling;
@@ -332,15 +317,12 @@ TEST_CASE("switching to rotating physics clears velocity and acceleration", "[da
     dx::setPhysics(box, dx::PHYS_Rotating, nullptr);
     CHECK(dx::actor::Velocity(box).zero());
     CHECK(dx::actor::Acceleration(box).zero());
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("a full touch list drops a non-player pawn to make room for a player", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     dx::UObject* node = firstOfClass(world, "PathNode");
     REQUIRE(node != nullptr);
@@ -352,23 +334,21 @@ TEST_CASE("a full touch list drops a non-player pawn to make room for a player",
     }
     REQUIRE(pawns.size() == 4);
     for (int i = 0; i < 4; i++) {
-        dx::actor::Physics(pawns[i]) = dx::PHYS_Walking;
-        dx::actor::Touching(node, i) = pawns[i];
+        dx::UObject* pawn = pawns[static_cast<size_t>(i)];
+        dx::actor::Physics(pawn) = dx::PHYS_Walking;
+        dx::actor::Touching(node, i) = pawn;
     }
     dx::beginTouch(node, player);
     CHECK(dx::actor::Touching(node, 0) == player);
     CHECK(dx::actor::Touching(node, 1) == pawns[1]);
     CHECK(dx::actor::Touching(node, 2) == pawns[2]);
     CHECK(dx::actor::Touching(node, 3) == pawns[3]);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("a destroyed actor leaves the collision hash before its Destroyed event runs", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     world.tick(1.0f / 30.0f);
     dx::UObject* box = spawnBox(world, dx::actor::Location(world.player()) + dx::Vector { 200, 0, 0 }, "DeusEx.Trophy");
     REQUIRE(box != nullptr);
@@ -387,15 +367,12 @@ TEST_CASE("a destroyed actor leaves the collision hash before its Destroyed even
     dx::vm::registerNative(720, hookOriginal);
     CHECK(hookCalls == 1);
     CHECK_FALSE(hookSawActorInHash);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("an actor whose owner ticks later waits until the owner has ticked", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     dx::UObject* paul = findActor(world, "PaulDenton0");
     REQUIRE(paul != nullptr);
@@ -423,15 +400,12 @@ TEST_CASE("an actor whose owner ticks later waits until the owner has ticked", "
     CHECK(dx::actor::bTicked(paul) == dx::actor::bTicked(player));
     CHECK(dx::actor::bTicked(box) == dx::actor::bTicked(player));
     dx::actor::Owner(paul) = nullptr;
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("actors spawned between frames are ticked on the next frame", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::Vector origin = dx::actor::Location(world.player());
     for (int frame = 0; frame < 2; frame++) {
         dx::UObject* box = spawnBox(world, origin + dx::Vector { 200.0f + 100.0f * static_cast<float>(frame), 0, 0 });
@@ -441,15 +415,12 @@ TEST_CASE("actors spawned between frames are ticked on the next frame", "[data]"
         INFO(frame);
         CHECK(dx::actor::LifeSpan(box) == Catch::Approx(9.75f));
     }
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("actors without physics do not rotate", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* box = spawnBox(world, dx::actor::Location(world.player()) + dx::Vector { 200, 0, 0 });
     REQUIRE(box != nullptr);
     dx::actor::Physics(box) = dx::PHYS_None;
@@ -459,15 +430,12 @@ TEST_CASE("actors without physics do not rotate", "[data]")
     dx::actor::RotationRate(box) = { 0, 6000, 0 };
     world.tick(0.1f);
     CHECK(dx::actor::Rotation(box).yaw == 0);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("players-only mode stops non-player actors after their animation update", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* box = spawnBox(world, dx::actor::Location(world.player()) + dx::Vector { 200, 0, 0 });
     REQUIRE(box != nullptr);
     dx::actor::LifeSpan(box) = 10.0f;
@@ -477,42 +445,203 @@ TEST_CASE("players-only mode stops non-player actors after their animation updat
     dx::levelinfo::bPlayersOnly(world.levelInfo) = 0;
     world.tick(0.25f);
     CHECK(dx::actor::LifeSpan(box) == Catch::Approx(9.75f));
+}
+
+TEST_CASE("frames under 5 ms run the game fast with original timing and at real time with steady timing", "[data]")
+{
+    // ULevel::Tick raises every tick to at least 5 ms (docs/differences.md, "Frame-rate dependence").
+    dx::engine::initialize(dx::test::gameData());
+    for (dx::FrameTiming timing : { dx::FrameTiming::Original, dx::FrameTiming::Steady }) {
+        dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
+        dx::World world;
+        REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+        dx::UObject* box = spawnBox(world, dx::actor::Location(world.player()) + dx::Vector { 200, 0, 0 });
+        REQUIRE(box != nullptr);
+        dx::actor::LifeSpan(box) = 10.0f;
+        dx::frameTiming = timing;
+        for (int i = 0; i < 10; i++) {
+            world.tick(0.001f);
+        }
+        dx::frameTiming = dx::FrameTiming::Original;
+        float passed = 10.0f - dx::actor::LifeSpan(box);
+        CHECK(passed == Catch::Approx(timing == dx::FrameTiming::Steady ? 0.01f : 0.05f).margin(0.0005f));
+    }
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
+}
+
+TEST_CASE("with steady frame timing, electricity emitters tick 30 times a second whatever the frame rate", "[data]")
+{
+    // light_effects.h, SteadyEffectRate. Each tick the emitter's script adds the time it is
+    // given to lastFlickerTime; a long flickerTime keeps it from resetting.
+    dx::test::LoadedMap map("09_NYC_ShipBelow");
+    dx::World& world = map.world;
+    dx::UObject* player = world.player();
+    REQUIRE(player != nullptr);
+    dx::UObject* emitter = findActor(world, "ElectricityEmitter0");
+    REQUIRE(emitter != nullptr);
+    auto floatProperty = [&](const char* name) -> float& {
+        dx::UProperty* property = emitter->cls->findProperty(dx::Name(name));
+        REQUIRE(property != nullptr);
+        return *reinterpret_cast<float*>(emitter->data + property->offset);
+    };
+    floatProperty("flickerTime") = 100.0f;
+    float& lastFlickerTime = floatProperty("lastFlickerTime");
+    // Close enough that the emitter does not freeze for being out of sight.
+    dx::console::execute(player, "teleport -3637 1100 -236 0");
+    world.tick(1.0f / 30.0f);
+
+    struct RestoreTiming {
+        ~RestoreTiming()
+        {
+            dx::frameTiming = dx::FrameTiming::Original;
+        }
+    } restore;
+    const float frame144 = 1.0f / 144.0f;
+
+    dx::frameTiming = dx::FrameTiming::Steady;
+    world.effectTime = 0;
+    lastFlickerTime = 0;
+    for (int i = 0; i < 4; i++) {
+        world.tick(frame144);
+    }
+    CHECK(lastFlickerTime == 0.0f);
+    world.tick(frame144);
+    CHECK(lastFlickerTime == Catch::Approx(1.0f / 30.0f));
+    CHECK(world.effectTime == Catch::Approx(5 * frame144 - 1.0f / 30.0f).margin(1e-5));
+
+    dx::frameTiming = dx::FrameTiming::Original;
+    lastFlickerTime = 0;
+    world.tick(frame144);
+    CHECK(lastFlickerTime == Catch::Approx(frame144));
+}
+
+TEST_CASE("with steady frame timing, an electric beam keeps its bends until the effect clock steps", "[data]")
+{
+    // light_effects.h, SteadyEffectRate; the bends are drawn in LaserIterator's CurrentItem.
+    dx::test::LoadedMap map("09_NYC_ShipBelow");
+    dx::World& world = map.world;
+    dx::UObject* player = world.player();
+    REQUIRE(player != nullptr);
+    dx::UObject* emitter = findActor(world, "ElectricityEmitter0");
+    REQUIRE(emitter != nullptr);
+    auto property = [&](const char* name) -> uint8_t* {
+        dx::UProperty* found = emitter->cls->findProperty(dx::Name(name));
+        REQUIRE(found != nullptr);
+        return emitter->data + found->offset;
+    };
+    // No flicker, so the beam stays shown.
+    *reinterpret_cast<float*>(property("flickerTime")) = 100.0f;
+    *reinterpret_cast<uint32_t*>(property("bHiddenBeam")) = 0;
+    dx::console::execute(player, "teleport -3637 1100 -236 0");
+
+    struct RestoreTiming {
+        ~RestoreTiming()
+        {
+            dx::frameTiming = dx::FrameTiming::Original;
+        }
+    } restore;
+    auto bends = [&]() {
+        std::vector<dx::Vector> points;
+        dx::deusex::renderIterate(world, emitter, [&](dx::UObject* item) {
+            points.push_back(dx::actor::Location(item));
+        });
+        return points;
+    };
+
+    dx::frameTiming = dx::FrameTiming::Steady;
+    // The first draw makes the beam's LaserIterator, which the script's next trace fills in.
+    bends();
+    world.effectTime = 0;
+    world.tick(1.0f / 30.0f);
+    std::vector<dx::Vector> first = bends();
+    REQUIRE(first.size() > 2);
+    CHECK(bends() == first);
+    world.tick(1.0f / 144.0f);
+    CHECK(bends() == first);
+    for (int i = 0; i < 4; i++) {
+        world.tick(1.0f / 144.0f);
+    }
+    CHECK(bends() != first);
+
+    dx::frameTiming = dx::FrameTiming::Original;
+    world.tick(1.0f / 30.0f);
+    std::vector<dx::Vector> original = bends();
+    CHECK(bends() != original);
+}
+
+TEST_CASE("with steady frame timing, a laser confused by EMP flickers on the effect clock", "[data]")
+{
+    // light_effects.h, SteadyEffectRate. While confused, the trigger's script adds the time it
+    // is given to confusionTimer and returns.
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
+    dx::UObject* trigger = findActor(world, "LaserTrigger0");
+    REQUIRE(trigger != nullptr);
+    auto property = [&](const char* name) -> uint8_t* {
+        dx::UProperty* found = trigger->cls->findProperty(dx::Name(name));
+        REQUIRE(found != nullptr);
+        return trigger->data + found->offset;
+    };
+    uint32_t& confused = *reinterpret_cast<uint32_t*>(property("bConfused"));
+    float& confusionTimer = *reinterpret_cast<float*>(property("confusionTimer"));
+
+    struct RestoreTiming {
+        ~RestoreTiming()
+        {
+            dx::frameTiming = dx::FrameTiming::Original;
+        }
+    } restore;
+    const float frame144 = 1.0f / 144.0f;
+
+    dx::frameTiming = dx::FrameTiming::Steady;
+    // Not confused: every tick.
+    world.effectTime = 0;
+    world.tick(frame144);
+    CHECK(confusionTimer == 0.0f);
+    CHECK(dx::deusex::onEffectClock(trigger) == false);
+
+    confused = 1;
+    confusionTimer = 0;
+    world.effectTime = 0;
+    CHECK(dx::deusex::onEffectClock(trigger));
+    for (int i = 0; i < 4; i++) {
+        world.tick(frame144);
+    }
+    CHECK(confusionTimer == 0.0f);
+    world.tick(frame144);
+    CHECK(confusionTimer == Catch::Approx(1.0f / 30.0f));
+
+    dx::frameTiming = dx::FrameTiming::Original;
+    confusionTimer = 0;
+    world.tick(frame144);
+    CHECK(confusionTimer == Catch::Approx(frame144));
 }
 
 TEST_CASE("spawned actors start as last rendered ten seconds before time zero", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* box = spawnBox(world, dx::actor::Location(world.player()) + dx::Vector { 200, 0, 0 });
     REQUIRE(box != nullptr);
     CHECK(dx::actor::LastRenderTime(box) == -10.0f);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("level startup bases actors with an AttachTag on the actor carrying that tag", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("00_TrainingCombat"));
-    dx::World world;
-    REQUIRE(world.loadMap("00_TrainingCombat"));
+    dx::test::LoadedMap map("00_TrainingCombat");
+    dx::World& world = map.world;
     dx::UObject* glass = findActor(world, "BreakableGlass0");
     REQUIRE(glass != nullptr);
     REQUIRE(dx::actor::AttachTag(glass) == dx::Name("guntarget1"));
     dx::UObject* base = dx::actor::Base(glass);
     REQUIRE(base != nullptr);
     CHECK(dx::actor::Tag(base) == dx::Name("guntarget1"));
-    dx::objects::unloadPackage(dx::Name("00_TrainingCombat"));
 }
 
 TEST_CASE("level startup moves static actors ahead of dynamic ones and never ticks them", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     REQUIRE(world.firstDynamicActor > 2);
     REQUIRE(world.firstDynamicActor < world.actors.size());
     for (size_t i = 2; i < world.actors.size(); i++) {
@@ -526,15 +655,12 @@ TEST_CASE("level startup moves static actors ahead of dynamic ones and never tic
     dx::actor::LifeSpan(staticActor) = 10.0f;
     world.tick(0.25f);
     CHECK(dx::actor::LifeSpan(staticActor) == 10.0f);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("a rolling actor on flat ground loses speed to ground and fluid friction", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* box = spawnBox(world, dx::actor::Location(world.player()) + dx::Vector { 0, 120, 0 });
     REQUIRE(box != nullptr);
     for (int i = 0; i < 60 && dx::actor::Physics(box) != dx::PHYS_None; i++) {
@@ -550,21 +676,17 @@ TEST_CASE("a rolling actor on flat ground loses speed to ground and fluid fricti
     dx::actor::Velocity(box) = { 100, 0, 0 };
     dx::actor::Acceleration(box) = {};
     float startX = dx::actor::Location(box).x;
-    dx::performPhysics(box, 0.05f);
+    dx::performPhysics(&world, box, 0.05f);
     CHECK(dx::actor::Physics(box) == dx::PHYS_Rolling);
     CHECK(dx::actor::Location(box).x - startX == Catch::Approx(2.82f).margin(0.001f));
     CHECK(dx::actor::Velocity(box).x == Catch::Approx(56.4f).margin(0.02f));
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("loading a saved level runs PostPostBeginPlay on its actors", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    std::filesystem::path root = std::filesystem::temp_directory_path() / "dx-world-test-postpost";
-    std::filesystem::remove_all(root);
-    dx::savegame::setSaveRoot(root);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::objects::unloadPackage(dx::Name("SaveGame_01_NYC_UNATCOIsland"));
+    dx::engine::initialize(dx::test::gameData());
+    dx::test::SaveRoot saves("postpost");
+    dx::test::PackageGuard island("01_NYC_UNATCOIsland");
     {
         dx::World world;
         REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
@@ -585,9 +707,6 @@ TEST_CASE("loading a saved level runs PostPostBeginPlay on its actors", "[data]"
     dx::UObject* script = firstOfClass(loaded, "MissionScript");
     REQUIRE(script != nullptr);
     CHECK(dx::actor::TimerCounter(script) == 0.0f);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::objects::unloadPackage(dx::Name("SaveGame_01_NYC_UNATCOIsland"));
-    std::filesystem::remove_all(root);
 }
 
 namespace {
@@ -603,10 +722,8 @@ namespace {
 
 TEST_CASE("script spawns give the new actor the spawner's instigator", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* paul = findActor(world, "PaulDenton0");
     dx::UObject* terrorist = findActor(world, "Terrorist1");
     REQUIRE(paul != nullptr);
@@ -622,15 +739,12 @@ TEST_CASE("script spawns give the new actor the spawner's instigator", "[data]")
     REQUIRE(box != nullptr);
     CHECK(dx::actor::Owner(box) == paul);
     CHECK(dx::actor::Instigator(box) == terrorist);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("traces ignore every actor up the source's owner chain but not its children", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::Vector origin = dx::actor::Location(world.player()) + dx::Vector { 0, 0, 200 };
     dx::UObject* source = spawnBox(world, origin);
     dx::UObject* middle = spawnBox(world, origin + dx::Vector { 0, 300, 0 });
@@ -647,35 +761,55 @@ TEST_CASE("traces ignore every actor up the source's owner chain but not its chi
     dx::Vector middleLocation = dx::actor::Location(middle);
     world.lineCheck(hit, topLocation, middleLocation, {}, top, dx::TRACE_Others);
     CHECK(hit.actor == middle);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("an actor's owner still blocks its moves", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::Vector origin = dx::actor::Location(world.player()) + dx::Vector { 0, 0, 200 };
     dx::UObject* mover = spawnBox(world, origin);
     dx::UObject* owner = spawnBox(world, origin + dx::Vector { 100, 0, 0 });
     REQUIRE(mover != nullptr);
     REQUIRE(owner != nullptr);
-    REQUIRE(dx::isBlockedBy(mover, owner));
+    REQUIRE(dx::isBlockedBy(world, mover, owner));
     dx::actor::Owner(mover) = owner;
     dx::CheckResult hit;
     world.moveActor(mover, { 100, 0, 0 }, dx::actor::Rotation(mover), hit, false, false, false, false);
     CHECK(hit.actor == owner);
     CHECK(dx::actor::Location(mover).x < origin.x + 100.0f - dx::actor::CollisionRadius(owner));
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
+}
+
+TEST_CASE("turning a base swings the actors based on it the same way", "[data]")
+{
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
+    dx::Vector origin = dx::actor::Location(world.player()) + dx::Vector { 0, 0, 200 };
+    dx::UObject* base = spawnBox(world, origin);
+    dx::UObject* rider = spawnBox(world, origin + dx::Vector { 100, 0, 0 });
+    REQUIRE(base != nullptr);
+    REQUIRE(rider != nullptr);
+    dx::actor::Physics(base) = dx::PHYS_None;
+    dx::actor::Physics(rider) = dx::PHYS_None;
+    dx::setCollision(rider, false, false, false);
+    dx::actor::bCollideWorld(rider) = 0;
+    dx::setBase(rider, base, false);
+    REQUIRE(dx::actor::StandingCount(base) == 1);
+    dx::Rotator turned = dx::actor::Rotation(base);
+    turned.yaw += 16384;
+    int32_t riderYaw = dx::actor::Rotation(rider).yaw;
+    dx::CheckResult hit;
+    world.moveActor(base, {}, turned, hit, false, false, false, false);
+    dx::Vector offset = dx::actor::Location(rider) - dx::actor::Location(base);
+    CHECK(offset.x == Catch::Approx(0.0f).margin(0.5f));
+    CHECK(offset.y == Catch::Approx(100.0f).margin(0.5f));
+    CHECK(dx::actor::Rotation(rider).yaw == riderYaw + 16384);
 }
 
 TEST_CASE("test moves update the actor's zone without zone events", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* box = spawnBox(world, dx::actor::Location(world.player()) + dx::Vector { 0, 0, 200 });
     REQUIRE(box != nullptr);
     dx::UObject* startZone = dx::region(box).zone;
@@ -698,12 +832,11 @@ TEST_CASE("test moves update the actor's zone without zone events", "[data]")
     world.moveActor(box, otherLocation - back, dx::actor::Rotation(box), hit, true, false, false, true);
     CHECK(dx::region(box).zone == world.zoneAt(dx::actor::Location(box), nullptr, nullptr));
     CHECK(dx::region(box).zone != startZone);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("actors spawned during level startup receive the later startup events too", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
     dx::UClass* decal = dx::objects::findClass("Engine.Decal");
     dx::objects::flushLoads();
@@ -734,10 +867,8 @@ TEST_CASE("actors spawned during level startup receive the later startup events 
 
 TEST_CASE("paused frames zero the player's input axes and tick always-tick actors", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     dx::UObject* box = spawnBox(world, dx::actor::Location(player) + dx::Vector { 200, 0, 0 });
     REQUIRE(box != nullptr);
@@ -753,32 +884,47 @@ TEST_CASE("paused frames zero the player's input axes and tick always-tick actor
     CHECK(dx::playerpawn::aBaseY(player) == 0.0f);
     CHECK(dx::actor::LifeSpan(box) == Catch::Approx(9.75f));
     CHECK(dx::actor::LifeSpan(other) == 10.0f);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
+}
+
+TEST_CASE("paused frames tick an owned always-tick actor only when its owner's tick flag matches", "[data]")
+{
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
+    dx::UObject* player = world.player();
+    dx::UObject* owner = spawnBox(world, dx::actor::Location(player) + dx::Vector { 200, 0, 0 });
+    dx::UObject* child = spawnBox(world, dx::actor::Location(player) + dx::Vector { 300, 0, 0 });
+    REQUIRE(owner != nullptr);
+    REQUIRE(child != nullptr);
+    dx::actor::Owner(child) = owner;
+    dx::actor::bAlwaysTick(child) = 1;
+    dx::actor::LifeSpan(child) = 10.0f;
+    dx::levelinfo::Pauser(world.levelInfo) = "test";
+    for (int frame = 0; frame < 4; frame++) {
+        world.tick(0.25f);
+        CHECK(world.newlySpawned.empty());
+    }
+    CHECK(dx::actor::LifeSpan(child) == Catch::Approx(9.5f));
+    dx::actor::Owner(child) = nullptr;
 }
 
 TEST_CASE("a spider pawn with no surface around it falls", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* paul = findActor(world, "PaulDenton0");
     REQUIRE(paul != nullptr);
     REQUIRE(world.farMoveActor(paul, dx::actor::Location(paul) + dx::Vector { 0, 0, 600 }, false, true));
     dx::actor::Physics(paul) = dx::PHYS_Spider;
     dx::pawn::Floor(paul) = {};
     dx::actor::Velocity(paul) = { 10, 0, 0 };
-    dx::performPhysics(paul, 0.05f);
+    dx::performPhysics(&world, paul, 0.05f);
     CHECK(dx::actor::Physics(paul) == dx::PHYS_Falling);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("physics hands the pending touch actor PostTouch and pops it off the chain", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::Vector origin = dx::actor::Location(world.player()) + dx::Vector { 0, 0, 200 };
     dx::UObject* a = spawnBox(world, origin);
     dx::UObject* b = spawnBox(world, origin + dx::Vector { 100, 0, 0 });
@@ -789,18 +935,47 @@ TEST_CASE("physics hands the pending touch actor PostTouch and pops it off the c
     dx::actor::Physics(a) = dx::PHYS_None;
     dx::actor::PendingTouch(a) = b;
     dx::actor::PendingTouch(b) = c;
-    dx::performPhysics(a, 0.05f);
+    dx::performPhysics(&world, a, 0.05f);
     CHECK(dx::actor::PendingTouch(a) == c);
     CHECK(dx::actor::PendingTouch(b) == nullptr);
+}
+
+TEST_CASE("the player climbs the ladder under the satcom hatch when walking into its rungs", "[data]")
+{
+    dx::engine::initialize(dx::test::gameData());
+    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
+    dx::World world;
+    world.inputHook = [](dx::UObject* player, float delta) {
+        dx::console::readInput(player, delta);
+        dx::playerpawn::aForward(player) += 6000.0f;
+    };
+    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::UObject* player = world.player();
+    dx::UObject* hatch = nullptr;
+    for (dx::UObject* a : world.actors) {
+        if (a && !a->destroyed && dx::actor::Tag(a) == dx::Name("satcomhatch")) {
+            hatch = a;
+        }
+    }
+    REQUIRE(hatch != nullptr);
+    dx::vm::Call(hatch, dx::Name("Trigger")).obj(player).obj(player).run();
+    // the rungs sit between rails wider than the player, in front of a non-ladder wall
+    dx::console::execute(player, "teleport -6384 1470 -280 16384");
+    dx::pawn::ViewRotation(player).pitch = 8000;
+    float startZ = dx::actor::Location(player).z;
+    REQUIRE(startZ < -200.0f);
+    for (int i = 0; i < 90; i++) {
+        world.tick(1.0f / 30.0f);
+    }
+    CHECK(dx::actor::Location(player).z > -100.0f);
+    dx::console::resetInput(player);
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("pawns level their pitch while walking, turn it at a fixed rate otherwise, and never roll", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* paul = findActor(world, "PaulDenton0");
     REQUIRE(paul != nullptr);
     REQUIRE(dx::actor::RotationRate(paul).pitch >= 4096);
@@ -812,21 +987,18 @@ TEST_CASE("pawns level their pitch while walking, turn it at a fixed rate otherw
     start.roll = 1000;
     dx::actor::Rotation(paul) = start;
     dx::actor::DesiredRotation(paul) = { 4000, start.yaw, 0 };
-    dx::performPhysics(paul, 0.05f);
+    dx::performPhysics(&world, paul, 0.05f);
     CHECK(dx::actor::Rotation(paul).pitch == 0);
     CHECK(dx::actor::Rotation(paul).roll == 0);
     dx::actor::Physics(paul) = dx::PHYS_Flying;
-    dx::performPhysics(paul, 0.05f);
+    dx::performPhysics(&world, paul, 0.05f);
     CHECK(dx::actor::Rotation(paul).pitch == 1638);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("the player's input is read again with -1 after PlayerTick, which zeroes the axes", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     std::vector<float> deltas;
     world.inputHook = [&](dx::UObject*, float delta) {
@@ -840,15 +1012,12 @@ TEST_CASE("the player's input is read again with -1 after PlayerTick, which zero
     dx::playerpawn::aBaseY(player) = 5.0f;
     dx::console::readInput(player, -1.0f);
     CHECK(dx::playerpawn::aBaseY(player) == 0.0f);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
 }
 
 TEST_CASE("a player pawn without a player object is blocked like any other actor", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
-    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
-    dx::World world;
-    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::test::LoadedMap map("01_NYC_UNATCOIsland");
+    dx::World& world = map.world;
     dx::UObject* player = world.player();
     dx::UObject* box = spawnBox(world, dx::actor::Location(player) + dx::Vector { 0, 0, 300 });
     REQUIRE(box != nullptr);
@@ -856,9 +1025,116 @@ TEST_CASE("a player pawn without a player object is blocked like any other actor
     dx::actor::bBlockPlayers(box) = 0;
     dx::UObject* possessing = dx::playerpawn::Player(player);
     dx::playerpawn::Player(player) = nullptr;
-    CHECK(dx::isBlockedBy(player, box));
+    CHECK(dx::isBlockedBy(world, player, box));
     dx::playerpawn::Player(player) = possessing ? possessing : box;
-    CHECK_FALSE(dx::isBlockedBy(player, box));
+    CHECK_FALSE(dx::isBlockedBy(world, player, box));
     dx::playerpawn::Player(player) = possessing;
+}
+
+namespace {
+    dx::UObject* spawnMedKit(dx::World& world, const dx::Vector& location)
+    {
+        return world.spawn(dx::objects::findClass("DeusEx.MedKit"), nullptr, dx::Name(), location, {}, nullptr, true);
+    }
+
+    dx::UObject*& regionZone(dx::UObject* a)
+    {
+        return *reinterpret_cast<dx::UObject**>(dx::actor::Region(a));
+    }
+}
+
+TEST_CASE("references to a destroyed actor stay until 128 are destroyed, then go from the actor list only", "[data]")
+{
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
+    // Made before the level, as an object carried from an earlier level would be.
+    dx::UObject* earlier = dx::objects::newObject(dx::engineClasses().viewport, dx::objects::packageObject(dx::Name("Transient")), dx::Name(), 0);
+    REQUIRE(earlier != nullptr);
+    dx::World world;
+    REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
+    dx::UObject* player = world.player();
+    REQUIRE(player != nullptr);
+    dx::UObject* holder = nullptr;
+    for (size_t i = 2; i < world.firstDynamicActor && !holder; i++) {
+        if (world.actors[i] && dx::actor::bStatic(world.actors[i])) {
+            holder = world.actors[i];
+        }
+    }
+    REQUIRE(holder != nullptr);
+    dx::UObject* zone = regionZone(holder);
+    dx::Vector spot = dx::actor::Location(player) + dx::Vector { 0, 0, 200 };
+    dx::UObject* victim = spawnMedKit(world, spot);
+    REQUIRE(victim != nullptr);
+    dx::actor::Instigator(holder) = victim;
+    regionZone(holder) = victim;
+    dx::player::Actor(earlier) = victim;
+    REQUIRE(world.destroy(victim));
+    world.tick(1.0f / 30.0f);
+    // ULevel::CleanupDestroyed leaves them until 128 actors wait to be cleaned up.
+    CHECK(dx::actor::Instigator(holder) == victim);
+    CHECK(regionZone(holder) == victim);
+    CHECK(dx::player::Actor(earlier) == victim);
+    CHECK(std::find(world.actors.begin(), world.actors.end(), victim) == world.actors.end());
+    for (int i = 0; i < 127; i++) {
+        dx::UObject* extra = spawnMedKit(world, spot);
+        REQUIRE(extra != nullptr);
+        REQUIRE(world.destroy(extra));
+    }
+    world.tick(1.0f / 30.0f);
+    CHECK(dx::actor::Instigator(holder) == nullptr);
+    CHECK(regionZone(holder) == nullptr);
+    // Cleanup only scans the level's actor list. This object is outside that list,
+    // so it still holds the old pointer even if the actor has already been freed.
+    CHECK(dx::player::Actor(earlier) == victim);
+    dx::player::Actor(earlier) = nullptr;
+    CHECK(world.destroyedActors.empty());
+
+    dx::UObject* second = spawnMedKit(world, spot);
+    REQUIRE(second != nullptr);
+    dx::actor::Instigator(holder) = second;
+    REQUIRE(world.destroy(second));
+    world.tick(1.0f / 30.0f);
+    CHECK(dx::actor::Instigator(holder) == second);
+    // Saving and leaving the level force the clean-up.
+    world.cleanupDestroyed(true);
+    CHECK(dx::actor::Instigator(holder) == nullptr);
+    regionZone(holder) = zone;
+    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
+}
+
+TEST_CASE("decal pieces follow a rebuilt model and go when the decal is destroyed", "[data]")
+{
+    dx::engine::initialize(dx::test::gameData());
+    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
+    dx::World world;
+    REQUIRE(world.loadMap("01_NYC_UNATCOHQ"));
+    dx::CheckResult floor;
+    REQUIRE(world.bspLineCheck(floor, { -1985, 813, 598 }, { -1985, 813, 0 }, {}));
+    dx::UClass* holeClass = dx::objects::findClass("DeusEx.BulletHole");
+    dx::UObject* hole = world.spawn(holeClass, nullptr, dx::Name(), floor.location + dx::Vector { 0, 0, 8 }, { 16384, 0, 0 }, nullptr, true);
+    REQUIRE(hole != nullptr);
+    REQUIRE(world.decals.pieces.count(hole) == 1);
+    dx::UModel* model = world.level->model;
+    CHECK(world.decals.model == model);
+    CHECK(world.decals.revision == model->revision);
+    // A rebuild that keeps the surface count must not reuse the old node lists.
+    std::vector<std::vector<int32_t>> fresh = world.decals.surfNodes;
+    for (std::vector<int32_t>& nodes : world.decals.surfNodes) {
+        nodes.clear();
+    }
+    model->revision++;
+    dx::UObject* second = world.spawn(holeClass, nullptr, dx::Name(), floor.location + dx::Vector { 4, 0, 8 }, { 16384, 0, 0 }, nullptr, true);
+    REQUIRE(second != nullptr);
+    CHECK(world.decals.revision == model->revision);
+    CHECK(world.decals.surfNodes == fresh);
+    REQUIRE(world.decals.pieces.count(second) == 1);
+    const dx::DecalPiece& first = world.decals.pieces[hole].front();
+    const dx::DecalPiece& next = world.decals.pieces[second].front();
+    CHECK(next.surf == first.surf);
+    CHECK(next.nodes == first.nodes);
+    CHECK_FALSE(world.decals.surfNodes[static_cast<size_t>(next.surf)].empty());
+    REQUIRE(world.destroy(hole));
+    CHECK(world.decals.pieces.count(hole) == 0);
+    CHECK(world.decals.pieces.count(second) == 1);
+    dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
 }

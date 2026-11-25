@@ -1,5 +1,7 @@
 #include "core/package_writer.h"
 
+#include "core/files.h"
+#include "core/gc.h"
 #include "core/objects.h"
 #include "core/vm.h"
 
@@ -248,7 +250,8 @@ namespace dx {
 
     int32_t PackageWriter::objectRef(UObject* object)
     {
-        if (!object || object->destroyed) {
+        // A reference left at an object gc::freeObjects deleted points at freed memory.
+        if (!object || gc::wasFreed(object) || object->destroyed) {
             return 0;
         }
         auto it = exportLookup.find(object);
@@ -597,7 +600,11 @@ namespace dx {
                     throw std::runtime_error("write failed for " + temporary.string());
                 }
             }
-            std::filesystem::rename(temporary, path);
+            std::error_code moveError;
+            files::replace(temporary, path, moveError);
+            if (moveError) {
+                throw std::runtime_error("cannot replace " + path.string() + ": " + moveError.message());
+            }
             return true;
         } catch (const std::exception& failure) {
             if (error) {

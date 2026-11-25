@@ -1,6 +1,8 @@
 #include "core/objects.h"
+#include "core/random.h"
 #include "core/vm.h"
 #include "engine/actor.h"
+#include "engine/wall_adjust.h"
 #include "engine/world.h"
 
 #include <algorithm>
@@ -11,48 +13,12 @@ namespace dx {
     namespace {
         float frand()
         {
-            static std::mt19937 generator(12345);
-            return std::uniform_real_distribution<float>(0.0f, 1.0f)(generator);
+            return std::uniform_real_distribution<float>(0.0f, 1.0f)(random::engine(random::Stream::Physics));
         }
 
-        World& world()
+        bool move(World& world, UObject* a, const Vector& delta, CheckResult& hit)
         {
-            return *World::current;
-        }
-
-        bool move(UObject* a, const Vector& delta, CheckResult& hit)
-        {
-            return world().moveActor(a, delta, actor::Rotation(a), hit, false, false, false, false);
-        }
-
-        bool ladderAhead(UObject* a, const Vector& accelDir)
-        {
-            if (!isPlayerPawn(a) || accelDir.zero()) {
-                return false;
-            }
-            Vector flat { accelDir.x, accelDir.y, 0 };
-            if (flat.sizeSquared() < 0.01f) {
-                return false;
-            }
-            flat = flat.normal();
-            float reach = actor::CollisionRadius(a) + 16.0f;
-            float halfSpan = (actor::CollisionHeight(a) - 4.0f) * 0.5f;
-            Vector location = actor::Location(a) - Vector { 0, 0, halfSpan };
-            CheckResult hit;
-            world().lineCheck(hit, location, location + flat * reach, { 1.0f, 1.0f, halfSpan }, a, TRACE_World);
-            if (hit.time >= 1.0f || !hit.material || std::abs(hit.normal.z) > 0.3f || flat.dot(hit.normal) > -0.3f) {
-                return false;
-            }
-            UObject* group = hit.material->outer;
-            return group && group->outer && group->name == Name("Ladder");
-        }
-
-        void climbLadder(UObject* a, float tick, float speed)
-        {
-            int32_t pitch = pawn::ViewRotation(a).pitch & 65535;
-            float direction = (pitch > 32768 && pitch < 61000) ? -1.0f : 1.0f;
-            CheckResult hit;
-            move(a, { 0, 0, direction * speed * tick }, hit);
+            return world.moveActor(a, delta, actor::Rotation(a), hit, false, false, false, false);
         }
 
         Vector zoneGravity(UObject* a)
@@ -93,22 +59,6 @@ namespace dx {
         bool probing(UObject* a, const char* eventName)
         {
             return vm::findEvent(a, Name(eventName)) != nullptr;
-        }
-
-        void twoWallAdjust(const Vector& desired, Vector& delta, const Vector& hitNormal, const Vector& oldNormal, float hitTime)
-        {
-            if (oldNormal.dot(hitNormal) <= 0) {
-                Vector direction = hitNormal.cross(oldNormal).normal();
-                delta = direction * (delta.dot(direction) * (1.0f - hitTime));
-                if (desired.dot(delta) < 0) {
-                    delta = delta * -1.0f;
-                }
-            } else {
-                delta = (delta - hitNormal * delta.dot(hitNormal)) * (1.0f - hitTime);
-                if (delta.dot(desired) <= 0) {
-                    delta = {};
-                }
-            }
         }
 
         int32_t fixedTurn(UObject* a, int32_t current, int32_t desired, int32_t deltaRate)
@@ -154,7 +104,7 @@ namespace dx {
             return result & 65535;
         }
 
-        void actorRotation(UObject* a, float deltaTime)
+        void actorRotation(World& world, UObject* a, float deltaTime)
         {
             bool toDesired = actor::bRotateToDesired(a) != 0;
             if ((!toDesired && !actor::bFixedRotationDir(a)) || (toDesired && actor::Rotation(a) == actor::DesiredRotation(a))) {
@@ -177,14 +127,14 @@ namespace dx {
             }
             if (!(rotation == actor::Rotation(a))) {
                 CheckResult hit;
-                world().moveActor(a, {}, rotation, hit, false, false, false, false);
+                world.moveActor(a, {}, rotation, hit, false, false, false, false);
             }
             if (toDesired && actor::Rotation(a) == actor::DesiredRotation(a)) {
                 vm::event(a, Name("EndedRotation"));
             }
         }
 
-        void pawnRotation(UObject* a, float deltaTime)
+        void pawnRotation(World& world, UObject* a, float deltaTime)
         {
             Rotator rotation = actor::Rotation(a);
             Rotator rate = actor::RotationRate(a);
@@ -213,7 +163,7 @@ namespace dx {
             rotation.roll = 0;
             if (!(rotation == actor::Rotation(a))) {
                 CheckResult hit;
-                world().moveActor(a, {}, rotation, hit, false, false, false, false);
+                world.moveActor(a, {}, rotation, hit, false, false, false, false);
             }
         }
 
@@ -225,9 +175,25 @@ namespace dx {
             Vector& acceleration = actor::Acceleration(a);
             float accelRate = pawn::AccelRate(a);
             if (brake && acceleration.zero()) {
+                // Brake in steps of 0.03 seconds, and take the average speed over the tick
+                // counting only the steps still moving the way the pawn was going. Below 10
+                // units a second it stops.
                 Vector old = velocity;
-                velocity = velocity - velocity * (2 * deltaTime * effectiveFriction);
-                if (old.dot(velocity) < 0) {
+                Vector average;
+                float left = deltaTime;
+                while (left > 0.03f) {
+                    velocity = velocity - velocity * (2.0f * 0.03f * effectiveFriction);
+                    if (old.dot(velocity) > 0) {
+                        average += velocity * (0.03f / deltaTime);
+                    }
+                    left -= 0.03f;
+                }
+                velocity = velocity - velocity * (2.0f * left * effectiveFriction);
+                if (old.dot(velocity) > 0) {
+                    average += velocity * (left / deltaTime);
+                }
+                velocity = average;
+                if (old.dot(velocity) < 0 || velocity.sizeSquared() < 100.0f) {
                     velocity = {};
                 }
             } else {
@@ -258,16 +224,166 @@ namespace dx {
             }
         }
 
-        void physFalling(UObject* a, float deltaTime, int iterations);
-        void physFlying(UObject* a, float deltaTime, int iterations);
-        void physSwimming(UObject* a, float deltaTime, int iterations);
+        void physFalling(World& world, UObject* a, float deltaTime, int iterations);
+        void physFlying(World& world, UObject* a, float deltaTime, int iterations);
+        void physSwimming(World& world, UObject* a, float deltaTime, int iterations);
 
-        void stepUp(UObject* a, const Vector& gravDir, const Vector& desiredDir, Vector delta, CheckResult& hit)
+        // Walking, falling and swimming all start by checking the player's footing and nearby
+        // ladders. A BSP surface is a ladder if its texture belongs to the Ladder group.
+
+        // A trace from start to end, and the texture of the BSP surface it ends on. Movers and
+        // other actors give none.
+        UObject* surfaceTexture(World& world, UObject* a, CheckResult& hit, const Vector& start, const Vector& end)
+        {
+            hit = CheckResult {};
+            world.lineCheck(hit, start, end, {}, a, TRACE_World);
+            if (hit.time >= 1.0f || hit.actor != world.levelInfo) {
+                return nullptr;
+            }
+            return hit.material;
+        }
+
+        bool ladderTexture(UObject* texture)
+        {
+            return texture && texture->outer && texture->outer->name == Name("Ladder");
+        }
+
+        // Probes from just above the feet out to twice the collision radius, ahead of the way
+        // the pawn faces and then to its left, its right and behind it, each at nine heights
+        // from level with the feet to 32 units above them. Returns the texture of the last
+        // surface hit, which is a ladder's if any probe found one.
+        UObject* findLadderTexture(World& world, UObject* a, CheckResult& hit)
+        {
+            Vector feet = actor::Location(a) - Vector { 0, 0, actor::CollisionHeight(a) * 0.95f };
+            float reach = actor::CollisionRadius(a) * 2.0f;
+            UObject* texture = nullptr;
+            for (int32_t turn : { 0, -16384, 16384, 32768 }) {
+                Rotator facing { 0, actor::Rotation(a).yaw + turn, actor::Rotation(a).roll };
+                Vector probe = feet + rotationVector(facing) * reach;
+                for (int up = 0; up <= 32; up += 4) {
+                    texture = surfaceTexture(world, a, hit, feet, probe + Vector { 0, 0, static_cast<float>(up) });
+                    if (texture && (!texture->outer || texture->outer->name == Name("Ladder"))) {
+                        return texture;
+                    }
+                }
+            }
+            return texture;
+        }
+
+        // Returns true when the player is on a ladder, which takes the place of the physics mode
+        // for this tick. On one, the player moves as if flying: without input they hang still,
+        // and with any input they climb at a vertical speed set by where they look. Level is
+        // already a climb; looking down more than 33.75 degrees climbs down. Physics is left
+        // as it was, so a player can be on a ladder while walking, falling or swimming.
+        // Off a ladder, it reports the floor's texture to script and slides the player down
+        // slopes whose texture has a friction below 1.
+        bool physLadder(World& world, UObject* a, float deltaTime, int iterations)
+        {
+            if (!isPlayerPawn(a)) {
+                return false;
+            }
+            CheckResult hit;
+            UObject* tex = findLadderTexture(world, a, hit);
+            if (ladderTexture(tex)) {
+                vm::Call(a, Name("WalkTexture")).obj(tex).v(hit.location).v(hit.normal).run();
+                if (!actor::Acceleration(a).zero()) {
+                    Rotator view = pawn::ViewRotation(a);
+                    view.pitch += view.pitch < 0 ? -6144 : 6144;
+                    pawn::bIsWalking(a) = 1;
+                    actor::Velocity(a).z = pawn::GroundSpeed(a) * rotationVector(view).z * 0.5f;
+                }
+                physFlying(world, a, deltaTime, iterations);
+                if (actor::Acceleration(a).zero()) {
+                    actor::Velocity(a) = {};
+                }
+                return true;
+            }
+            Vector location = actor::Location(a);
+            Vector below { 0, 0, actor::CollisionRadius(a) * 2.0f + actor::CollisionHeight(a) };
+            tex = surfaceTexture(world, a, hit, location, location - below);
+            vm::Call(a, Name("WalkTexture")).obj(tex).v(hit.location).v(hit.normal).run();
+            if (actor::Physics(a) == PHYS_Walking && tex && texture::Friction(tex) < 1.0f) {
+                float friction = std::max(texture::Friction(tex) * 4.0f, 0.05f);
+                Vector slide = zoneGravity(a) * (deltaTime * deltaTime / (friction * 0.5f));
+                Vector delta = slide - hit.normal * hit.normal.dot(slide);
+                if (delta.dot(slide) >= 0) {
+                    move(world, a, delta, hit);
+                }
+            }
+            return false;
+        }
+
+        // Bisects from start toward end for where the zone stops being water or stops being
+        // dry, keeping end on the side of the zone the pawn is in now.
+        void findWaterLine(World& world, UObject* a, Vector start, Vector& end)
+        {
+            bool water = waterZone(zoneOf(a));
+            while ((end - start).sizeSquared() >= 1.0f) {
+                Vector middle = (start + end) * 0.5f;
+                if (waterZone(world.zoneAt(middle, nullptr, nullptr)) == water) {
+                    end = middle;
+                } else {
+                    start = middle;
+                }
+            }
+        }
+
+        // A swimming move. If it leaves the water, the pawn is brought back to the surface and
+        // the share of the move that would have been spent in the air is returned.
+        float swim(World& world, UObject* a, const Vector& delta, CheckResult& hit)
+        {
+            Vector start = actor::Location(a);
+            float airTime = 0;
+            move(world, a, delta, hit);
+            if (!a->destroyed && !waterZone(zoneOf(a))) {
+                Vector end = actor::Location(a);
+                findWaterLine(world, a, start, end);
+                if (!(end == actor::Location(a))) {
+                    airTime = (end - actor::Location(a)).size() / delta.size();
+                    move(world, a, end - actor::Location(a), hit);
+                }
+            }
+            return airTime;
+        }
+
+        // Entering water from walking or falling: back up to the surface, take the speed the
+        // pawn came in at, and swim for the rest of the tick.
+        void startSwimming(World& world, UObject* a, Vector oldVelocity, float timeTick, float remainingTime, int iterations)
+        {
+            Vector end = actor::Location(a);
+            findWaterLine(world, a, actor::OldLocation(a), end);
+            float waterTime = 0;
+            if (!(end == actor::Location(a))) {
+                waterTime = timeTick * (end - actor::Location(a)).size() / (actor::Location(a) - actor::OldLocation(a)).size();
+                remainingTime += waterTime;
+                CheckResult hit;
+                move(world, a, end - actor::Location(a), hit);
+                if (a->destroyed) {
+                    return;
+                }
+            }
+            Vector& velocity = actor::Velocity(a);
+            if (!actor::bBounce(a) && !actor::bJustTeleported(a)) {
+                velocity = (actor::Location(a) - actor::OldLocation(a)) / (timeTick - waterTime);
+                velocity = velocity * 2.0f - oldVelocity;
+                if (velocity.sizeSquared() > 16000000.0f) {
+                    velocity = velocity.normal() * 4000.0f;
+                }
+            }
+            if (velocity.z > -160.0f && velocity.z < 0) {
+                velocity.z = -80.0f - velocity.size2D() * 0.7f;
+            }
+            if (remainingTime > 0.01f) {
+                physSwimming(world, a, remainingTime, iterations);
+            }
+        }
+
+        void stepUp(World& world, UObject* a, const Vector& gravDir, const Vector& desiredDir, Vector delta, CheckResult& hit)
         {
             Vector down = gravDir * pawn::MaxStepHeight(a);
             Vector up = down * -1.0f;
-            move(a, up, hit);
-            move(a, delta, hit);
+            move(world, a, up, hit);
+            move(world, a, delta, hit);
             if (hit.time < 1.0f) {
                 UObject* hitActor = hit.actor;
                 bool pushable = hitActor && isPlayerPawn(a) && hitActor->isA(engineClasses().decoration) && decoration::bPushable(hitActor) && hit.normal.dot(desiredDir) < -0.9f;
@@ -279,7 +395,7 @@ namespace dx {
                         return;
                     }
                 } else if (std::abs(hit.normal.z) < 0.2f && hit.time * delta.sizeSquared() > 144.0f) {
-                    stepUp(a, gravDir, desiredDir, delta * (1 - hit.time), hit);
+                    stepUp(world, a, gravDir, desiredDir, delta * (1 - hit.time), hit);
                     if (actor::Physics(a) == PHYS_Falling) {
                         return;
                     }
@@ -289,29 +405,37 @@ namespace dx {
                     Vector oldNormal = hit.normal;
                     delta = (delta - hit.normal * delta.dot(hit.normal)) * (1.0f - hit.time);
                     if (delta.dot(original) >= 0) {
-                        move(a, delta, hit);
+                        move(world, a, delta, hit);
                         if (hit.time < 1.0f) {
                             processHitWall(a, hit.normal, hit.actor);
                             if (actor::Physics(a) == PHYS_Falling) {
                                 return;
                             }
                             twoWallAdjust(desiredDir, delta, hit.normal, oldNormal, hit.time);
-                            move(a, delta, hit);
+                            move(world, a, delta, hit);
                         }
                     }
                 }
             }
-            move(a, down, hit);
+            move(world, a, down, hit);
             if (hit.time < 1.0f && hit.normal.z < 0.5f) {
                 Vector slide = (down - hit.normal * down.dot(hit.normal)) * (1.0f - hit.time);
                 if (slide.dot(down) >= 0) {
-                    move(a, slide, hit);
+                    move(world, a, slide, hit);
                 }
             }
         }
 
-        void physWalking(UObject* a, float deltaTime, int iterations)
+        void physWalking(World& world, UObject* a, float deltaTime, int iterations)
         {
+            if (physLadder(world, a, deltaTime, iterations)) {
+                return;
+            }
+            if (region(a).zoneNumber == 0) {
+                // Outside the level. Pawn.FellOutOfWorld kills the pawn, the player included.
+                vm::event(a, Name("FellOutOfWorld"));
+                return;
+            }
             Vector& velocity = actor::Velocity(a);
             Vector& acceleration = actor::Acceleration(a);
             velocity.z = 0;
@@ -321,7 +445,8 @@ namespace dx {
             Vector desiredMove = actor::Velocity(a);
             Vector zoneVel = zoneVelocity(a);
             if (isPlayerPawn(a) || zoneVel.sizeSquared() > 90000.0f) {
-                desiredMove = desiredMove + zoneVel;
+                // Scaled by 25 times the tick, as Deus Ex does when walking and swimming.
+                desiredMove = desiredMove + zoneVel * (25.0f * deltaTime);
             }
             desiredMove.z = 0;
             Vector gravDir { 0, 0, zoneGravity(a).z > 0 ? 1.0f : -1.0f };
@@ -346,49 +471,53 @@ namespace dx {
                 Vector delta = desiredMove * tick;
                 Vector subLocation = actor::Location(a);
                 Vector subMove = delta;
-                bool zeroMove = delta.sizeSquared() < 1e-6f;
-                Vector ladderDir = accelDir.zero() ? rotationAxes(actor::Rotation(a)).xAxis : accelDir;
-                if (ladderAhead(a, ladderDir)) {
-                    if (zeroMove || accelDir.zero()) {
-                        remaining = 0;
-                        continue;
-                    }
-                    climbLadder(a, tick, std::max(desiredMove.size(), pawn::GroundSpeed(a) * 0.5f) * 0.5f);
-                    move(a, delta, hit);
-                    if (a->destroyed) {
-                        return;
-                    }
-                    continue;
-                }
+                bool zeroMove = std::abs(delta.x) < 0.0001f && std::abs(delta.y) < 0.0001f && std::abs(delta.z) < 0.0001f;
                 if (zeroMove) {
                     remaining = 0;
                     pawn::bHitSlopedWall(a) = 0;
                 } else {
+                    // Deus Ex's physWalking has none of Unreal Tournament's look-ahead for
+                    // ledges (bAvoidLedges): pawns walk straight on, and the floor check
+                    // below decides whether they fall.
                     if (pawn::bHitSlopedWall(a)) {
                         float desiredDist = delta.size();
-                        if (desiredDist > 0) {
-                            Vector desiredDir = delta / desiredDist;
-                            Vector location = actor::Location(a);
-                            world().lineCheck(hit, location, location + desiredDir * std::max(30.0f, desiredDist + 4), extent, a, TRACE_World | TRACE_Blocking);
-                            bool sloped = hit.time < 1.0f && hit.normal.z > 0.01f && hit.normal.z < 0.7f;
-                            pawn::bHitSlopedWall(a) = sloped ? 1 : 0;
-                            if (sloped) {
-                                Vector normal { hit.normal.x, hit.normal.y, 0 };
-                                normal = normal.normal();
-                                delta = delta - normal * delta.dot(normal);
+                        Vector desiredDir = delta / desiredDist;
+                        Vector location = actor::Location(a);
+                        world.lineCheck(hit, location, location + desiredDir * std::max(30.0f, desiredDist + 4), extent, a, TRACE_World | TRACE_Blocking);
+                        bool sloped = hit.time < 1.0f && hit.normal.z >= 0.01f && hit.normal.z < 0.7f;
+                        pawn::bHitSlopedWall(a) = sloped ? 1 : 0;
+                        if (sloped) {
+                            Vector normal = Vector { hit.normal.x, hit.normal.y, 0 }.normal();
+                            delta = delta - normal * delta.dot(normal);
+                        } else if (isPlayerPawn(a)) {
+                            // A player stays against a sloped wall while one is within 100
+                            // units of their feet, ahead or 45 degrees to either side.
+                            Vector feet { location.x, location.y, location.z - height + maxStep + 4.0f };
+                            Vector sides[] = {
+                                desiredDir,
+                                Vector { desiredDir.x + desiredDir.y, desiredDir.y - desiredDir.x, desiredDir.z }.normal(),
+                                Vector { desiredDir.x - desiredDir.y, desiredDir.x + desiredDir.y, desiredDir.z }.normal(),
+                            };
+                            for (const Vector& side : sides) {
+                                CheckResult check;
+                                world.lineCheck(check, feet, feet + side * 100.0f, {}, a, TRACE_World | TRACE_Blocking);
+                                if (check.time < 1.0f && check.normal.z >= 0.01f && check.normal.z < 0.7f) {
+                                    pawn::bHitSlopedWall(a) = 1;
+                                    break;
+                                }
                             }
                         }
-                        move(a, delta, hit);
+                        move(world, a, delta, hit);
                     } else {
-                        move(a, delta, hit);
-                        pawn::bHitSlopedWall(a) = (hit.time < 1.0f && hit.normal.z > 0.01f && hit.normal.z < 0.7f) ? 1 : 0;
+                        move(world, a, delta, hit);
+                        pawn::bHitSlopedWall(a) = (hit.time < 1.0f && hit.normal.z >= 0.01f && hit.normal.z < 0.7f) ? 1 : 0;
                     }
                     if (a->destroyed) {
                         return;
                     }
                     if (hit.time < 1.0f) {
                         Vector desiredDir = delta.normal();
-                        stepUp(a, gravDir, desiredDir, delta * (1.0f - hit.time), hit);
+                        stepUp(world, a, gravDir, desiredDir, delta * (1.0f - hit.time), hit);
                         if (actor::Physics(a) == PHYS_Falling) {
                             float desiredDist = subMove.size();
                             float actualDist = (actor::Location(a) - subLocation).size2D();
@@ -398,45 +527,45 @@ namespace dx {
                             vm::event(a, Name("Falling"));
                             if (actor::Physics(a) == PHYS_Falling) {
                                 if (remaining > 0.01f) {
-                                    physFalling(a, remaining, iterations);
+                                    physFalling(world, a, remaining, iterations);
                                 }
                             } else if (actor::Physics(a) == PHYS_Flying) {
                                 actor::Velocity(a) = { 0, 0, pawn::AirSpeed(a) };
                                 actor::Acceleration(a) = { 0, 0, pawn::AccelRate(a) };
                                 if (remaining > 0.01f) {
-                                    physFlying(a, remaining, iterations);
+                                    physFlying(world, a, remaining, iterations);
                                 }
                             }
                             return;
                         }
                     }
                     if (actor::Physics(a) == PHYS_Swimming) {
-                        physSwimming(a, remaining, iterations);
+                        startSwimming(world, a, actor::Velocity(a), tick, remaining, iterations);
                         return;
                     }
                 }
                 Vector location = actor::Location(a);
                 if (zeroMove) {
                     Vector foot = location - Vector { 0, 0, height };
-                    world().lineCheck(hit, foot, foot - Vector { 0, 0, 20 }, {}, a, TRACE_World | TRACE_Blocking);
+                    world.lineCheck(hit, foot, foot - Vector { 0, 0, 20 }, {}, a, TRACE_World | TRACE_Blocking);
                     float floorDist = hit.time * 20;
                     zeroMove = actor::Base(a) == hit.actor && floorDist <= 4.6f && floorDist >= 4.1f;
                 }
                 if (!zeroMove) {
-                    world().lineCheck(hit, location, location + down, extent, a, TRACE_AllColliding | TRACE_Blocking);
+                    world.lineCheck(hit, location, location + down, extent, a, TRACE_AllColliding | TRACE_Blocking);
                     float floorDist = hit.time * (maxStep + 2.0f);
                     if (hit.time < 1.0f && (hit.actor != actor::Base(a) || floorDist > 2.4f)) {
-                        move(a, down, hit);
+                        move(world, a, down, hit);
                         if (hit.actor != actor::Base(a)) {
                             setSupportBase(a, hit.actor);
                         }
                         if (actor::Physics(a) == PHYS_Swimming) {
-                            physSwimming(a, remaining, iterations);
+                            startSwimming(world, a, actor::Velocity(a), tick, remaining, iterations);
                             return;
                         }
                     } else if (floorDist < 1.9f) {
                         Vector realNormal = hit.normal;
-                        move(a, { 0, 0, 2.1f - floorDist }, hit);
+                        move(world, a, { 0, 0, 2.1f - floorDist }, hit);
                         hit.time = 0;
                         hit.normal = realNormal;
                     }
@@ -446,14 +575,16 @@ namespace dx {
                             Vector slide = zoneGravity(a) * (deltaTime * deltaTime / (2 * std::max(0.5f, friction)));
                             Vector slideDelta = slide - hit.normal * slide.dot(hit.normal);
                             if (slideDelta.dot(slide) >= 0) {
-                                move(a, slideDelta, hit);
+                                move(world, a, slideDelta, hit);
                             }
                             if (actor::Physics(a) == PHYS_Swimming) {
-                                physSwimming(a, remaining, iterations);
+                                startSwimming(world, a, actor::Velocity(a), tick, remaining, iterations);
                                 return;
                             }
                         }
                     } else {
+                        // Off a ledge. Only a pawn that cannot jump stops at it; Deus Ex lets a
+                        // walking player step off just as a running one does.
                         if (pawn::bCanJump(a) && !checkedFall && probing(a, "MayFall")) {
                             checkedFall = true;
                             vm::event(a, Name("MayFall"));
@@ -461,7 +592,7 @@ namespace dx {
                         if (!pawn::bCanJump(a)) {
                             actor::Velocity(a) = {};
                             actor::Acceleration(a) = {};
-                            world().farMoveActor(a, actor::OldLocation(a), false, false);
+                            world.farMoveActor(a, actor::OldLocation(a), false, false);
                             pawn::MoveTimer(a) = -1.0f;
                             return;
                         }
@@ -472,6 +603,8 @@ namespace dx {
                         float actualDist = (actor::Location(a) - subLocation).size2D();
                         if (desiredDist > 0) {
                             remaining += tick * (1 - std::min(1.0f, actualDist / desiredDist));
+                        } else {
+                            remaining = 0;
                         }
                         actor::Velocity(a).z = 0;
                         vm::event(a, Name("Falling"));
@@ -485,11 +618,11 @@ namespace dx {
                             }
                             actor::Velocity(a).z = velocityZ;
                             if (remaining > 0.01f) {
-                                physFalling(a, remaining, iterations);
+                                physFalling(world, a, remaining, iterations);
                             }
                             return;
                         }
-                        move(a, desiredMove * remaining, hit);
+                        move(world, a, desiredMove * remaining, hit);
                         remaining = 0;
                     }
                 }
@@ -521,33 +654,49 @@ namespace dx {
             return oldVelocity * (1 - 2 * zoneFluidFriction(a) * tick) + (acceleration + gravity * (1.0f - actor::Buoyancy(a) / mass)) * (0.5f * tick);
         }
 
-        void physFalling(UObject* a, float deltaTime, int iterations)
+        void physFalling(World& world, UObject* a, float deltaTime, int iterations)
         {
-            if (region(a).zoneNumber == 0) {
-                if (!isPawn(a) || !pawn::bIsPlayer(a)) {
-                    setPhysics(a, PHYS_None, nullptr);
-                    world().destroy(a);
-                }
+            if (isPawn(a) && physLadder(world, a, deltaTime, iterations)) {
                 return;
             }
+            if (region(a).zoneNumber == 0) {
+                // Actor.FellOutOfWorld destroys the actor; Pawn.FellOutOfWorld kills the
+                // pawn, the player included.
+                vm::event(a, Name("FellOutOfWorld"));
+                return;
+            }
+            // Air control limits acceleration only during the fall. Save the pawn's
+            // acceleration so it can be restored afterward.
+            Vector savedAcceleration = actor::Acceleration(a);
+            float maxSpeed2D = 0;
             if (isPawn(a)) {
-                float maxAccel = pawn::AccelRate(a) * 0.05f;
+                Vector& acceleration = actor::Acceleration(a);
+                float airControl = pawn::AirControl(a);
+                if (airControl > 0.15f) {
+                    // Little control while steering into something.
+                    Vector steer = (actor::Velocity(a) + acceleration.normal() * (airControl * pawn::AccelRate(a))) * deltaTime;
+                    Vector location = actor::Location(a);
+                    CheckResult check;
+                    world.lineCheck(check, location, location + Vector { steer.x, steer.y, 0 }, cylinderExtent(a), a, TRACE_World | TRACE_Blocking);
+                    if (check.actor) {
+                        airControl = 0.05f;
+                    }
+                }
+                float maxAccel = airControl * pawn::AccelRate(a);
+                acceleration.z = 0;
                 float speed2d = actor::Velocity(a).size2D();
                 if (speed2d < 10.0f) {
                     maxAccel = maxAccel + (10 - speed2d) / deltaTime;
-                } else if (speed2d > pawn::GroundSpeed(a)) {
-                    maxAccel = 1.0f;
+                } else if (speed2d >= pawn::GroundSpeed(a)) {
+                    if (airControl > 0.05f) {
+                        maxSpeed2D = speed2d;
+                    } else {
+                        maxAccel = 1.0f;
+                    }
                 }
-                Vector& acceleration = actor::Acceleration(a);
-                acceleration.z = 0;
                 if (acceleration.sizeSquared() > maxAccel * maxAccel) {
                     acceleration = acceleration.normal() * maxAccel;
                 }
-            }
-            if (isPawn(a) && ladderAhead(a, actor::Acceleration(a).zero() ? Vector {} : actor::Acceleration(a).normal())) {
-                actor::Velocity(a) = {};
-                setPhysics(a, PHYS_Walking, nullptr);
-                return;
             }
             float remaining = deltaTime;
             int bounces = 0;
@@ -573,20 +722,26 @@ namespace dx {
                 } else {
                     adjustApex = false;
                 }
-                Vector zoneVel = zoneVelocity(a);
-                Vector adjusted;
-                if (!isPawn(a) || isPlayerPawn(a) || zoneVel.sizeSquared() > 40000.0f) {
-                    adjusted = (actor::Velocity(a) + zoneVel) * tick;
-                } else {
-                    adjusted = actor::Velocity(a) * tick;
+                if (maxSpeed2D != 0) {
+                    Vector& v = actor::Velocity(a);
+                    if (v.x * v.x + v.y * v.y > maxSpeed2D * maxSpeed2D) {
+                        Vector flat = Vector { v.x, v.y, 0 }.normal() * maxSpeed2D;
+                        v = { flat.x, flat.y, v.z };
+                    }
                 }
-                move(a, adjusted, hit);
+                Vector zoneVel = zoneVelocity(a);
+                if (isPawn(a) && !isPlayerPawn(a) && zoneVel.sizeSquared() <= 40000.0f) {
+                    zoneVel = {};
+                }
+                Vector adjusted = (actor::Velocity(a) + zoneVel) * tick;
+                move(world, a, adjusted, hit);
+                bool hitSomething = hit.time < 1.0f;
                 if (a->destroyed) {
                     return;
                 }
                 if (isPawn(a) && actor::Physics(a) == PHYS_Swimming) {
                     remaining = remaining + tick * (1.0f - hit.time);
-                    physSwimming(a, remaining, iterations);
+                    startSwimming(world, a, oldVelocity, tick, remaining, iterations);
                     return;
                 }
                 if (hit.time < 1.0f) {
@@ -604,7 +759,7 @@ namespace dx {
                         if (!actor::bJustTeleported(a) && hit.time > 0.1f && hit.time * tick > 0.003f) {
                             actor::Velocity(a) = (actor::Location(a) - actor::OldLocation(a)) / (tick * hit.time);
                         }
-                        processLanded(a, hit.normal, hit.actor, remaining, iterations);
+                        processLanded(world, a, hit.normal, hit.actor, remaining, iterations);
                         return;
                     } else {
                         processHitWall(a, hit.normal, hit.actor);
@@ -614,19 +769,19 @@ namespace dx {
                         Vector oldNormal = hit.normal;
                         Vector delta = (adjusted - hit.normal * adjusted.dot(hit.normal)) * (1.0f - hit.time);
                         if (delta.dot(adjusted) >= 0) {
-                            move(a, delta, hit);
+                            move(world, a, delta, hit);
                             if (hit.time < 1.0f) {
                                 if (hit.normal.z > 0.7f) {
-                                    processLanded(a, hit.normal, hit.actor, 0, iterations);
+                                    processLanded(world, a, hit.normal, hit.actor, 0, iterations);
                                     return;
                                 }
                                 processHitWall(a, hit.normal, hit.actor);
                                 Vector desiredDir = adjusted.normal();
                                 twoWallAdjust(desiredDir, delta, hit.normal, oldNormal, hit.time);
                                 bool ditch = oldNormal.z > 0 && hit.normal.z > 0 && delta.z == 0 && hit.normal.dot(oldNormal) < 0;
-                                move(a, delta, hit);
+                                move(world, a, delta, hit);
                                 if (ditch || hit.normal.z > 0.7f) {
-                                    processLanded(a, hit.normal, hit.actor, 0, iterations);
+                                    processLanded(world, a, hit.normal, hit.actor, 0, iterations);
                                     return;
                                 }
                             }
@@ -636,8 +791,10 @@ namespace dx {
                         oldVelocity.z = oldZ;
                     }
                 }
-                if (!actor::bBounce(a) && !actor::bJustTeleported(a)) {
-                    Vector newVelocity = (actor::Location(a) - actor::OldLocation(a)) / tick;
+                // The current carries the actor, but its own velocity leaves the current out.
+                // A bouncing actor keeps the velocity HitWall gave it.
+                if ((!actor::bBounce(a) || !hitSomething) && !actor::bJustTeleported(a)) {
+                    Vector newVelocity = (actor::Location(a) - actor::OldLocation(a)) / tick - zoneVel;
                     if (newVelocity.z < oldVelocity.z || oldVelocity.z >= 0) {
                         newVelocity = newVelocity * 2.0f - oldVelocity;
                     }
@@ -648,13 +805,14 @@ namespace dx {
                     actor::Velocity(a) = newVelocity;
                 }
             }
+            actor::Acceleration(a) = savedAcceleration;
         }
 
-        void physFlying(UObject* a, float deltaTime, int iterations)
+        void physFlying(World& world, UObject* a, float deltaTime, int iterations)
         {
-            if (region(a).zoneNumber == 0) {
+            if (actor::bCollideWorld(a) && region(a).zoneNumber == 0) {
                 if (!pawn::bIsPlayer(a)) {
-                    world().destroy(a);
+                    world.destroy(a);
                 }
                 return;
             }
@@ -666,25 +824,25 @@ namespace dx {
             Vector zoneVel = (isPlayerPawn(a) || zoneVelocity(a).sizeSquared() > 90000.0f) ? zoneVelocity(a) : Vector {};
             Vector adjusted = (actor::Velocity(a) + zoneVel) * deltaTime;
             CheckResult hit;
-            move(a, adjusted, hit);
+            move(world, a, adjusted, hit);
             if (hit.time < 1.0f && !a->destroyed) {
                 Vector gravDir { 0, 0, zoneGravity(a).z > 0 ? 1.0f : -1.0f };
                 Vector desiredDir = adjusted.normal();
                 float upDown = gravDir.dot(actor::Velocity(a).normal());
                 if (std::abs(hit.normal.z) < 0.2f && upDown < 0.5f && upDown > -0.2f) {
                     float stepZ = actor::Location(a).z;
-                    stepUp(a, gravDir, desiredDir, adjusted * (1.0f - hit.time), hit);
+                    stepUp(world, a, gravDir, desiredDir, adjusted * (1.0f - hit.time), hit);
                     actor::OldLocation(a).z = actor::Location(a).z + (actor::OldLocation(a).z - stepZ);
                 } else {
                     processHitWall(a, hit.normal, hit.actor);
                     Vector oldNormal = hit.normal;
                     Vector delta = (adjusted - hit.normal * adjusted.dot(hit.normal)) * (1.0f - hit.time);
                     if (delta.dot(adjusted) >= 0) {
-                        move(a, delta, hit);
+                        move(world, a, delta, hit);
                         if (hit.time < 1.0f) {
                             processHitWall(a, hit.normal, hit.actor);
                             twoWallAdjust(desiredDir, delta, hit.normal, oldNormal, hit.time);
-                            move(a, delta, hit);
+                            move(world, a, delta, hit);
                         }
                     }
                 }
@@ -695,9 +853,12 @@ namespace dx {
             (void)iterations;
         }
 
-        void physSwimming(UObject* a, float deltaTime, int iterations)
+        void physSwimming(World& world, UObject* a, float deltaTime, int iterations)
         {
             if (deltaTime <= 0) {
+                return;
+            }
+            if (physLadder(world, a, deltaTime, iterations)) {
                 return;
             }
             UObject* head = reinterpret_cast<PointRegion*>(pawn::HeadRegion(a))->zone;
@@ -709,28 +870,57 @@ namespace dx {
             Vector acceleration = actor::Acceleration(a);
             Vector accelDir = acceleration.zero() ? Vector {} : acceleration.normal();
             calcVelocity(a, accelDir, deltaTime, pawn::WaterSpeed(a), zoneFluidFriction(a), true, false, true);
-            Vector zoneVel = (isPlayerPawn(a) || zoneVelocity(a).sizeSquared() > 90000.0f) ? zoneVelocity(a) : Vector {};
+            float velocityZ = actor::Velocity(a).z;
+            // Deus Ex scales a water current by 25 times the tick here, unlike when flying or falling.
+            Vector zoneVel = (isPlayerPawn(a) || zoneVelocity(a).sizeSquared() > 90000.0f) ? zoneVelocity(a) * (25.0f * deltaTime) : Vector {};
             Vector adjusted = (actor::Velocity(a) + zoneVel) * deltaTime;
             CheckResult hit;
-            move(a, adjusted, hit);
-            if (hit.time < 1.0f && !a->destroyed) {
+            // The time left over once the move has carried the pawn out of the water.
+            float remaining = swim(world, a, adjusted, hit) * deltaTime;
+            if (a->destroyed) {
+                return;
+            }
+            if (hit.time < 1.0f) {
                 Vector gravDir { 0, 0, zoneGravity(a).z > 0 ? 1.0f : -1.0f };
                 Vector desiredDir = adjusted.normal();
                 float upDown = gravDir.dot(actor::Velocity(a).normal());
                 if (std::abs(hit.normal.z) < 0.2f && upDown < 0.5f && upDown > -0.2f) {
                     float stepZ = actor::Location(a).z;
-                    stepUp(a, gravDir, desiredDir, adjusted * (1.0f - hit.time), hit);
+                    stepUp(world, a, gravDir, desiredDir, adjusted * (1.0f - hit.time), hit);
                     actor::OldLocation(a).z = actor::Location(a).z + (actor::OldLocation(a).z - stepZ);
                 } else {
                     processHitWall(a, hit.normal, hit.actor);
+                    if (a->destroyed) {
+                        return;
+                    }
+                    Vector oldNormal = hit.normal;
                     Vector delta = (adjusted - hit.normal * adjusted.dot(hit.normal)) * (1.0f - hit.time);
                     if (delta.dot(adjusted) >= 0) {
-                        move(a, delta, hit);
+                        // Use the slide's hit time here. There is no time left to scale
+                        // unless the first move took the pawn out of the water.
+                        float airTime = swim(world, a, delta, hit);
+                        remaining = remaining * (1.0f - hit.time) * airTime;
+                        if (hit.time < 1.0f && !a->destroyed) {
+                            processHitWall(a, hit.normal, hit.actor);
+                            twoWallAdjust(desiredDir, delta, hit.normal, oldNormal, hit.time);
+                            airTime = swim(world, a, delta, hit);
+                            remaining = remaining * (1.0f - hit.time) * airTime;
+                        }
+                        if (a->destroyed) {
+                            return;
+                        }
                     }
                 }
             }
-            if (!actor::bJustTeleported(a)) {
-                actor::Velocity(a) = (actor::Location(a) - actor::OldLocation(a)) / deltaTime;
+            if (!actor::bJustTeleported(a) && remaining < deltaTime) {
+                // A zone change during the move, such as the water jump PlayerSwimming starts on
+                // leaving the water, sets the vertical speed; keep it over the distance moved.
+                bool zoneSetZ = velocityZ != actor::Velocity(a).z;
+                velocityZ = actor::Velocity(a).z;
+                actor::Velocity(a) = (actor::Location(a) - actor::OldLocation(a)) / (deltaTime - remaining);
+                if (zoneSetZ) {
+                    actor::Velocity(a).z = velocityZ;
+                }
             }
             if (!waterZone(zoneOf(a))) {
                 if (actor::Physics(a) == PHYS_Swimming) {
@@ -741,13 +931,19 @@ namespace dx {
                     velocity.z = 40.0f + velocity.size2D() * 0.4f;
                 }
             }
-            (void)iterations;
+            if (remaining > 0.01f) {
+                if (actor::Physics(a) == PHYS_Falling) {
+                    physFalling(world, a, remaining, iterations + 1);
+                } else if (actor::Physics(a) == PHYS_Flying) {
+                    physFlying(world, a, remaining, iterations + 1);
+                }
+            }
         }
 
-        void physProjectile(UObject* a, float deltaTime, int iterations)
+        void physProjectile(World& world, UObject* a, float deltaTime, int iterations)
         {
             if (region(a).zoneNumber == 0) {
-                world().destroy(a);
+                world.destroy(a);
                 return;
             }
             float remaining = deltaTime;
@@ -770,7 +966,7 @@ namespace dx {
                     }
                 }
                 Vector adjusted = actor::Velocity(a) * deltaTime;
-                move(a, adjusted, hit);
+                move(world, a, adjusted, hit);
                 if (hit.time < 1.0f && !a->destroyed && !actor::bJustTeleported(a)) {
                     vm::Call(a, Name("HitWall")).v(hit.normal).obj(hit.actor).run();
                     if (a->destroyed) {
@@ -782,7 +978,7 @@ namespace dx {
                         }
                         bounces++;
                         if (actor::Physics(a) == PHYS_Falling) {
-                            physFalling(a, remaining, iterations);
+                            physFalling(world, a, remaining, iterations);
                         }
                     }
                 }
@@ -798,59 +994,119 @@ namespace dx {
             return (1.0f / 16.0f) * s * s - 0.5f * s + 1;
         }
 
-        Rotator mixRotators(const Rotator* rotators, const float* weights, int count)
+        // FRotator * float truncates each axis, so a weighted sum of rotators is the
+        // sum of the truncated parts.
+        Rotator scaleRotator(const Rotator& r, float s)
         {
-            float pitch = 0;
-            float yaw = 0;
-            float roll = 0;
-            for (int i = 0; i < count; i++) {
-                pitch += static_cast<float>(rotators[i].pitch) * weights[i];
-                yaw += static_cast<float>(rotators[i].yaw) * weights[i];
-                roll += static_cast<float>(rotators[i].roll) * weights[i];
-            }
-            return { static_cast<int32_t>(pitch), static_cast<int32_t>(yaw), static_cast<int32_t>(roll) };
+            return { static_cast<int32_t>(static_cast<float>(r.pitch) * s), static_cast<int32_t>(static_cast<float>(r.yaw) * s), static_cast<int32_t>(static_cast<float>(r.roll) * s) };
         }
 
-        void physPathing(UObject* a, float deltaTime)
+        Rotator mixRotators(const Rotator* rotators, const float* weights, int count)
+        {
+            Rotator sum;
+            for (int i = 0; i < count; i++) {
+                Rotator part = scaleRotator(rotators[i], weights[i]);
+                sum = { sum.pitch + part.pitch, sum.yaw + part.yaw, sum.roll + part.roll };
+            }
+            return sum;
+        }
+
+        UObject* interpolationLink(UObject* point, const char* name)
+        {
+            uint8_t* address = point ? point->propertyAddress(Name(name)) : nullptr;
+            return address ? *reinterpret_cast<UObject**>(address) : nullptr;
+        }
+
+        float interpolationFloat(UObject* point, const char* name, float fallback)
+        {
+            uint8_t* address = point ? point->propertyAddress(Name(name)) : nullptr;
+            return address ? *reinterpret_cast<float*>(address) : fallback;
+        }
+
+        bool skipsNextPath(UObject* point)
+        {
+            static const Name nameSkip("bSkipNextPath");
+            UClass* interpolationClass = engineClasses().interpolationPoint;
+            if (!point || !interpolationClass || !point->isA(interpolationClass)) {
+                return false;
+            }
+            uint8_t* address = point->propertyAddress(nameSkip);
+            return address && *reinterpret_cast<uint32_t*>(address) != 0;
+        }
+
+        // AActor::physPathing. Deus Ex's
+        // version, like UT's, also takes the game speed from the points and, for a
+        // player, the field of view and screen flash, all blended at the alpha
+        // the tick starts from.
+        void applyInterpolationPoint(World& world, UObject* a, UObject* dest, UObject* next, float alpha)
+        {
+            auto blend = [&](const char* name) {
+                return interpolationFloat(next, name, 1.0f) * alpha + (1.0f - alpha) * interpolationFloat(dest, name, 1.0f);
+            };
+            if (world.levelInfo) {
+                levelinfo::TimeDilation(world.levelInfo) = blend("GameSpeedModifier");
+            }
+            if (!a->isA(engineClasses().playerPawn)) {
+                return;
+            }
+            float flashScale = blend("ScreenFlashScale");
+            playerpawn::DesiredFlashScale(a) = flashScale;
+            playerpawn::FlashScale(a) = { flashScale, flashScale, flashScale };
+            Vector destFog;
+            Vector nextFog;
+            if (uint8_t* address = dest->propertyAddress(Name("ScreenFlashFog"))) {
+                destFog = *reinterpret_cast<Vector*>(address);
+            }
+            if (uint8_t* address = next->propertyAddress(Name("ScreenFlashFog"))) {
+                nextFog = *reinterpret_cast<Vector*>(address);
+            }
+            Vector fog = destFog * (1.0f - alpha) + nextFog * alpha;
+            playerpawn::DesiredFlashFog(a) = fog;
+            playerpawn::FlashFog(a) = fog;
+            UObject* defaults = a->cls ? a->cls->defaultObject : nullptr;
+            if (defaults) {
+                pawn::FovAngle(a) = blend("FovModifier") * pawn::FovAngle(defaults);
+            }
+        }
+
+        void physPathing(World& world, UObject* a, float deltaTime)
         {
             UClass* interpolationClass = engineClasses().interpolationPoint;
             int guard = 0;
             while (actor::PhysRate(a) != 0 && actor::bInterpolating(a) && deltaTime > 0 && guard++ < 16) {
                 UObject* target = actor::Target(a);
                 UObject* dest = (target && interpolationClass && target->isA(interpolationClass)) ? target : nullptr;
-                UObject* next = dest ? dest->propertyAddress(Name("Next")) ? *reinterpret_cast<UObject**>(dest->propertyAddress(Name("Next"))) : nullptr : nullptr;
-                UObject* prev = dest ? dest->propertyAddress(Name("Prev")) ? *reinterpret_cast<UObject**>(dest->propertyAddress(Name("Prev"))) : nullptr : nullptr;
+                UObject* next = interpolationLink(dest, "Next");
+                UObject* prev = interpolationLink(dest, "Prev");
                 float rateModifier = 1.0f;
                 float& alpha = actor::PhysAlpha(a);
                 if (dest && next) {
-                    float r0 = *reinterpret_cast<float*>(dest->propertyAddress(Name("RateModifier")));
-                    float r1 = *reinterpret_cast<float*>(next->propertyAddress(Name("RateModifier")));
-                    rateModifier = r0 * (1 - alpha) + r1 * alpha;
+                    rateModifier = interpolationFloat(next, "RateModifier", 1.0f) * alpha + (1 - alpha) * interpolationFloat(dest, "RateModifier", 1.0f);
+                    applyInterpolationPoint(world, a, dest, next, alpha);
                 }
                 float oldAlpha = alpha;
-                float destAlpha = alpha + actor::PhysRate(a) * rateModifier * deltaTime;
+                float destAlpha = rateModifier * actor::PhysRate(a) * deltaTime + alpha;
                 alpha = std::clamp(destAlpha, 0.0f, 1.0f);
                 if (dest && next) {
-                    UObject* nextNext = *reinterpret_cast<UObject**>(next->propertyAddress(Name("Next")));
+                    UObject* nextNext = interpolationLink(next, "Next");
                     Vector newLocation;
                     Rotator newRotation;
                     if (prev && nextNext) {
+                        // Weighted by the unnormalized spline weights, then scaled by
+                        // their reciprocal sum, as the original does.
                         float w[4] = { splerp(alpha + 1), splerp(alpha), splerp(alpha - 1), splerp(alpha - 2) };
-                        float inv = 1.0f / (w[0] + w[1] + w[2] + w[3]);
-                        for (float& weight : w) {
-                            weight *= inv;
-                        }
-                        newLocation = actor::Location(prev) * w[0] + actor::Location(dest) * w[1] + actor::Location(next) * w[2] + actor::Location(nextNext) * w[3];
+                        float inv = 1.0f / (w[3] + w[2] + w[1] + w[0]);
+                        newLocation = (actor::Location(prev) * w[0] + actor::Location(dest) * w[1] + actor::Location(next) * w[2] + actor::Location(nextNext) * w[3]) * inv;
                         Rotator rotators[4] = { actor::Rotation(prev), actor::Rotation(dest), actor::Rotation(next), actor::Rotation(nextNext) };
-                        newRotation = mixRotators(rotators, w, 4);
+                        newRotation = scaleRotator(mixRotators(rotators, w, 4), inv);
                     } else {
                         float w[2] = { 1 - alpha, alpha };
-                        newLocation = actor::Location(dest) * w[0] + actor::Location(next) * w[1];
+                        newLocation = actor::Location(next) * w[1] + actor::Location(dest) * w[0];
                         Rotator rotators[2] = { actor::Rotation(dest), actor::Rotation(next) };
                         newRotation = mixRotators(rotators, w, 2);
                     }
                     CheckResult hit;
-                    world().moveActor(a, newLocation - actor::Location(a), newRotation, hit, false, false, false, false);
+                    world.moveActor(a, newLocation - actor::Location(a), newRotation, hit, false, false, false, false);
                     if (isPawn(a)) {
                         pawn::ViewRotation(a) = actor::Rotation(a);
                     }
@@ -861,8 +1117,16 @@ namespace dx {
                     if (target) {
                         vm::Call(target, Name("InterpolateEnd")).obj(a).run();
                         vm::Call(a, Name("InterpolateEnd")).obj(target).run();
-                        if (dest) {
-                            actor::Target(a) = next;
+                        // The original steps on from the point it started the segment
+                        // at, past any point marked bSkipNextPath.
+                        // (The original would loop forever on a ring of skipped points.)
+                        UObject* point = dest;
+                        for (int steps = 0; point && steps < 1024; steps++) {
+                            point = interpolationLink(point, "Next");
+                            actor::Target(a) = point;
+                            if (!skipsNextPath(point)) {
+                                break;
+                            }
                         }
                     }
                 } else if (actor::PhysRate(a) < 0 && destAlpha < 0) {
@@ -871,8 +1135,13 @@ namespace dx {
                     if (target) {
                         vm::Call(target, Name("InterpolateEnd")).obj(a).run();
                         vm::Call(a, Name("InterpolateEnd")).obj(target).run();
-                        if (dest) {
-                            actor::Target(a) = prev;
+                        UObject* point = dest;
+                        for (int steps = 0; point && steps < 1024; steps++) {
+                            point = interpolationLink(point, "Prev");
+                            actor::Target(a) = point;
+                            if (!skipsNextPath(point)) {
+                                break;
+                            }
                         }
                     }
                     vm::Call(a, Name("InterpolateEnd")).obj(nullptr).run();
@@ -882,7 +1151,7 @@ namespace dx {
             }
         }
 
-        void physMovingBrush(UObject* a, float deltaTime)
+        void physMovingBrush(World& world, UObject* a, float deltaTime)
         {
             if (!isMover(a)) {
                 return;
@@ -915,7 +1184,7 @@ namespace dx {
                     oldRot.roll + static_cast<int32_t>(static_cast<float>(targetRot.roll - oldRot.roll) * renderAlpha),
                 };
                 CheckResult hit;
-                if (world().moveActor(a, newLocation - actor::Location(a), newRotation, hit, false, false, false, false)) {
+                if (world.moveActor(a, newLocation - actor::Location(a), newRotation, hit, false, false, false, false)) {
                     actor::PhysAlpha(a) = newAlpha;
                     if (newAlpha == 1.0f) {
                         actor::bInterpolating(a) = 0;
@@ -930,10 +1199,10 @@ namespace dx {
             return std::abs(v.x) < 1e-4f && std::abs(v.y) < 1e-4f && std::abs(v.z) < 1e-4f;
         }
 
-        bool checkFloor(UObject* a, const Vector& direction, CheckResult& hit)
+        bool checkFloor(World& world, UObject* a, const Vector& direction, CheckResult& hit)
         {
             Vector location = actor::Location(a);
-            world().lineCheck(hit, location, location - direction * pawn::MaxStepHeight(a), cylinderExtent(a), nullptr, TRACE_World);
+            world.lineCheck(hit, location, location - direction * pawn::MaxStepHeight(a), cylinderExtent(a), nullptr, TRACE_World);
             if (hit.time < 1.0f) {
                 pawn::Floor(a) = hit.normal;
                 return true;
@@ -941,11 +1210,11 @@ namespace dx {
             return false;
         }
 
-        bool findNewFloor(UObject* a, const Vector& oldLocation, float deltaTime, float remainingTime, int iterations)
+        bool findNewFloor(World& world, UObject* a, const Vector& oldLocation, float deltaTime, float remainingTime, int iterations)
         {
             CheckResult hit;
             for (const Vector& direction : { Vector { 0, 0, 1 }, Vector { 0, 1, 0 }, Vector { 0, -1, 0 }, Vector { 1, 0, 0 }, Vector { -1, 0, 0 } }) {
-                if (checkFloor(a, direction, hit)) {
+                if (checkFloor(world, a, direction, hit)) {
                     return true;
                 }
             }
@@ -960,13 +1229,13 @@ namespace dx {
                 }
                 actor::Velocity(a).z = velocityZ;
                 if (remainingTime > 0.005f) {
-                    physFalling(a, remainingTime, iterations);
+                    physFalling(world, a, remainingTime, iterations);
                 }
             }
             return false;
         }
 
-        void physSpider(UObject* a, float deltaTime, int iterations)
+        void physSpider(World& world, UObject* a, float deltaTime, int iterations)
         {
             Vector& velocity = actor::Velocity(a);
             Vector& acceleration = actor::Acceleration(a);
@@ -1003,11 +1272,11 @@ namespace dx {
             actor::DesiredRotation(a) = actor::Rotation(a);
             if (!needFloor) {
                 Vector location = actor::Location(a);
-                world().lineCheck(hit, location, location + down, cylinderExtent(a), nullptr, TRACE_World);
+                world.lineCheck(hit, location, location + down, cylinderExtent(a), nullptr, TRACE_World);
                 needFloor = hit.time == 1.0f;
             }
             if (needFloor) {
-                if (!findNewFloor(a, actor::Location(a), deltaTime, deltaTime, iterations)) {
+                if (!findNewFloor(world, a, actor::Location(a), deltaTime, deltaTime, iterations)) {
                     return;
                 }
                 gravDir = pawn::Floor(a) * -1.0f;
@@ -1023,10 +1292,13 @@ namespace dx {
                 pawn::Floor(a) = {};
                 vm::event(a, Name("Falling"));
                 setPhysics(a, PHYS_Falling, nullptr);
-                physFalling(a, deltaTime, iterations);
+                physFalling(world, a, deltaTime, iterations);
                 return;
             }
-            desiredDir = (desiredDir - pawn::Floor(a) * desiredDir.dot(pawn::Floor(a))).normal();
+            // At zero speed, desiredDir contains NaN. Normalizing the projected direction
+            // gives a zero vector, so the pawn stays put but still checks for a floor.
+            Vector projected = desiredDir - pawn::Floor(a) * desiredDir.dot(pawn::Floor(a));
+            desiredDir = std::isnan(projected.sizeSquared()) ? Vector {} : projected.normal();
             actor::OldLocation(a) = actor::Location(a);
             actor::bJustTeleported(a) = 0;
             float remaining = deltaTime;
@@ -1037,7 +1309,7 @@ namespace dx {
                 remaining -= tick;
                 Vector delta = desiredMove * tick;
                 if (!nearlyZero(delta)) {
-                    world().moveActor(a, delta, actor::DesiredRotation(a), hit, false, false, false, false);
+                    world.moveActor(a, delta, actor::DesiredRotation(a), hit, false, false, false, false);
                     if (a->destroyed) {
                         return;
                     }
@@ -1068,26 +1340,26 @@ namespace dx {
                                 }
                                 actor::Velocity(a).z = velocityZ;
                                 if (remaining > 0.005f) {
-                                    physFalling(a, remaining, iterations);
+                                    physFalling(world, a, remaining, iterations);
                                 }
                                 return;
                             }
                         }
-                        stepUp(a, gravDir, delta.normal(), delta * (1.0f - hit.time), hit);
+                        stepUp(world, a, gravDir, delta.normal(), delta * (1.0f - hit.time), hit);
                         if (actor::Physics(a) == PHYS_Falling) {
                             if (remaining > 0.005f) {
-                                physFalling(a, remaining, iterations);
+                                physFalling(world, a, remaining, iterations);
                             }
                             return;
                         }
                     }
                 }
-                move(a, down, hit);
+                move(world, a, down, hit);
                 if (a->destroyed) {
                     return;
                 }
                 if (hit.time == 1.0f) {
-                    if (!findNewFloor(a, actor::OldLocation(a), deltaTime, remaining, iterations)) {
+                    if (!findNewFloor(world, a, actor::OldLocation(a), deltaTime, remaining, iterations)) {
                         return;
                     }
                     gravDir = pawn::Floor(a) * -1.0f;
@@ -1104,23 +1376,40 @@ namespace dx {
             }
         }
 
-        void physTrailer(UObject* a)
+        // AActor::physTrailer.
+        void physTrailer(World& world, UObject* a)
         {
             UObject* owner = actor::Owner(a);
             if (!owner) {
                 return;
             }
-            world().farMoveActor(a, actor::Location(owner), false, true);
-            Rotator rotation { 16384, 0, 0 };
-            Vector velocity = actor::Velocity(owner);
-            if (velocity.sizeSquared() > 1e-4f) {
-                rotation = vectorRotation(velocity * -1.0f);
+            const uint8_t DT_Sprite = 1;
+            if (actor::DrawType(a) != DT_Sprite) {
+                // Meshes and the rest go to the owner and face against its velocity, or as it does.
+                world.farMoveActor(a, actor::Location(owner), false, true);
+                Rotator rotation;
+                if (actor::bTrailerSameRotation(a)) {
+                    rotation = actor::Rotation(owner);
+                } else if (nearlyZero(actor::Velocity(owner))) {
+                    rotation = { 16384, 0, 0 };
+                } else {
+                    rotation = vectorRotation(actor::Velocity(owner) * -1.0f);
+                }
+                CheckResult hit;
+                world.moveActor(a, {}, rotation, hit, false, false, false, false);
+                return;
             }
-            CheckResult hit;
-            world().moveActor(a, {}, rotation, hit, false, false, false, false);
+            // Sprites only move: offset by PrePivot, or Mass units behind the owner when sharing its rotation.
+            Vector location = actor::Location(owner);
+            if (actor::bTrailerPrePivot(a)) {
+                location = location + actor::PrePivot(a);
+            } else if (actor::bTrailerSameRotation(a)) {
+                location = location - rotationVector(actor::Rotation(owner)) * actor::Mass(a);
+            }
+            world.farMoveActor(a, location, false, true);
         }
 
-        void physRolling(UObject* a, float deltaTime, int iterations)
+        void physRolling(World& world, UObject* a, float deltaTime, int iterations)
         {
             Vector& velocity = actor::Velocity(a);
             Vector velDir = velocity.normal();
@@ -1143,7 +1432,7 @@ namespace dx {
                 Vector subMove = delta;
                 Vector subLocation = actor::Location(a);
                 if (!(std::abs(delta.x) < 1e-4f && std::abs(delta.y) < 1e-4f && std::abs(delta.z) < 1e-4f)) {
-                    move(a, delta, hit);
+                    move(world, a, delta, hit);
                     if (hit.time < 1.0f) {
                         vm::Call(a, Name("HitWall")).v(hit.normal).obj(hit.actor).run();
                         if (actor::bBounce(a)) {
@@ -1156,11 +1445,11 @@ namespace dx {
                             Vector oldNormal = hit.normal;
                             delta = (delta - hit.normal * delta.dot(hit.normal)) * (1.0f - hit.time);
                             if (delta.dot(original) >= 0) {
-                                move(a, delta, hit);
+                                move(world, a, delta, hit);
                                 if (hit.time < 1.0f) {
                                     vm::Call(a, Name("HitWall")).v(hit.normal).obj(hit.actor).run();
                                     twoWallAdjust(desiredMove.normal(), delta, hit.normal, oldNormal, hit.time);
-                                    move(a, delta, hit);
+                                    move(world, a, delta, hit);
                                 }
                             }
                         }
@@ -1169,19 +1458,19 @@ namespace dx {
                 if (a->destroyed) {
                     return;
                 }
-                move(a, down, hit);
+                move(world, a, down, hit);
                 float dropTime = hit.time;
                 float dropHitZ = hit.normal.z;
                 if (dropTime < 1.0f && hit.normal.z < 1.0f && hit.normal.z * zoneGroundFriction(a) < 3.3f) {
                     Vector slide = zoneGravity(a) * (deltaTime / (2 * std::max(0.5f, zoneGroundFriction(a))) * deltaTime);
                     delta = slide - hit.normal * slide.dot(hit.normal);
                     if (delta.dot(slide) >= 0) {
-                        move(a, delta, hit);
+                        move(world, a, delta, hit);
                         dropHitZ = std::max(dropHitZ, hit.normal.z);
                     }
                 }
                 if (dropTime == 1.0f || dropHitZ < 0.7f) {
-                    move(a, down * (-dropTime), hit);
+                    move(world, a, down * (-dropTime), hit);
                     float desiredDist = subMove.size();
                     float actualDist = (actor::Location(a) - subLocation).size2D();
                     remaining += tick * (1 - std::min(1.0f, actualDist / desiredDist));
@@ -1195,11 +1484,11 @@ namespace dx {
                         }
                         actor::Velocity(a).z = 0;
                         if (remaining > 0.005f) {
-                            physFalling(a, remaining, iterations);
+                            physFalling(world, a, remaining, iterations);
                         }
                         return;
                     }
-                    move(a, desiredMove * remaining, hit);
+                    move(world, a, desiredMove * remaining, hit);
                 } else if (hit.actor != actor::Base(a)) {
                     setSupportBase(a, hit.actor);
                 }
@@ -1219,6 +1508,9 @@ namespace dx {
             }
             vm::Call(pending, Name("PostTouch")).obj(a).run();
             pending = actor::PendingTouch(a);
+            if (!pending) {
+                return;
+            }
             actor::PendingTouch(a) = actor::PendingTouch(pending);
             actor::PendingTouch(pending) = nullptr;
         }
@@ -1253,22 +1545,69 @@ namespace dx {
         vm::Call(a, Name("HitWall")).v(hitNormal).obj(hitActor).run();
     }
 
-    void processLanded(UObject* a, const Vector& hitNormal, UObject* hitActor, float remainingTime, int iterations)
+    void processLanded(World& world, UObject* a, const Vector& hitNormal, UObject* hitActor, float remainingTime, int iterations)
     {
+        constexpr uint32_t landTrace = TRACE_World | TRACE_Pawns | TRACE_Others | TRACE_Blocking;
+        UObject* zone = zoneOf(a);
+        // Anything but a pawn that lands in a zone with bBounceVelocity is thrown back up.
+        if (!isPawn(a) && zone && zoneinfo::bBounceVelocity(zone) && !zoneinfo::ZoneVelocity(zone).zero()) {
+            actor::Velocity(a) = zoneinfo::ZoneVelocity(zone) + Vector { 0, 0, 80 };
+            return;
+        }
         if (isPawn(a)) {
+            // A pawn whose feet are not all on something, such as one landing on the edge of
+            // another pawn's head, is moved aside.
             CheckResult hit;
             Vector location = actor::Location(a);
-            world().lineCheck(hit, location, location - Vector { 0, 0, 0.2f * actor::CollisionRadius(a) + 8 }, cylinderExtent(a) * 0.9f, a, TRACE_World | TRACE_Blocking | TRACE_OnlyProjActor);
+            world.lineCheck(hit, location, location - Vector { 0, 0, 0.2f * actor::CollisionRadius(a) + 8 }, cylinderExtent(a) * 0.9f, a, landTrace | TRACE_OnlyProjActor);
             if (hit.time >= 1.0f) {
                 Vector adjusted = location;
-                if (world().findSpot(cylinderExtent(a) * 1.1f, adjusted, false, false) && !(adjusted == location)) {
-                    world().farMoveActor(a, adjusted, false, false);
+                if (world.findSpot(cylinderExtent(a) * 1.1f, adjusted, false, false) && !(adjusted == location)) {
+                    world.farMoveActor(a, adjusted, false, false);
                     actor::Velocity(a).x += frand() * 60 - 30;
                     actor::Velocity(a).y += frand() * 60 - 30;
                     return;
                 }
             }
         } else if (a->isA(engineClasses().decoration)) {
+            if (decoration::numLandings(a) < 5) {
+                float radius = actor::CollisionRadius(a);
+                float height = actor::CollisionHeight(a);
+                Vector location = actor::Location(a);
+                CheckResult hit;
+                world.lineCheck(hit, location - Vector { 0, 0, 0.8f * height }, location - Vector { 0, 0, height + radius + 8 }, {}, a, landTrace | TRACE_OnlyProjActor);
+                if (!hit.actor) {
+                    // Nothing under the middle: if two neighboring quarters hang over an
+                    // edge, it tips off that way.
+                    Vector extent { 0.5f * radius, 0.5f * radius, height };
+                    auto clear = [&](float x, float y) {
+                        Vector start = location + Vector { x * 0.5f * radius, y * 0.5f * radius, 0 };
+                        CheckResult corner;
+                        return world.lineCheck(corner, start, start - Vector { 0, 0, 8 }, extent, a, landTrace) ? 0 : 1;
+                    };
+                    int c1 = clear(1, 1);
+                    int c2 = clear(-1, 1);
+                    int c3 = clear(-1, -1);
+                    int c4 = clear(1, -1);
+                    if (c1 + c2 + c3 + c4 > 1 && c1 + c3 != 0 && c2 + c4 != 0) {
+                        decoration::numLandings(a)++;
+                        float speed = -actor::Velocity(a).z;
+                        speed = speed < 30.0f ? 30.0f : std::min(speed, radius + 30.0f);
+                        speed *= 2.0f;
+                        actor::Velocity(a) = { static_cast<float>(c1 + c4 - c2 - c3) * speed, static_cast<float>(c1 + c2 - c3 - c4) * speed, 0.5f * speed };
+                        return;
+                    }
+                }
+                // A sliding carcass slides off slopes.
+                if (a->isA(engineClasses().carcass) && hitNormal.z < 0.9f && carcass::bSlidingCarcass(a)) {
+                    if (frand() < 0.2f) {
+                        decoration::numLandings(a)++;
+                    }
+                    actor::Velocity(a) = hitNormal * 120.0f;
+                    actor::Velocity(a).z = 70.0f;
+                    return;
+                }
+            }
             decoration::numLandings(a) = 0;
         }
         vm::Call(a, Name("Landed")).v(hitNormal).run();
@@ -1276,44 +1615,39 @@ namespace dx {
             return;
         }
         if (actor::Physics(a) == PHYS_Falling) {
-            if (isPawn(a)) {
-                setPhysics(a, PHYS_Walking, hitActor);
-            } else {
-                setPhysics(a, PHYS_None, hitActor);
-                actor::Velocity(a) = {};
-            }
+            setPhysics(a, isPawn(a) ? PHYS_Walking : PHYS_None, hitActor);
         }
         if (actor::Physics(a) == PHYS_Walking && isPawn(a)) {
             actor::Acceleration(a) = actor::Acceleration(a).normal();
             if (remainingTime > 0.01f) {
-                physWalking(a, remainingTime, iterations);
+                physWalking(world, a, remainingTime, iterations);
             }
         }
     }
 
-    void performPhysics(UObject* a, float deltaSeconds)
+    void performPhysics(World* world, UObject* a, float deltaSeconds)
     {
         uint8_t physics = actor::Physics(a);
         if (isPawn(a)) {
             switch (physics) {
             case PHYS_Walking:
-                physWalking(a, deltaSeconds, 0);
+                physWalking(*world, a, deltaSeconds, 0);
                 break;
             case PHYS_Falling:
-                physFalling(a, deltaSeconds, 0);
+                physFalling(*world, a, deltaSeconds, 0);
                 break;
             case PHYS_Flying:
-                physFlying(a, deltaSeconds, 0);
+                physFlying(*world, a, deltaSeconds, 0);
                 break;
             case PHYS_Swimming:
-                physSwimming(a, deltaSeconds, 0);
+                physSwimming(*world, a, deltaSeconds, 0);
                 break;
             case PHYS_Spider:
-                physSpider(a, deltaSeconds, 0);
+                physSpider(*world, a, deltaSeconds, 0);
                 break;
             case PHYS_Interpolating:
                 actor::OldLocation(a) = actor::Location(a);
-                physPathing(a, deltaSeconds);
+                physPathing(*world, a, deltaSeconds);
                 actor::Velocity(a) = (actor::Location(a) - actor::OldLocation(a)) / deltaSeconds;
                 break;
             default:
@@ -1324,7 +1658,7 @@ namespace dx {
             }
             Rotator rotation = actor::Rotation(a);
             if (actor::Physics(a) != PHYS_Spider && (isPlayerPawn(a) || !(rotation == actor::DesiredRotation(a)) || actor::RotationRate(a).roll > 0)) {
-                pawnRotation(a, deltaSeconds);
+                pawnRotation(*world, a, deltaSeconds);
             }
             pawn::MoveTimer(a) -= deltaSeconds;
             pawn::AvgPhysicsTime(a) = 0.8f * pawn::AvgPhysicsTime(a) + 0.2f * deltaSeconds;
@@ -1333,26 +1667,26 @@ namespace dx {
         }
         switch (physics) {
         case PHYS_Projectile:
-            physProjectile(a, deltaSeconds, 0);
+            physProjectile(*world, a, deltaSeconds, 0);
             break;
         case PHYS_Falling:
-            physFalling(a, deltaSeconds, 0);
+            physFalling(*world, a, deltaSeconds, 0);
             break;
         case PHYS_Interpolating:
             actor::OldLocation(a) = actor::Location(a);
-            physPathing(a, deltaSeconds);
+            physPathing(*world, a, deltaSeconds);
             actor::Velocity(a) = (actor::Location(a) - actor::OldLocation(a)) / deltaSeconds;
             break;
         case PHYS_MovingBrush:
             actor::OldLocation(a) = actor::Location(a);
-            physMovingBrush(a, deltaSeconds);
+            physMovingBrush(*world, a, deltaSeconds);
             actor::Velocity(a) = (actor::Location(a) - actor::OldLocation(a)) / deltaSeconds;
             break;
         case PHYS_Trailer:
-            physTrailer(a);
+            physTrailer(*world, a);
             break;
         case PHYS_Rolling:
-            physRolling(a, deltaSeconds, 0);
+            physRolling(*world, a, deltaSeconds, 0);
             break;
         default:
             break;
@@ -1362,7 +1696,7 @@ namespace dx {
         }
         Rotator rate = actor::RotationRate(a);
         if ((rate.pitch & 65535) != 0 || (rate.yaw & 65535) != 0 || (rate.roll & 65535) != 0) {
-            actorRotation(a, deltaSeconds);
+            actorRotation(*world, a, deltaSeconds);
         }
         postTouch(a);
     }

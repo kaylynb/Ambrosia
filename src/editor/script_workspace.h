@@ -31,6 +31,7 @@ namespace dx::editor {
         std::filesystem::path sourcePath(UClass* cls) const;
         const std::vector<CompileMessage>& messages() const;
         const std::set<UClass*>& changed() const;
+        bool takeLayoutChange();
 
     private:
         void log(const std::string& line, const std::map<std::string, UClass*>& files);
@@ -39,5 +40,6 @@ namespace dx::editor {
         std::vector<CompileMessage> results;
         std::set<UClass*> changedClasses;
         std::map<UClass*, int> lineOffsets;
+        bool layoutChanged = false;
     };
 }

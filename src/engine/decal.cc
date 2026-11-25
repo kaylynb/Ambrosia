@@ -1,6 +1,7 @@
 #include "engine/decal.h"
 
 #include "core/objects.h"
+#include "core/random.h"
 #include "engine/props_engine.h"
 #include "engine/resources.h"
 #include "engine/world.h"
@@ -18,8 +19,7 @@ namespace dx {
 
         float decalRandom()
         {
-            static std::mt19937 generator(5150);
-            return std::uniform_real_distribution<float>(0.0f, 1.0f)(generator);
+            return std::uniform_real_distribution<float>(0.0f, 1.0f)(random::engine(random::Stream::Decal));
         }
 
         Vector unitOrSame(const Vector& value)
@@ -51,8 +51,9 @@ namespace dx {
         const std::vector<int32_t>& surfNodes(World& world, UModel* model, int32_t surf)
         {
             DecalRegistry& registry = world.decals;
-            if (registry.model != model || registry.surfNodes.size() != model->surfs.size()) {
+            if (registry.model != model || registry.revision != model->revision || registry.surfNodes.size() != model->surfs.size()) {
                 registry.model = model;
+                registry.revision = model->revision;
                 registry.surfNodes.assign(model->surfs.size(), {});
                 for (size_t i = 0; i < model->nodes.size(); i++) {
                     int32_t owner = model->nodes[i].surf;

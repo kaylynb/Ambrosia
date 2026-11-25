@@ -13,3 +13,5 @@ AllowShortFunctionsOnASingleLine: None
 BraceWrapping:
   AfterControlStatement: true
 SeparateDefinitionBlocks: Always
+# Keep {} as written; clang-format 22's WebKit style would make it { }.
+SpaceInEmptyBraces: Never

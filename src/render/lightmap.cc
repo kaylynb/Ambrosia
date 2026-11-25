@@ -3,7 +3,7 @@
 #include "core/objects.h"
 #include "engine/props_engine.h"
 #include "render/lighting.h"
-#include "render/render_device.h"
+#include "render/gl_device.h"
 
 #include <algorithm>
 #include <cmath>
@@ -231,7 +231,7 @@ namespace dx {
         if (lights) {
             Vector worldBase = transform.point(model->points.at(static_cast<size_t>(surf.pBase)));
             for (UObject* light : *lights) {
-                if (!lightOnSurfaces(light) || (actor::Location(light) - worldBase).dot(lighting.normal) <= 0) {
+                if (!lightMayLightSurfaces(light) || (actor::Location(light) - worldBase).dot(lighting.normal) <= 0) {
                     continue;
                 }
                 if (lightBakedOnSurfaces(light)) {
@@ -256,7 +256,7 @@ namespace dx {
                 break;
             }
             objects::ensureLoaded(light);
-            if (!lightOnSurfaces(light)) {
+            if (!lightMayLightSurfaces(light)) {
                 continue;
             }
             int32_t shadowIndex = static_cast<int32_t>(slot) - index.lightActors;
@@ -311,7 +311,7 @@ namespace dx {
         return result;
     }
 
-    LightmapAtlas::LightmapAtlas(RenderDevice& renderDevice, int32_t size)
+    LightmapAtlas::LightmapAtlas(GLRenderDevice& renderDevice, int32_t size)
         : device(renderDevice)
         , PageSize(size)
     {
@@ -330,15 +330,34 @@ namespace dx {
     void LightmapAtlas::clear()
     {
         device.deleteLightmaps(textures);
-        textures.clear();
         device.deleteLightmaps(fogTextures);
-        fogTextures.clear();
         pages.clear();
         placements.clear();
         variantPlacements.clear();
         variantIndex.clear();
         animated.clear();
         isBuilt = false;
+    }
+
+    void LightmapAtlas::objectsReleased(const gc::ReleasedSet& released)
+    {
+        for (Animated& entry : animated) {
+            std::erase_if(entry.lighting.lights, [&](const SurfaceLighting::Light& light) {
+                return released.count(light.light) != 0;
+            });
+        }
+    }
+
+    bool LightmapAtlas::holdsLight(const UObject* light) const
+    {
+        for (const Animated& entry : animated) {
+            for (const SurfaceLighting::Light& held : entry.lighting.lights) {
+                if (held.light == light) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     bool LightmapAtlas::place(int32_t width, int32_t height, LightmapPlacement& placement)
@@ -485,7 +504,7 @@ namespace dx {
             entry.bytes.swap(bytes);
             const LightmapPlacement& placement = entry.variant >= 0 ? variantPlacements[static_cast<size_t>(entry.variant)].second : placements[entry.lightMap];
             padPixels(entry.bytes, entry.lighting.width, entry.lighting.height, entry.pixels);
-            device.updateLightmap(textures[static_cast<size_t>(placement.page)], placement.x - Padding, placement.y - Padding, entry.lighting.width + 2 * Padding, entry.lighting.height + 2 * Padding, entry.pixels.data());
+            device.updateLightmap(textures[static_cast<size_t>(placement.page)].get(), placement.x - Padding, placement.y - Padding, entry.lighting.width + 2 * Padding, entry.lighting.height + 2 * Padding, entry.pixels.data());
         }
     }
 
@@ -525,8 +544,8 @@ namespace dx {
         if (fogTextures.empty() && !textures.empty()) {
             fogTextures.resize(textures.size());
             std::vector<uint8_t> zeros(static_cast<size_t>(PageSize * PageSize * 4), 0);
-            for (uint32_t& id : fogTextures) {
-                id = device.createLightmap(PageSize, zeros.data());
+            for (TextureHandle& page : fogTextures) {
+                page = device.createLightmap(PageSize, zeros.data());
             }
         }
         padPixels(bytes, width, height, fogPixels);
@@ -537,7 +556,7 @@ namespace dx {
             if (placement->page < 0 || static_cast<size_t>(placement->page) >= fogTextures.size()) {
                 continue;
             }
-            device.updateLightmap(fogTextures[static_cast<size_t>(placement->page)], placement->x - Padding, placement->y - Padding, width + 2 * Padding, height + 2 * Padding, fogPixels.data());
+            device.updateLightmap(fogTextures[static_cast<size_t>(placement->page)].get(), placement->x - Padding, placement->y - Padding, width + 2 * Padding, height + 2 * Padding, fogPixels.data());
         }
     }
 
@@ -546,7 +565,7 @@ namespace dx {
         if (page < 0 || static_cast<size_t>(page) >= fogTextures.size()) {
             return 0;
         }
-        return fogTextures[static_cast<size_t>(page)];
+        return fogTextures[static_cast<size_t>(page)].get();
     }
 
     uint32_t LightmapAtlas::texture(int32_t page) const
@@ -554,6 +573,6 @@ namespace dx {
         if (page < 0 || static_cast<size_t>(page) >= textures.size()) {
             return 0;
         }
-        return textures[static_cast<size_t>(page)];
+        return textures[static_cast<size_t>(page)].get();
     }
 }

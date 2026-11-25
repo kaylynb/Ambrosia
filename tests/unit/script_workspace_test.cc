@@ -2,8 +2,10 @@
 #include "core/objects.h"
 #include "core/vm.h"
 #include "editor/script_workspace.h"
-#include "engine/package.h"
+#include "core/package.h"
 #include "engine/world.h"
+#include "fixtures.h"
+#include "ucc_runner.h"
 
 #include <catch_amalgamated.hpp>
 
@@ -37,13 +39,6 @@ namespace {
         return "class " + className + " expands Object;\r\n\r\n" + members;
     }
 
-    void start()
-    {
-        dx::objects::setEditorMode(true);
-        dx::engine::initialize(DEUSEX_GAME_DATA);
-        REQUIRE(dx::objects::objectClass()->scriptText != nullptr);
-    }
-
     std::string readFile(const std::filesystem::path& path)
     {
         std::ifstream in(path, std::ios::binary);
@@ -55,7 +50,7 @@ namespace {
 
 TEST_CASE("editor recompiles a loaded class in place keeping defaults and instance values", "[.][editor-scripts][data]")
 {
-    start();
+    dx::test::ScriptEditing editing;
     dx::editor::ScriptWorkspace workspace;
     dx::UClass* base = workspace.newClass("EdTestScripts", "EdTestKeep", dx::objects::objectClass());
     REQUIRE(base != nullptr);
@@ -78,7 +73,7 @@ TEST_CASE("editor recompiles a loaded class in place keeping defaults and instan
 
 TEST_CASE("editor recompiles subclasses when their parent changes", "[.][editor-scripts][data]")
 {
-    start();
+    dx::test::ScriptEditing editing;
     dx::editor::ScriptWorkspace workspace;
     dx::UClass* base = workspace.newClass("EdTestScripts", "EdTestParent", dx::objects::objectClass());
     REQUIRE(base != nullptr);
@@ -100,7 +95,7 @@ TEST_CASE("editor recompiles subclasses when their parent changes", "[.][editor-
 
 TEST_CASE("a script error restores the classes and reports the line", "[.][editor-scripts][data]")
 {
-    start();
+    dx::test::ScriptEditing editing;
     dx::editor::ScriptWorkspace workspace;
     dx::UClass* base = workspace.newClass("EdTestScripts", "EdTestBroken", dx::objects::objectClass());
     REQUIRE(base != nullptr);
@@ -125,7 +120,7 @@ TEST_CASE("a script error restores the classes and reports the line", "[.][edito
 
 TEST_CASE("editor exports changed scripts and saves a package ucc can read", "[.][editor-scripts][data]")
 {
-    start();
+    dx::test::ScriptEditing editing;
     dx::editor::ScriptWorkspace workspace;
     dx::UClass* base = workspace.newClass("EdTestSaved", "EdTestStored", dx::objects::objectClass());
     REQUIRE(base != nullptr);
@@ -150,8 +145,7 @@ TEST_CASE("editor exports changed scripts and saves a package ucc can read", "[.
     }
     REQUIRE(hasClass);
     std::filesystem::path out = dx::config::userDirectory() / "reexport";
-    std::string command = std::string("\"") + UCC_PATH + "\" batchexport EdTestSaved.u class uc \"" + out.string() + "\" > /dev/null";
-    REQUIRE(std::system(command.c_str()) == 0);
+    REQUIRE(ucctest::runUcc("batchexport EdTestSaved.u class uc \"" + out.string() + "\"") == 0);
     std::string reexported = readFile(out / "EdTestStored.uc");
     REQUIRE(reexported.find("return 4;") != std::string::npos);
     REQUIRE(reexported.find("Stored=9") != std::string::npos);
@@ -159,7 +153,7 @@ TEST_CASE("editor exports changed scripts and saves a package ucc can read", "[.
 
 TEST_CASE("editor refuses to save packages holding non-script objects", "[.][editor-scripts][data]")
 {
-    start();
+    dx::test::ScriptEditing editing;
     dx::editor::ScriptWorkspace workspace;
     REQUIRE_FALSE(workspace.savePackage("Engine"));
     REQUIRE(workspace.messages().back().text.find("is not script content") != std::string::npos);

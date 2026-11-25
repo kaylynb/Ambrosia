@@ -1,29 +1,17 @@
 #include "engine/resources.h"
 
+#include "core/gc.h"
 #include "core/objects.h"
-#include "engine/reader.h"
+#include "core/reader.h"
+#include "engine/reader_values.h"
 
 #include <stdexcept>
 
 namespace dx {
     namespace {
-        Vector readVector(Reader& reader)
-        {
-            Vector value;
-            value.x = reader.f32();
-            value.y = reader.f32();
-            value.z = reader.f32();
-            return value;
-        }
-
-        size_t readCount(Reader& reader)
-        {
-            int32_t count = reader.index();
-            if (count < 0) {
-                throw std::runtime_error("negative array count");
-            }
-            return static_cast<size_t>(count);
-        }
+        using readers::readBox;
+        using readers::readCount;
+        using readers::readVector;
 
         void readMips(Reader& reader, std::vector<TextureMip>& mips, uint16_t version)
         {
@@ -265,6 +253,10 @@ namespace dx {
     {
         int32_t count = reader.i32();
         reader.i32();
+        // Each poly takes far more than a byte, so a count past the bytes left is corrupt.
+        if (count > 0 && static_cast<size_t>(count) > reader.remaining()) {
+            throw std::runtime_error("poly count past the end of the data");
+        }
         polys.resize(static_cast<size_t>(std::max(count, 0)));
         for (Poly& poly : polys) {
             size_t vertices = readCount(reader);
@@ -289,9 +281,7 @@ namespace dx {
 
     void UPrimitive::serialize(Reader& reader, Linker&)
     {
-        bounds.min = readVector(reader);
-        bounds.max = readVector(reader);
-        bounds.valid = reader.u8() != 0;
+        bounds = readBox(reader);
         sphere.x = reader.f32();
         sphere.y = reader.f32();
         sphere.z = reader.f32();
@@ -383,9 +373,7 @@ namespace dx {
         count = readCount(reader);
         nodeBounds.resize(count);
         for (BoundingBox& box : nodeBounds) {
-            box.min = readVector(reader);
-            box.max = readVector(reader);
-            box.valid = reader.u8() != 0;
+            box = readBox(reader);
         }
         count = readCount(reader);
         leafHulls.resize(count);
@@ -457,8 +445,54 @@ namespace dx {
         }
     }
 
+    void UFont::addReferences(ReferenceVisitor& references)
+    {
+        UObject::addReferences(references);
+        for (FontPage& page : pages) {
+            references(page.texture);
+        }
+    }
+
+    void UPolys::addReferences(ReferenceVisitor& references)
+    {
+        UObject::addReferences(references);
+        for (Poly& poly : polys) {
+            references(poly.actor);
+            references(poly.texture);
+        }
+    }
+
+    void UModel::addReferences(ReferenceVisitor& references)
+    {
+        UPrimitive::addReferences(references);
+        for (BspSurf& surf : surfs) {
+            references(surf.texture);
+            references(surf.actor);
+        }
+        for (ZoneProperties& zone : zones) {
+            references(zone.zoneActor);
+        }
+        references(polys);
+        references(lights);
+    }
+
+    void ULevel::addReferences(ReferenceVisitor& references)
+    {
+        UObject::addReferences(references);
+        references(actors);
+        references(model);
+        for (ReachSpec& spec : reachSpecs) {
+            references(spec.start);
+            references(spec.end);
+        }
+        for (UObject*& block : textBlocks) {
+            references(block);
+        }
+    }
+
     void registerEngineResources()
     {
+        gc::reportsReferences<UPalette, UTexture, UFont, USound, UMusic, UPolys, UPrimitive, UModel, ULevel>();
         objects::registerFactory(Name("Palette"), [] { return new UPalette(); });
         objects::registerFactory(Name("Texture"), [] { return new UTexture(); });
         objects::registerFactory(Name("Font"), [] { return new UFont(); });

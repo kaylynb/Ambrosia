@@ -1,4 +1,6 @@
 #include "compiler/exporter.h"
+#include "debugui/imgui_setup.h"
+#include "core/files.h"
 #include "editor/editor.h"
 
 namespace dx::editor {
@@ -21,7 +23,8 @@ namespace dx::editor {
             }
             ImGui::SameLine();
             if (ImGui::Button("Delete")) {
-                pendingCommand = "deleteclass " + placeClass->pathName();
+                std::string path = placeClass->pathName();
+                askConfirm("Delete class " + path + "? This cannot be undone.", "Delete", [this, path]() { pendingCommand = "deleteclass " + path; }, nullptr);
             }
         }
         if (ImGui::Button("Export")) {
@@ -58,7 +61,7 @@ namespace dx::editor {
             ImGui::TextUnformatted("Load and compile a class from a .uc file");
             ImGui::InputText("File", loadClassFile.data(), loadClassFile.size());
             if (ImGui::Button("Load") && loadClassFile[0]) {
-                pendingCommand = std::string("loadclass ") + loadClassFile.data();
+                pendingCommand = "loadclass " + quoteArg(loadClassFile.data());
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -97,7 +100,8 @@ namespace dx::editor {
         if (cls->scriptText && !(cls->flags & dx::RF_Native)) {
             ImGui::Separator();
             if (ImGui::MenuItem(("Delete " + name).c_str())) {
-                pendingCommand = "deleteclass " + cls->pathName();
+                std::string path = cls->pathName();
+                askConfirm("Delete class " + path + "? This cannot be undone.", "Delete", [this, path]() { pendingCommand = "deleteclass " + path; }, nullptr);
             }
         }
     }
@@ -108,8 +112,8 @@ namespace dx::editor {
             return;
         }
         dx::UClass* cls = defaultsClass;
-        ImGui::SetNextWindowSize(ImVec2(460, 560), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(360, 90), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(460), debugui::scaled(560)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(360), debugui::scaled(90)), ImGuiCond_FirstUseEver);
         std::string title = "Default " + cls->name.str() + " Properties###ClassDefaults";
         if (!ImGui::Begin(title.c_str(), &showClassDefaults)) {
             ImGui::End();
@@ -133,7 +137,7 @@ namespace dx::editor {
             if (!ImGui::BeginTable(category.first.c_str(), 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
                 continue;
             }
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 160.0f);
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(160.0f));
             ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
             for (dx::UProperty* property : category.second) {
                 for (int32_t index = 0; index < property->arrayDim; index++) {
@@ -153,16 +157,14 @@ namespace dx::editor {
     bool Editor::classCommand(const std::string& verb, const std::string& rest)
     {
         if (verb == "loadclass") {
-            dx::UClass* cls = scripts.loadClass(rest);
+            std::filesystem::path file = utf8Path(restArg(rest));
+            dx::UClass* cls = scripts.loadClass(file);
             showScripts = true;
             status = scripts.messages().empty() ? std::string() : scripts.messages().back().text;
             if (!cls) {
                 for (const dx::editor::CompileMessage& message : scripts.messages()) {
                     if (message.error && message.cls) {
-                        std::ifstream in(rest, std::ios::binary);
-                        std::stringstream text;
-                        text << in.rdbuf();
-                        loadDocumentText(message.cls, message.line, text.str());
+                        loadDocumentText(message.cls, message.line, dx::files::readFile(file).value_or(std::string()));
                         break;
                     }
                 }

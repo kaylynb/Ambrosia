@@ -1,9 +1,10 @@
 #include "core/object.h"
 
 #include "core/config.h"
+#include "core/gc.h"
 #include "core/objects.h"
 #include "core/vm.h"
-#include "engine/reader.h"
+#include "core/reader.h"
 
 #include <algorithm>
 #include <cmath>
@@ -96,9 +97,15 @@ namespace dx {
             pushBytes(out, &value, sizeof(value));
         }
 
+        // Where the bytecode being read keeps its object handles.
+        thread_local std::vector<uint32_t>* scriptObjectOffsets = nullptr;
+
         void pushObject(std::vector<uint8_t>& out, Reader& reader, Linker& source)
         {
             UObject* object = source.readObject(reader);
+            if (scriptObjectOffsets) {
+                scriptObjectOffsets->push_back(static_cast<uint32_t>(out.size()));
+            }
             pushU32(out, object ? object->handle : 0);
         }
 
@@ -296,7 +303,7 @@ namespace dx {
         if (data && cls) {
             cls->destroyValue(data);
         }
-        delete[] data;
+        objects::freeObjectData(data);
     }
 
     void UObject::serialize(Reader&, Linker&)
@@ -398,10 +405,30 @@ namespace dx {
         line = reader.u32();
         textPos = reader.u32();
         uint32_t scriptSize = reader.u32();
-        script.reserve(scriptSize);
+        script.reserve(std::min<size_t>(scriptSize, reader.remaining()));
+        scriptObjects.clear();
+
+        struct Recording {
+            explicit Recording(std::vector<uint32_t>* offsets)
+                : previous(scriptObjectOffsets)
+            {
+                scriptObjectOffsets = offsets;
+            }
+
+            ~Recording()
+            {
+                scriptObjectOffsets = previous;
+            }
+
+            Recording(const Recording&) = delete;
+            Recording& operator=(const Recording&) = delete;
+            std::vector<uint32_t>* previous;
+        } recording(&scriptObjects);
+
         while (script.size() < scriptSize) {
             readToken(script, reader, source, 0);
         }
+        scriptObjectsKnown = true;
         if (script.size() != scriptSize) {
             throw std::runtime_error("bytecode size mismatch in " + pathName());
         }
@@ -414,11 +441,12 @@ namespace dx {
 
     UProperty* UStruct::findProperty(Name propertyName) const
     {
-        if (propertyIndexSize != properties.size() || propertyIndexData != properties.data()) {
+        if (!propertyIndexValid || propertyIndexSize != properties.size() || propertyIndexData != properties.data()) {
             propertyIndex.clear();
             for (UProperty* property : properties) {
                 propertyIndex[property->name] = property;
             }
+            propertyIndexValid = true;
             propertyIndexSize = properties.size();
             propertyIndexData = properties.data();
         }
@@ -522,6 +550,7 @@ namespace dx {
             alignment = std::max(alignment, align);
             properties.push_back(property);
         }
+        invalidatePropertyIndex();
         size = alignUp(size, alignment);
 
         constructed.clear();
@@ -651,6 +680,78 @@ namespace dx {
         config::applyClassDefaults(this);
     }
 
+    void UField::addReferences(ReferenceVisitor& references)
+    {
+        UObject::addReferences(references);
+        references(superField);
+        references(next);
+    }
+
+    void UStruct::addReferences(ReferenceVisitor& references)
+    {
+        UField::addReferences(references);
+        references(scriptText);
+        references(children);
+        references(properties);
+        references(constructed);
+        // The bytecode's own references keep their targets. They are handed over as copies:
+        // nothing bytecode names is ever eliminated, and the code is not rewritten here.
+        if (scriptObjectsKnown) {
+            for (uint32_t offset : scriptObjects) {
+                if (offset + sizeof(uint32_t) > script.size()) {
+                    continue;
+                }
+                uint32_t target = 0;
+                std::memcpy(&target, script.data() + offset, sizeof(target));
+                UObject* object = objects::atHandle(target);
+                references(object);
+            }
+        }
+    }
+
+    void UFunction::addReferences(ReferenceVisitor& references)
+    {
+        UStruct::addReferences(references);
+        references(params);
+        references(returnParm);
+    }
+
+    void UState::addReferences(ReferenceVisitor& references)
+    {
+        UStruct::addReferences(references);
+        for (auto& [functionName, function] : functions) {
+            references(function);
+        }
+    }
+
+    void UClass::addReferences(ReferenceVisitor& references)
+    {
+        UState::addReferences(references);
+        for (ClassDependency& dependency : dependencies) {
+            references(dependency.cls);
+        }
+        references(within);
+        references(defaultObject);
+        for (auto& [functionName, function] : vtable) {
+            references(function);
+        }
+        for (auto& [stateName, state] : states) {
+            references(state);
+        }
+        references(nativeChain);
+    }
+
+    void UProperty::addReferences(ReferenceVisitor& references)
+    {
+        UField::addReferences(references);
+        references(enumType);
+        references(objectClass);
+        references(metaClass);
+        references(structType);
+        references(inner);
+        references(mapValue);
+    }
+
     void UClass::linkClass()
     {
         if (defaultObject) {
@@ -699,7 +800,7 @@ namespace dx {
         defaultObject->cls = this;
         defaultObject->outer = outer;
         defaultObject->flags = RF_Public;
-        defaultObject->data = new uint8_t[std::max<size_t>(size, 1)];
+        defaultObject->data = objects::allocateObjectData(size);
         initValue(defaultObject->data);
         if (parent && parent->defaultObject) {
             parent->copyValue(defaultObject->data, parent->defaultObject->data);

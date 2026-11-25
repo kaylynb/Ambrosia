@@ -47,10 +47,9 @@ namespace dx {
         constexpr uint8_t EX_IteratorPop = 0x30;
         constexpr uint8_t EX_IteratorNext = 0x31;
 
-        using RemoteHook = bool (*)(UObject* context, UFunction* function, uint8_t* locals);
-        extern RemoteHook remoteHook;
-
         NativeFunction bindNative(UFunction* function);
+        // The function a call by this native index names, or None.
+        UFunction* indexedFunction(int32_t index);
         void registerNative(int32_t index, NativeFunction function);
         void registerNative(std::string_view className, std::string_view functionName, NativeFunction function);
         void callFunction(Frame& stack, UObject* context, UFunction* function, void* result);
@@ -58,6 +57,8 @@ namespace dx {
         UFunction* findFunction(UObject* object, Name functionName, bool global = false);
         UFunction* findEvent(UObject* object, Name eventName);
         bool isProbing(UObject* object, Name functionName);
+        // True while any script code is on the stack.
+        bool scriptRunning();
         StateFrame& stateFrame(UObject* object);
         bool gotoState(UObject* object, Name stateName, Name label = Name());
         bool gotoLabel(UObject* object, Name label);
@@ -74,6 +75,8 @@ namespace dx {
         void resetRunaway();
         void fatal(const std::string& message);
         uint32_t assertionFailures();
+        Vector stringToVector(const std::string& text);
+        Rotator stringToRotator(const std::string& text);
 
         template <typename T>
         T get(Frame& stack)
@@ -152,6 +155,21 @@ namespace dx {
             void run();
             uint8_t* parameter(size_t index);
             uint8_t* returnValue();
+
+            // Runs the call and returns its result, or fallback when the function has none.
+            template <typename T>
+            T result(T fallback = {})
+            {
+                run();
+                uint8_t* value = returnValue();
+                return value ? *reinterpret_cast<T*>(value) : fallback;
+            }
+
+            // UnrealScript bools are returned in four bytes.
+            bool resultBool()
+            {
+                return result<uint32_t>() != 0;
+            }
 
         private:
             UProperty* nextParam();

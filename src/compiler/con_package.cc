@@ -3,7 +3,7 @@
 #include "compiler/con_file.h"
 #include "compiler/script_package.h"
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 namespace dx::compiler {
     namespace {

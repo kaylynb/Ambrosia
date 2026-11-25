@@ -2,7 +2,7 @@
 
 #include "core/objects.h"
 #include "core/vm.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 #include <cctype>
@@ -275,6 +275,8 @@ namespace dx::compiler::detail {
         char p = peekChar();
         if (c == 0) {
             ungetChar();
+            token.startPos = inputPos;
+            token.startLine = inputLine;
             return false;
         }
         token.startPos = prevPos;
@@ -419,7 +421,9 @@ namespace dx::compiler::detail {
             if (isFloat) {
                 token.setConstFloat(static_cast<float>(std::atof(text.c_str())));
             } else if (isHex) {
-                token.setConstInt(static_cast<int32_t>(std::strtol(text.c_str(), nullptr, 0)));
+                // The original compiler caps oversized hex literals at 0xFFFFFFFF.
+                unsigned long long value = std::min<unsigned long long>(std::strtoull(text.c_str(), nullptr, 0), 0xFFFFFFFFull);
+                token.setConstInt(static_cast<int32_t>(static_cast<uint32_t>(value)));
             } else {
                 token.setConstInt(std::atoi(text.c_str()));
             }

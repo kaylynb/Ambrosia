@@ -27,6 +27,8 @@ namespace dx {
             int balance = 15;
             bool zones = true;
             bool optimizeGeometry = true;
+            // The texture brush polygons without one are given.
+            UObject* defaultTexture = nullptr;
         };
 
         using Stats = bsp::Stats;
@@ -36,9 +38,10 @@ namespace dx {
         void buildSheet(UPolys& polys, float width, float height, UObject* texture);
         void updateBounds(UModel& model);
         UClass* nativeClass(const char* name);
-        UObject* addBrush(ULevel* level, UObject* builder, uint8_t csgOper, uint32_t polyFlags = 0);
-        UObject* addMover(ULevel* level, UObject* builder, UClass* moverClass);
-        bool brushFromIntersection(ULevel* level, UObject* builder, bool deintersect);
+        // Builder polygons without a texture are given defaultTexture.
+        UObject* addBrush(ULevel* level, UObject* builder, uint8_t csgOper, uint32_t polyFlags = 0, UObject* defaultTexture = nullptr);
+        UObject* addMover(ULevel* level, UObject* builder, UClass* moverClass, UObject* defaultTexture = nullptr);
+        bool brushFromIntersection(ULevel* level, UObject* builder, bool deintersect, UObject* defaultTexture = nullptr);
         Stats rebuild(ULevel* level, const RebuildOptions& options = RebuildOptions());
         bool pointSolid(const UModel& model, const Vector& point);
         int32_t pointZone(const UModel& model, const Vector& point);

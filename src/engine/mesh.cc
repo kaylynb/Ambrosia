@@ -1,40 +1,20 @@
 #include "engine/mesh.h"
 
+#include "core/gc.h"
 #include "core/objects.h"
-#include "engine/reader.h"
+#include "core/reader.h"
+#include "engine/reader_values.h"
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace dx {
     namespace {
-        size_t readCount(Reader& reader)
-        {
-            int32_t count = reader.index();
-            if (count < 0) {
-                throw std::runtime_error("negative array count in mesh");
-            }
-            return static_cast<size_t>(count);
-        }
-
-        Vector readVector(Reader& reader)
-        {
-            Vector value;
-            value.x = reader.f32();
-            value.y = reader.f32();
-            value.z = reader.f32();
-            return value;
-        }
-
-        BoundingBox readBox(Reader& reader)
-        {
-            BoundingBox box;
-            box.min = readVector(reader);
-            box.max = readVector(reader);
-            box.valid = reader.u8() != 0;
-            return box;
-        }
+        using readers::readBox;
+        using readers::readCount;
+        using readers::readVector;
 
         Plane readSphere(Reader& reader)
         {
@@ -65,7 +45,7 @@ namespace dx {
 
         std::vector<uint16_t> readWords(Reader& reader)
         {
-            std::vector<uint16_t> values(readCount(reader));
+            std::vector<uint16_t> values(readCount(reader, "mesh"));
             for (uint16_t& value : values) {
                 value = static_cast<uint16_t>(reader.i16());
             }
@@ -78,7 +58,7 @@ namespace dx {
         UPrimitive::serialize(reader, source);
 
         uint32_t skip = reader.u32();
-        verts.resize(readCount(reader));
+        verts.resize(readCount(reader, "mesh"));
         for (Vector& vertex : verts) {
             int16_t x = reader.i16();
             int16_t y = reader.i16();
@@ -89,7 +69,7 @@ namespace dx {
         checkSkip(reader, skip);
 
         skip = reader.u32();
-        tris.resize(readCount(reader));
+        tris.resize(readCount(reader, "mesh"));
         for (MeshTri& tri : tris) {
             for (uint16_t& vertex : tri.vertex) {
                 vertex = static_cast<uint16_t>(reader.i16());
@@ -103,13 +83,13 @@ namespace dx {
         }
         checkSkip(reader, skip);
 
-        sequences.resize(readCount(reader));
+        sequences.resize(readCount(reader, "mesh"));
         for (AnimSequence& sequence : sequences) {
             sequence.name = source.readName(reader);
             sequence.group = source.readName(reader);
             sequence.startFrame = reader.i32();
             sequence.numFrames = reader.i32();
-            sequence.notifys.resize(readCount(reader));
+            sequence.notifys.resize(readCount(reader, "mesh"));
             for (AnimNotify& notify : sequence.notifys) {
                 notify.time = reader.f32();
                 notify.function = source.readName(reader);
@@ -121,7 +101,7 @@ namespace dx {
         }
 
         skip = reader.u32();
-        connects.resize(readCount(reader));
+        connects.resize(readCount(reader, "mesh"));
         for (MeshConnect& connect : connects) {
             connect.numVertTriangles = reader.i32();
             connect.triangleListOffset = reader.i32();
@@ -132,22 +112,22 @@ namespace dx {
         meshSphere = readSphere(reader);
 
         skip = reader.u32();
-        vertLinks.resize(readCount(reader));
+        vertLinks.resize(readCount(reader, "mesh"));
         for (int32_t& link : vertLinks) {
             link = reader.i32();
         }
         checkSkip(reader, skip);
 
-        textures.resize(readCount(reader));
+        textures.resize(readCount(reader, "mesh"));
         for (UObject*& texture : textures) {
             texture = source.readObject(reader);
         }
 
-        frameBounds.resize(readCount(reader));
+        frameBounds.resize(readCount(reader, "mesh"));
         for (BoundingBox& box : frameBounds) {
             box = readBox(reader);
         }
-        frameSpheres.resize(readCount(reader));
+        frameSpheres.resize(readCount(reader, "mesh"));
         for (Plane& frameSphere : frameSpheres) {
             frameSphere = readSphere(reader);
         }
@@ -163,7 +143,7 @@ namespace dx {
         rotOrigin.roll = reader.i32();
         curPoly = reader.i32();
         curVertex = reader.i32();
-        textureLod.resize(readCount(reader));
+        textureLod.resize(readCount(reader, "mesh"));
         for (float& lod : textureLod) {
             lod = reader.f32();
         }
@@ -217,16 +197,26 @@ namespace dx {
                 startFrame = sequence->startFrame;
                 numFrames = sequence->numFrames;
             }
-            float frame = std::max(animFrame, 0.0f) * static_cast<float>(numFrames);
-            int32_t frame0 = static_cast<int32_t>(frame);
-            float t = frame - static_cast<float>(frame0);
-            frame0 %= numFrames;
-            int32_t frame1 = (frame0 + 1) % numFrames;
-            size_t base0 = static_cast<size_t>(startFrame + frame0) * count;
-            size_t base1 = static_cast<size_t>(startFrame + frame1) * count;
-            if (base0 + count > mesh.verts.size() || base1 + count > mesh.verts.size()) {
-                base0 = 0;
-                base1 = 0;
+            // Negative or NaN animation positions start at frame zero. If the scaled frame
+            // number is too large for int32_t, use INT32_MIN to match the original behavior.
+            float frame = !(animFrame >= 0.0f) ? 0.0f : animFrame * static_cast<float>(numFrames);
+            int32_t whole = frame < 2147483648.0f ? static_cast<int32_t>(frame) : std::numeric_limits<int32_t>::min();
+            float t = frame - static_cast<float>(whole);
+            int32_t frame0 = whole % numFrames;
+            // Add one before taking the remainder: when whole is negative, advancing
+            // from frame0 instead can select a different frame.
+            int32_t frame1 = static_cast<int32_t>((static_cast<int64_t>(whole) + 1) % numFrames);
+            int64_t index0 = static_cast<int64_t>(startFrame) + frame0;
+            int64_t index1 = static_cast<int64_t>(startFrame) + frame1;
+            int64_t frames = static_cast<int64_t>(count == 0 ? 0 : mesh.verts.size() / count);
+            size_t base0 = 0;
+            size_t base1 = 0;
+            if (count == 0 || (index0 >= 0 && index0 < frames && index1 >= 0 && index1 < frames)) {
+                base0 = static_cast<size_t>(index0) * count;
+                base1 = static_cast<size_t>(index1) * count;
+            } else {
+                // The original reads outside the mesh here.
+                t = 0.0f;
                 if (count > mesh.verts.size()) {
                     raw.assign(count, Vector {});
                     return false;
@@ -345,23 +335,23 @@ namespace dx {
         UMesh::serialize(reader, source);
         collapsePointThus = readWords(reader);
         faceLevel = readWords(reader);
-        faces.resize(readCount(reader));
+        faces.resize(readCount(reader, "mesh"));
         for (MeshFace& face : faces) {
             face = readFace(reader);
         }
         collapseWedgeThus = readWords(reader);
-        wedges.resize(readCount(reader));
+        wedges.resize(readCount(reader, "mesh"));
         for (MeshWedge& wedge : wedges) {
             wedge.vertex = static_cast<uint16_t>(reader.i16());
             wedge.u = reader.u8();
             wedge.v = reader.u8();
         }
-        materials.resize(readCount(reader));
+        materials.resize(readCount(reader, "mesh"));
         for (MeshMaterial& material : materials) {
             material.polyFlags = reader.u32();
             material.textureIndex = reader.i32();
         }
-        specialFaces.resize(readCount(reader));
+        specialFaces.resize(readCount(reader, "mesh"));
         for (MeshFace& face : specialFaces) {
             face = readFace(reader);
         }
@@ -483,7 +473,7 @@ namespace dx {
     void UFireTexture::serialize(Reader& reader, Linker& source)
     {
         UTexture::serialize(reader, source);
-        sparks.resize(readCount(reader));
+        sparks.resize(readCount(reader, "mesh"));
         for (FireSpark& spark : sparks) {
             spark.type = reader.u8();
             spark.heat = reader.u8();
@@ -496,8 +486,15 @@ namespace dx {
         }
     }
 
+    void UMesh::addReferences(ReferenceVisitor& references)
+    {
+        UPrimitive::addReferences(references);
+        references(textures);
+    }
+
     void registerMeshResources()
     {
+        gc::reportsReferences<UMesh, ULodMesh, UFireTexture>();
         objects::registerFactory(Name("Mesh"), [] { return new UMesh(); });
         objects::registerFactory(Name("LodMesh"), [] { return new ULodMesh(); });
         objects::registerFactory(Name("FireTexture"), [] { return new UFireTexture(); });

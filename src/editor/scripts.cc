@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "debugui/imgui_setup.h"
 
 namespace dx::editor {
     namespace {
@@ -75,7 +76,7 @@ namespace dx::editor {
                     while (q < end && (std::isalnum(static_cast<unsigned char>(*q)) || *q == '_')) {
                         q++;
                     }
-                    if (scriptKeywords().count(lower(std::string(p, q)))) {
+                    if (scriptKeywords().count(lowered(std::string(p, q)))) {
                         emit(p, q, IM_COL32(110, 170, 255, 255));
                     }
                     p = q;
@@ -197,6 +198,10 @@ namespace dx::editor {
     void Editor::refreshClasses()
     {
         buildClassTree();
+        if (scripts.takeLayoutChange()) {
+            cancelComponentDrag();
+            history.clear();
+        }
         ImGui::ClearActiveID();
         for (ScriptDocument& document : documents) {
             document.text = editorText(document.cls->scriptText->text);
@@ -296,8 +301,8 @@ namespace dx::editor {
         if (!showScripts) {
             return;
         }
-        ImGui::SetNextWindowPos(ImVec2(300, 80), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(860, 620), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(300), debugui::scaled(80)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(860), debugui::scaled(620)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Script Editor", &showScripts)) {
             ImGui::End();
             return;
@@ -326,8 +331,12 @@ namespace dx::editor {
             for (size_t i = 0; i < documents.size(); i++) {
                 ScriptDocument& document = documents[i];
                 bool open = true;
-                std::string label = document.cls->name.str() + (document.text != document.compiled ? " *" : "") + "###" + document.cls->pathName();
+                bool edited = document.text != document.compiled;
+                std::string label = document.cls->name.str() + (edited ? " *" : "") + "###" + document.cls->pathName();
                 ImGuiTabItemFlags flags = selectDocument == static_cast<int>(i) ? ImGuiTabItemFlags_SetSelected : 0;
+                if (edited) {
+                    flags |= ImGuiTabItemFlags_NoAssumedClosure;
+                }
                 if (ImGui::BeginTabItem(label.c_str(), &open, flags)) {
                     activeDocument = static_cast<int>(i);
                     scriptView(document, std::max(ImGui::GetFontSize() * 4.0f, ImGui::GetContentRegionAvail().y - resultsHeight));
@@ -341,7 +350,15 @@ namespace dx::editor {
         }
         selectDocument = -1;
         if (closed >= 0) {
-            documents.erase(documents.begin() + closed);
+            ScriptDocument& document = documents[static_cast<size_t>(closed)];
+            if (document.text == document.compiled) {
+                documents.erase(documents.begin() + closed);
+            } else {
+                dx::UClass* cls = document.cls;
+                askConfirm("Close " + cls->name.str() + " and discard edits that have not been compiled?", "Discard", [this, cls]() { std::erase_if(documents, [&](const ScriptDocument& item) {
+                                                                                                                                          return item.cls == cls;
+                                                                                                                                      }); }, nullptr);
+            }
         }
         ImGui::BeginChild("results", ImVec2(0, 0), ImGuiChildFlags_Borders);
         int index = 0;

@@ -1,24 +1,22 @@
 #pragma once
 
+#include "core/gc.h"
 #include "core/math.h"
 #include "core/object.h"
 #include "engine/collision_hash.h"
 #include "engine/decal.h"
 
+#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
-#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace dx {
     class ULevel;
     class UModel;
-
-    namespace net {
-        class Driver;
-    }
 
     struct CheckResult {
         UObject* actor = nullptr;
@@ -39,6 +37,19 @@ namespace dx {
     constexpr uint32_t TRACE_LevelGeometry = 0x80;
     constexpr uint32_t TRACE_ShadowCast = 0x100;
     constexpr uint32_t TRACE_StopAtFirstHit = 0x200;
+    // How the game handles ticks of different lengths (docs/differences.md, "Frame-rate dependence"). Original copies
+    // Deus Ex, where some things depend on the frame rate; Steady makes them run the same at any
+    // frame rate, so a glitch can be checked under both. The engine starts in Original, which
+    // the parity tests rely on; the game sets it from its options.
+    enum class FrameTiming { Original,
+        Steady };
+    extern FrameTiming frameTiming;
+
+    inline bool steadyTiming()
+    {
+        return frameTiming == FrameTiming::Steady;
+    }
+
     constexpr uint32_t TRACE_World = TRACE_Movers | TRACE_Level | TRACE_LevelGeometry;
     constexpr uint32_t TRACE_AllColliding = TRACE_Pawns | TRACE_Movers | TRACE_Level | TRACE_Others | TRACE_LevelGeometry;
 
@@ -55,28 +66,89 @@ namespace dx {
         std::vector<TravelValue> values;
     };
 
-    class World {
+    // Hands over every object pointer in travel data: the classes, the actors left behind and
+    // the object values.
+    void addTravelReferences(std::vector<TravelActor>& travel, ReferenceVisitor& references);
+
+    // Travel data on its way from the level being left to the next one. Storing the departing
+    // level deletes destroyed actors, and the collector sets every reference it is told of to
+    // them to None, so the data is held here, where the collector sees it, until the new world's
+    // incomingTravel takes it over. Whatever is still here when it goes is released.
+    class PendingTravel final : public gc::Holder {
+    public:
+        PendingTravel() = default;
+        PendingTravel(PendingTravel&& other) noexcept;
+        PendingTravel& operator=(PendingTravel&& other) noexcept;
+        ~PendingTravel() override;
+
+        void addReferences(ReferenceVisitor& references) override;
+
+        // Hands the data over, leaving this empty.
+        std::vector<TravelActor> take();
+
+        std::vector<TravelActor> actors;
+    };
+
+    // A Holder: the world's own pointers to its level, actors and travel data keep them, and the
+    // collision hash and decals drop actors that are deleted.
+    class World : public gc::Holder {
     public:
         World();
-        ~World();
+        ~World() override;
+        void addReferences(ReferenceVisitor& references) override;
+        void objectsReleased(const gc::ReleasedSet& released) override;
         World(const World&) = delete;
         World& operator=(const World&) = delete;
 
-        static World* current;
+        // The world in play, for script natives and engine callbacks that are called with no
+        // way to be given one. Code that can take a World as an argument should do that
+        // instead. There is none while no level is loaded, as in the editor.
+        static bool hasActive()
+        {
+            return current != nullptr;
+        }
+
+        static World& active()
+        {
+            assert(current != nullptr);
+            return *current;
+        }
+
+        // Makes a world the one in play until the end of the scope, then puts back the one
+        // that was before.
+        class ActiveScope {
+        public:
+            explicit ActiveScope(World& world)
+                : previous(current)
+            {
+                current = &world;
+            }
+
+            ~ActiveScope()
+            {
+                current = previous;
+            }
+
+            ActiveScope(const ActiveScope&) = delete;
+            ActiveScope& operator=(const ActiveScope&) = delete;
+
+        private:
+            World* previous;
+        };
 
         bool loadMap(const std::string& url);
-        std::vector<TravelActor> collectTravel();
+        PendingTravel collectTravel();
         std::string travelString(UObject* player) const;
-        std::string urlOption(std::string_view key) const;
         std::vector<std::pair<std::string, std::string>> arrivalTravelInfo;
         bool replaceTravelInfo = false;
         static void releaseTravel(std::vector<TravelActor>& travel);
         std::vector<UObject*> applyTravel(UObject* player);
+        void rehomeCarried(const std::vector<std::pair<TravelActor*, UObject*>>& targets, const std::unordered_map<UObject*, UObject*>& remap);
         void tick(float deltaSeconds);
         bool calcView(Vector& location, Rotator& rotation, float& fov);
         UObject* player() const;
 
-        UObject* spawn(UClass* cls, UObject* owner, Name tag, const Vector& location, const Rotator& rotation, UObject* templateActor, bool noCollisionFail, UObject* instigator = nullptr, bool remoteOwned = false);
+        UObject* spawn(UClass* cls, UObject* owner, Name tag, const Vector& location, const Rotator& rotation, UObject* templateActor, bool noCollisionFail, UObject* instigator = nullptr);
         bool destroy(UObject* actor);
         bool inStasis(UObject* actor);
 
@@ -95,27 +167,34 @@ namespace dx {
         std::shared_ptr<const std::vector<UObject*>> liveActors();
 
         bool tickActor(UObject* actor, float deltaSeconds);
-        bool tickTimer(UObject* actor, float deltaSeconds);
         void tickPawnSenses(UObject* pawn, float deltaSeconds);
         void aiEvents();
-        void cleanupDestroyed();
+        void cleanupDestroyed(bool force = false);
+        // Deletes the destroyed actors cleanupDestroyed has cleared references to, once no script
+        // is running. A save that script starts clears them, and the next tick deletes them.
+        void releaseDestroyed();
 
         ULevel* level = nullptr;
         UObject* levelInfo = nullptr;
         UObject* gameInfo = nullptr;
         UObject* localPlayer = nullptr;
+        // The session's viewport, which the game hands to each level and login makes on the
+        // first; not this world's own.
         UObject* viewport = nullptr;
-        uint8_t netMode = 0;
-        int32_t netPort = 0;
-        net::Driver* net = nullptr;
         std::vector<UObject*> actors;
         CollisionHash collisionHash;
         DecalRegistry decals;
         uint64_t actorsVersion = 0;
         float timeSeconds = 0;
-        float pendingSeconds = 0;
-        double realTime = 0;
         uint32_t frame = 0;
+        // Steady timing: time from frames too short to tick, carried into the next tick.
+        float shortFrameTime = 0;
+        // Steady timing: the effect clock (SteadyEffectRate). effectTime is the time not yet
+        // given to the actors on it, effectStep what this tick gives them (0 when they skip
+        // it), and effectSteps counts the ticks that gave them any.
+        float effectTime = 0;
+        float effectStep = 0;
+        uint32_t effectSteps = 0;
         std::string url;
         std::string travelUrl;
         int32_t travelType = -1;
@@ -125,23 +204,42 @@ namespace dx {
         bool paused = false;
         bool pendingCleanup = false;
         std::vector<UObject*> destroyedActors;
+        std::vector<UObject*> releasingActors;
         uint32_t tickParity = 0;
         size_t firstDynamicActor = 0;
         bool inTick = false;
         std::vector<UObject*> newlySpawned;
-        size_t runtimeStart = 0;
         std::function<void(UObject*, float)> inputHook;
 
     private:
+        // The world in play: the last one made, or the one an ActiveScope gives.
+        static World* current;
+
+        // Whether the level has been announced as loaded (engine/level_events.h), and so is owed
+        // an unloading notice.
+        bool levelAnnounced = false;
+
         std::shared_ptr<const std::vector<UObject*>> liveActorsCache;
         uint64_t liveActorsVersion = 0;
         uint64_t liveActorsDestroys = 0;
     };
 
     namespace engine {
-        void initialize(const std::string& gameRoot);
-        void initializeCore(const std::string& gameRoot);
         void registerEngineNatives();
-        void registerDeusExNatives();
+
+        // Game-specific callbacks for the world. The game layer installs them when it
+        // registers its native functions, before the first level loads.
+        struct GameHooks {
+            // Once a level's actors are set up, before a saved game's state is restored.
+            void (*levelLoaded)(World& world) = nullptr;
+            // AScriptedPawn::Tick, ahead of the rest of the pawn's tick; false when the pawn
+            // was destroyed and the tick should stop.
+            bool (*scriptedPawnTick)(World& world, UObject* pawn, float deltaSeconds) = nullptr;
+            // Under Steady timing, whether this tick the actor's script Tick runs on the effect
+            // clock (SteadyEffectRate) instead of every tick.
+            bool (*onEffectClock)(UObject* actor) = nullptr;
+        };
+
+        GameHooks& gameHooks();
     }
 }

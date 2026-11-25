@@ -1,11 +1,14 @@
 #define SDL_MAIN_HANDLED
 
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/props_engine.h"
 #include "engine/world.h"
 #include "render/scene_renderer.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #include <catch_amalgamated.hpp>
 #include <glad/gl.h>
 
@@ -24,20 +27,20 @@ namespace {
         OffscreenContext()
         {
             SDL_SetMainReady();
-            if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+            if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
                 return;
             }
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
             SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-            window = SDL_CreateWindow("ao", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, frameWidth, frameHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+            window = SDL_CreateWindow("ao", frameWidth, frameHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
             if (!window) {
                 return;
             }
             context = SDL_GL_CreateContext(window);
             if (context && !gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-                SDL_GL_DeleteContext(context);
+                SDL_GL_DestroyContext(context);
                 context = nullptr;
             }
         }
@@ -45,7 +48,7 @@ namespace {
         ~OffscreenContext()
         {
             if (context) {
-                SDL_GL_DeleteContext(context);
+                SDL_GL_DestroyContext(context);
             }
             if (window) {
                 SDL_DestroyWindow(window);
@@ -77,7 +80,7 @@ namespace {
         renderer.setOptions(options);
         renderer.setTime(1.0);
         renderer.beginFrame(width, height);
-        renderer.drawScene(world.level, world.actors, eye, rotation, 90.0f, world.player());
+        renderer.drawScene(&world, world.level, world.actors, eye, rotation, 90.0f, world.player());
         renderer.endFrame();
         renderer.applyBrightness(0.5f);
         std::vector<uint8_t> rgba;
@@ -99,7 +102,7 @@ TEST_CASE("every ambient occlusion level darkens the floor around a crate and le
 {
     OffscreenContext gl;
     REQUIRE(gl.context != nullptr);
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;
     REQUIRE(world.loadMap("01_NYC_UNATCOHQ"));
@@ -127,7 +130,7 @@ TEST_CASE("every ambient occlusion level darkens the floor around a crate and le
     std::vector<uint8_t> plainMultisampledAgain = render(renderer, world, dx::OcclusionQuality::Off, eye, dx::Rotator { -16384, 0, 0 }, 4);
     std::vector<uint8_t> lowAfterMultisample = render(renderer, world, dx::OcclusionQuality::Low, eye);
     renderer.beginFrame(frameWidth - 3, frameHeight - 3);
-    renderer.drawScene(world.level, world.actors, eye, dx::Rotator { -16384, 0, 0 }, 90.0f, world.player());
+    renderer.drawScene(&world, world.level, world.actors, eye, dx::Rotator { -16384, 0, 0 }, 90.0f, world.player());
     renderer.endFrame();
     renderer.applyBrightness(0.5f);
     CHECK(glGetError() == GL_NO_ERROR);
@@ -200,7 +203,7 @@ TEST_CASE("ambient occlusion at the foot of a crate is no darker than a wall wou
 {
     OffscreenContext gl;
     REQUIRE(gl.context != nullptr);
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;
     REQUIRE(world.loadMap("01_NYC_UNATCOHQ"));
@@ -263,7 +266,7 @@ TEST_CASE("ambient occlusion leaves an unlit sprite beside a crate untouched", "
 {
     OffscreenContext gl;
     REQUIRE(gl.context != nullptr);
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;
     REQUIRE(world.loadMap("01_NYC_UNATCOHQ"));
@@ -334,7 +337,7 @@ TEST_CASE("a view of the sky renders without GL errors with and without ambient 
 {
     OffscreenContext gl;
     REQUIRE(gl.context != nullptr);
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
     dx::World world;
     REQUIRE(world.loadMap("01_NYC_UNATCOIsland"));
@@ -354,7 +357,7 @@ TEST_CASE("ambient occlusion at an odd resolution darkens the floor around a cra
 {
     OffscreenContext gl;
     REQUIRE(gl.context != nullptr);
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;
     REQUIRE(world.loadMap("01_NYC_UNATCOHQ"));

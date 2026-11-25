@@ -1,77 +1,84 @@
+#include "core/config.h"
+#include "core/log.h"
+#include "core/platform.h"
+#include "core/random.h"
+#include "debugui/imgui_setup.h"
 #include "editor/editor.h"
+
+#include <SDL3/SDL_main.h>
 
 #include <tabler_icons.h>
 
+#include <CLI11.hpp>
+
+#include <memory>
+#include <optional>
+
 namespace {
-    dx::editor::Options parseOptions(int argc, char** argv)
+    // Reads the command line into options: nothing when the editor should start, otherwise the
+    // code to exit with (cli::parse).
+    std::optional<int> parseOptions(int argc, char** argv, dx::editor::Options& options)
     {
-        dx::editor::Options options;
-        for (int i = 1; i < argc; i++) {
-            std::string arg = argv[i];
-            if (arg == "--screenshot" && i + 1 < argc) {
-                options.screenshot = argv[++i];
-            } else if (arg == "--frames" && i + 1 < argc) {
-                options.frames = std::atoi(argv[++i]);
-            } else if (arg == "--new" && i + 1 < argc) {
-                options.blankMap = argv[++i];
-            } else if (arg == "--select" && i + 1 < argc) {
-                options.select = argv[++i];
-            } else if (arg == "--width" && i + 1 < argc) {
-                options.width = std::atoi(argv[++i]);
-            } else if (arg == "--height" && i + 1 < argc) {
-                options.height = std::atoi(argv[++i]);
-            } else if (arg == "--at" && i + 1 < argc) {
-                std::string spec = argv[++i];
-                size_t colon = spec.find(':');
-                if (colon != std::string::npos) {
-                    options.actions.emplace_back(std::atoi(spec.substr(0, colon).c_str()), spec.substr(colon + 1));
-                }
-            } else {
-                options.map = arg;
-            }
-        }
-        return options;
+        CLI::App app("DentEd, the Ambrosia level editor.", "dented");
+        app.add_option("map", options.map, "Map to open: a map's name, or the path of a .dx file")->capture_default_str();
+        app.add_option("--new", options.blankMap, "Start on a new, empty map of this name instead")->type_name("NAME");
+        dx::cli::addRunOptions(app, options);
+        return dx::cli::parse(app, argc, argv);
     }
 }
 
 int main(int argc, char** argv)
 {
-    dx::editor::Options options = parseOptions(argc, argv);
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+    if (dx::cli::printVersion(argc, argv)) {
+        return 0;
+    }
+    // DentEd.log in the user directory, and a console with --console.
+    dx::log::startProgram(dx::config::userDirectory() / "DentEd.log", dx::log::consoleRequested(argc, argv));
+    dx::random::seed(dx::random::clockSeed());
+    dx::editor::Options options;
+    if (std::optional<int> exit = parseOptions(argc, argv, options)) {
+        return *exit;
+    }
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        dx::log::error("Critical", "SDL_Init failed: {}", SDL_GetError());
         return 1;
     }
+
+    // SDL, the window and its context are released in reverse order however main returns.
+    struct SdlQuit {
+        ~SdlQuit()
+        {
+            SDL_Quit();
+        }
+    } sdlQuit;
+
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_Window* window = SDL_CreateWindow("Deus Ex UnrealEd", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, options.width, options.height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    std::unique_ptr<SDL_Window, decltype(&SDL_DestroyWindow)> windowOwner(SDL_CreateWindow("DentEd", options.width, options.height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | (options.hidden ? SDL_WINDOW_HIDDEN : 0)), &SDL_DestroyWindow);
+    SDL_Window* window = windowOwner.get();
     if (!window) {
-        std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        dx::log::error("Critical", "SDL_CreateWindow failed: {}", SDL_GetError());
         return 1;
     }
-    SDL_GLContext context = SDL_GL_CreateContext(window);
+    dx::platform::setWindowIcon(window);
+    std::unique_ptr<SDL_GLContextState, decltype(&SDL_GL_DestroyContext)> contextOwner(SDL_GL_CreateContext(window), &SDL_GL_DestroyContext);
+    SDL_GLContext context = contextOwner.get();
     if (!context || !gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-        std::fprintf(stderr, "failed to create OpenGL 3.3 context\n");
+        dx::log::error("Critical", "failed to create OpenGL 3.3 context");
         return 1;
     }
-    SDL_GL_SetSwapInterval(options.frames > 0 ? 0 : 1);
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::GetIO().IniFilename = nullptr;
-    ImGui::StyleColorsDark();
-    ImGui::GetIO().Fonts->AddFontDefault();
+    SDL_GL_SetSwapInterval(options.automated() ? 0 : 1);
+    dx::debugui::startImGui(window, context);
     ImFontConfig iconConfig;
     iconConfig.MergeMode = true;
     iconConfig.GlyphMinAdvanceX = 13.0f;
     iconConfig.GlyphOffset = ImVec2(0.0f, 1.0f);
     ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(TablerIcons_compressed_data, static_cast<int>(TablerIcons_compressed_size), 13.0f, &iconConfig);
-    ImGui_ImplSDL2_InitForOpenGL(window, context);
-    ImGui_ImplOpenGL3_Init("#version 330 core");
     std::filesystem::path gamePath = "deusex";
-    if (char* base = SDL_GetBasePath()) {
+    if (const char* base = SDL_GetBasePath()) {
         gamePath = std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(base))) / "deusex";
-        SDL_free(base);
     }
     int result = 0;
     try {
@@ -79,18 +86,13 @@ int main(int argc, char** argv)
         editor.start();
         editor.run();
         if (editor.passedExpectations + editor.failedExpectations > 0) {
-            std::printf("expectations: %d passed, %d failed\n", editor.passedExpectations, editor.failedExpectations);
+            dx::log::info("Log", "expectations: {} passed, {} failed", editor.passedExpectations, editor.failedExpectations);
         }
         result = editor.failedExpectations > 0 ? 1 : 0;
     } catch (const std::exception& failure) {
-        std::fprintf(stderr, "error: %s\n", failure.what());
+        dx::log::error("Critical", "error: {}", failure.what());
         result = 1;
     }
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
-    ImGui::DestroyContext();
-    SDL_GL_DeleteContext(context);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    dx::debugui::stopImGui();
     return result;
 }

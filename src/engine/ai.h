@@ -29,6 +29,7 @@ namespace dx {
     class UAIEvent : public UObject {
     public:
         void serialize(Reader& reader, Linker& source) override;
+        void addReferences(ReferenceVisitor& references) override;
 
         UAIEventType* type = nullptr;
         UObject* actor = nullptr;
@@ -48,6 +49,7 @@ namespace dx {
     class UAIReceiverEvent : public UAIEvent {
     public:
         void serialize(Reader& reader, Linker& source) override;
+        void addReferences(ReferenceVisitor& references) override;
 
         Name callback;
         Name scoreCallback;
@@ -69,6 +71,7 @@ namespace dx {
     class UAIEventType : public UObject {
     public:
         void serialize(Reader& reader, Linker& source) override;
+        void addReferences(ReferenceVisitor& references) override;
 
         Name eventName;
         uint32_t hash = 0;
@@ -80,6 +83,7 @@ namespace dx {
     class UEventManager : public UObject {
     public:
         void serialize(Reader& reader, Linker& source) override;
+        void addReferences(ReferenceVisitor& references) override;
 
         UAIEvent* findEvent(int32_t kind, Name eventName, UObject* actor, UAIEventType** outType, UAIEvent*** outLink);
         void setEventCallback(UObject* actor, Name eventName, Name callback, Name scoreCallback, bool checkVisibility, bool checkDirection, bool checkCylinder, bool checkLineOfSight);
@@ -90,6 +94,7 @@ namespace dx {
         void safeDelete(UAIEvent* event);
         void process();
         void cleanupEvents();
+        void releaseUnlinked();
         void destroyActor(UObject* actor);
         void tick();
         UAIReceiverEvent* firstProcess() const;
@@ -100,9 +105,10 @@ namespace dx {
         int32_t curSlot = 0;
         UAIReceiverEvent* processHead = nullptr;
         UAIEventType* hash[256] = {};
+        // Events cleanupEvents took out of the lists. tick deletes them, as CleanupSlot does;
+        // a cleanup during a save leaves them for the next tick.
+        std::vector<UAIEvent*> unlinked;
     };
-
-    extern bool aiTimeBudget;
 
     void registerAINatives();
     uint32_t aiEventHash(Name eventName);

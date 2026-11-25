@@ -1,4 +1,7 @@
 #include "editor/editor.h"
+#include "debugui/imgui_setup.h"
+#include "core/files.h"
+#include "core/sdl_handles.h"
 #include "engine/actor_selection.h"
 #include "engine/t3d.h"
 
@@ -134,7 +137,7 @@ namespace dx::editor {
         }
         if (verb == "selectadd" || verb == "selecttoggle") {
             for (dx::UObject* actor : actors) {
-                if (lower(actor->name.str()) == lower(rest)) {
+                if (lowered(actor->name.str()) == lowered(rest)) {
                     if (verb == "selecttoggle" || !isSelected(actor)) {
                         toggleSelect(actor);
                     }
@@ -168,9 +171,7 @@ namespace dx::editor {
             return verb == "copy" || command("delete");
         }
         if (verb == "paste") {
-            char* clipboard = SDL_GetClipboardText();
-            std::string text = clipboard ? clipboard : "";
-            SDL_free(clipboard);
+            std::string text = dx::sdl::clipboardText();
             if (text.find("Begin Actor") == std::string::npos) {
                 status = "clipboard has no T3D actors";
                 return false;
@@ -213,35 +214,34 @@ namespace dx::editor {
             return true;
         }
         if (verb == "exportt3d") {
-            std::string file;
+            std::string file = readArg(values);
             std::string scope;
-            values >> file >> scope;
+            values >> scope;
             std::vector<dx::UObject*> chosen = scope == "selected" ? selectionList() : actors;
-            std::ofstream out(file, std::ios::binary);
+            std::ofstream out(utf8Path(file), std::ios::binary);
             out << dx::t3d::exportActors(chosen);
             status = out ? "exported " + std::to_string(chosen.size()) + " actors to " + file : "cannot write " + file;
             return static_cast<bool>(out);
         }
         if (verb == "importt3d") {
-            std::ifstream in(rest, std::ios::binary);
-            if (!in) {
-                status = "cannot read " + rest;
+            std::string file = restArg(rest);
+            std::optional<std::string> text = dx::files::readFile(utf8Path(file));
+            if (!text) {
+                status = "cannot read " + file;
                 return false;
             }
-            std::stringstream text;
-            text << in.rdbuf();
-            std::string name = std::filesystem::path(rest).stem().string();
+            std::string name = utf8String(utf8Path(file).stem());
             if (name == currentMap || dx::objects::findLinker(dx::Name(name))) {
                 name += "_Import";
             }
             if (!newMap(name)) {
                 return false;
             }
-            std::vector<dx::UObject*> created = dx::t3d::importActors(level, text.str(), true);
+            std::vector<dx::UObject*> created = dx::t3d::importActors(level, *text, true);
             refreshActors();
             placeCamera();
             command("rebuild");
-            status = "imported " + std::to_string(created.size()) + " actors from " + rest;
+            status = "imported " + std::to_string(created.size()) + " actors from " + file;
             return !created.empty();
         }
         if (verb == "hide") {
@@ -303,6 +303,7 @@ namespace dx::editor {
             return true;
         }
         if (verb == "gizmo") {
+            cancelComponentDrag();
             gizmoMode = rest == "off" ? 0 : rest == "rotate" ? 2
                 : rest == "scale"                            ? 3
                 : rest == "extrude"                          ? 4
@@ -707,7 +708,7 @@ namespace dx::editor {
             if (!ImGui::BeginTable(category.first.c_str(), 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
                 continue;
             }
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, debugui::scaled(140.0f));
             ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
             for (dx::UProperty* property : category.second) {
                 for (int32_t index = 0; index < property->arrayDim; index++) {
@@ -882,7 +883,10 @@ namespace dx::editor {
         if (ImGui::BeginMenu("Import T3D")) {
             ImGui::InputText("File", t3dFile.data(), t3dFile.size());
             if (ImGui::Button("Import") && t3dFile[0]) {
-                pendingCommand = std::string("importt3d ") + t3dFile.data();
+                std::string line = "importt3d " + quoteArg(t3dFile.data());
+                guardLevel([this, line]() {
+                    pendingCommand = line;
+                });
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndMenu();
@@ -890,12 +894,12 @@ namespace dx::editor {
         if (ImGui::BeginMenu("Export T3D")) {
             ImGui::InputText("File", t3dFile.data(), t3dFile.size());
             if (ImGui::Button("Export Level") && t3dFile[0]) {
-                command(std::string("exportt3d ") + t3dFile.data());
+                command("exportt3d " + quoteArg(t3dFile.data()));
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
             if (ImGui::Button("Export Selected") && t3dFile[0]) {
-                command(std::string("exportt3d ") + t3dFile.data() + " selected");
+                command("exportt3d " + quoteArg(t3dFile.data()) + " selected");
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndMenu();

@@ -1,7 +1,8 @@
 #include "compiler/package_dump.h"
 
-#include "engine/package.h"
-#include "engine/reader.h"
+#include "core/package.h"
+#include "core/reader.h"
+#include "core/text.h"
 
 #include <cstdio>
 #include <memory>
@@ -15,14 +16,6 @@ namespace dx::compiler {
         constexpr uint32_t PropertyTransient = 0x00002000;
         constexpr uint32_t PropertyNet = 0x00000020;
         constexpr uint32_t FunctionNet = 0x00000040;
-
-        std::string lower(std::string text)
-        {
-            for (char& c : text) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
-            return text;
-        }
 
         std::string hex(const uint8_t* bytes, size_t count)
         {
@@ -64,7 +57,7 @@ namespace dx::compiler {
 
             const Package* open(const std::string& name)
             {
-                std::string key = lower(name);
+                std::string key = lowered(name);
                 auto it = loaded.find(key);
                 if (it != loaded.end()) {
                     return it->second.get();
@@ -81,7 +74,7 @@ namespace dx::compiler {
 
             void add(const std::string& name, std::unique_ptr<Package> package)
             {
-                loaded[lower(name)] = std::move(package);
+                loaded[lowered(name)] = std::move(package);
             }
 
         private:
@@ -203,9 +196,9 @@ namespace dx::compiler {
                     if ((info & 0x0f) == 10) {
                         reader.index();
                     }
-                    size_t size = tagSize(reader, info);
+                    size_t size = readTagSize(reader, info);
                     if ((info & 0x0f) != 3 && (info & 0x80)) {
-                        arrayIndex(reader);
+                        readTagArrayIndex(reader);
                     }
                     if ((info & 0x0f) == 3) {
                         size = 0;
@@ -286,43 +279,6 @@ namespace dx::compiler {
                 return fields;
             }
 
-            static size_t tagSize(Reader& reader, uint8_t info)
-            {
-                switch ((info >> 4) & 0x07) {
-                case 0:
-                    return 1;
-                case 1:
-                    return 2;
-                case 2:
-                    return 4;
-                case 3:
-                    return 12;
-                case 4:
-                    return 16;
-                case 5:
-                    return reader.u8();
-                case 6:
-                    return static_cast<uint16_t>(reader.i16());
-                default:
-                    return reader.u32();
-                }
-            }
-
-            static int32_t arrayIndex(Reader& reader)
-            {
-                uint8_t first = reader.u8();
-                if ((first & 0xc0) == 0xc0) {
-                    int32_t value = (first & 0x3f) << 24;
-                    value |= reader.u8() << 16;
-                    value |= reader.u8() << 8;
-                    return value | reader.u8();
-                }
-                if (first & 0x80) {
-                    return ((first & 0x7f) << 8) | reader.u8();
-                }
-                return first;
-            }
-
             std::string ref(Reader& reader)
             {
                 return "{" + objectPath(package, reader.index()) + "}";
@@ -395,10 +351,10 @@ namespace dx::compiler {
                     if (type == 10) {
                         structName = package.nameAt(reader.index());
                     }
-                    size_t size = tagSize(reader, info);
+                    size_t size = readTagSize(reader, info);
                     int32_t index = 0;
                     if (type != 3 && (info & 0x80)) {
-                        index = arrayIndex(reader);
+                        index = readTagArrayIndex(reader);
                     }
                     text += propertyName + "[" + number(static_cast<uint64_t>(index)) + "]:" + number(type) + "=";
                     size_t start = reader.tell();

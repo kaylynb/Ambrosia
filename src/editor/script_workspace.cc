@@ -1,10 +1,14 @@
 #include "editor/script_workspace.h"
+#include "core/files.h"
+#include "core/gc.h"
 
 #include "compiler/exporter.h"
 #include "compiler/script_compiler.h"
 #include "compiler/script_package.h"
 #include "core/config.h"
 #include "core/objects.h"
+#include "core/text.h"
+#include "engine/props_bind.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -47,6 +51,8 @@ namespace dx::editor {
             std::unordered_map<Name, UState*> states;
             uint32_t flags = 0;
             std::vector<UObject*> owned;
+            std::vector<uint32_t> scriptObjects;
+            bool scriptObjectsKnown = false;
         };
 
         SavedClass save(UClass* cls)
@@ -60,6 +66,8 @@ namespace dx::editor {
             state.line = cls->line;
             state.textPos = cls->textPos;
             state.script = cls->script;
+            state.scriptObjects = cls->scriptObjects;
+            state.scriptObjectsKnown = cls->scriptObjectsKnown;
             state.properties = cls->properties;
             state.constructed = cls->constructed;
             state.size = cls->size;
@@ -86,6 +94,10 @@ namespace dx::editor {
         void clearProperties(UClass* cls)
         {
             cls->properties = std::vector<UProperty*>();
+            // findProperty caches its index by the vector's size and data
+            // pointer. Rebuilding it on the empty vector now keeps a later vector
+            // that reuses the old allocation from hitting the stale index, which
+            // property rebinding after a compile depends on.
             cls->findProperty(Name());
         }
 
@@ -100,6 +112,9 @@ namespace dx::editor {
             cls->line = state.line;
             cls->textPos = state.textPos;
             cls->script = state.script;
+            cls->scriptObjects = state.scriptObjects;
+            cls->scriptObjectsKnown = state.scriptObjectsKnown;
+            gc::referencesChanged();
             cls->properties = state.properties;
             cls->constructed = state.constructed;
             cls->size = state.size;
@@ -182,7 +197,7 @@ namespace dx::editor {
             for (UProperty* property : old.properties) {
                 previous[property->name] = property;
             }
-            uint8_t* fresh = new uint8_t[std::max<size_t>(cls->size, 1)];
+            uint8_t* fresh = dx::objects::allocateObjectData(cls->size);
             cls->initValue(fresh);
             cls->copyValue(fresh, cls->defaultObject->data);
             for (UProperty* property : cls->properties) {
@@ -199,7 +214,7 @@ namespace dx::editor {
             for (UProperty* property : old.constructed) {
                 property->destroyAll(object->data + property->offset);
             }
-            delete[] object->data;
+            dx::objects::freeObjectData(object->data);
             object->data = fresh;
             objects::syncObjectProperties(object);
         }
@@ -230,13 +245,6 @@ namespace dx::editor {
             }
             return std::all_of(text.begin(), text.end(), [](char c) {
                 return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
-            });
-        }
-
-        bool iequals(const std::string& a, const std::string& b)
-        {
-            return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
-                return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
             });
         }
 
@@ -394,6 +402,20 @@ namespace dx::editor {
                 break;
             }
         }
+        // The engine's C++ reads script fields through offsets bound at startup;
+        // rebind them to the new layout. A failed bind leaves the old offsets,
+        // which match the classes once they are restored below.
+        bool bindingFailed = false;
+        if (success && propsBound()) {
+            std::vector<std::string> failures;
+            if (!bindAllProps(failures)) {
+                for (const std::string& failure : failures) {
+                    report("Error, engine property binding " + failure, true);
+                }
+                success = false;
+                bindingFailed = true;
+            }
+        }
         if (!success) {
             destroyArtifacts(firstNew, targets, packages);
             for (auto& [cls, state] : saved) {
@@ -405,7 +427,7 @@ namespace dx::editor {
                     state.defaultObject->destroyed = false;
                 }
             }
-            report("Failure: compile errors, all classes restored", true);
+            report(bindingFailed ? "Failure: classes no longer match the engine's property bindings, all classes restored" : "Failure: compile errors, all classes restored", true);
             return false;
         }
         std::map<UClass*, std::vector<UObject*>> instances;
@@ -419,6 +441,7 @@ namespace dx::editor {
             if (sameLayout(old, cls)) {
                 continue;
             }
+            layoutChanged = true;
             if (cls->flags & RF_Native) {
                 report("Warning, native class " + cls->name.str() + " size mismatch (script " + std::to_string(cls->size) + ", was " + std::to_string(old.size) + ")", false);
             }
@@ -484,6 +507,7 @@ namespace dx::editor {
         results.clear();
         loadClasses();
         int count = 0;
+        std::vector<UClass*> written;
         for (UObject* object : objects::all()) {
             UClass* cls = cast<UClass>(object);
             if (!cls || cls->destroyed || !cls->scriptText) {
@@ -502,9 +526,12 @@ namespace dx::editor {
                 continue;
             }
             count++;
+            if (changedOnly) {
+                written.push_back(cls);
+            }
         }
-        if (changedOnly) {
-            changedClasses.clear();
+        for (UClass* cls : written) {
+            changedClasses.erase(cls);
         }
         report("Exported " + std::to_string(count) + " class(es) to " + config::userDirectory().string(), false);
         return count;
@@ -515,10 +542,7 @@ namespace dx::editor {
         results.clear();
         Name name(packageName);
         if (Linker* linker = objects::findLinker(name)) {
-            for (size_t i = 0; i < linker->file().exports().size(); i++) {
-                objects::ensureLoaded(linker->object(static_cast<int32_t>(i + 1)));
-            }
-            objects::flushLoads();
+            objects::loadAllExports(linker);
         }
         UObject* package = objects::packageObject(name);
         for (UObject* object : compiler::packageContents(package)) {
@@ -566,14 +590,12 @@ namespace dx::editor {
     UClass* ScriptWorkspace::loadClass(const std::filesystem::path& file)
     {
         results.clear();
-        std::ifstream in(file, std::ios::binary);
-        if (!in) {
+        std::optional<std::string> contents = files::readFile(file);
+        if (!contents) {
             report("Error, cannot open " + file.string(), true);
             return nullptr;
         }
-        std::stringstream buffer;
-        buffer << in.rdbuf();
-        std::string text = buffer.str();
+        std::string text = std::move(*contents);
         std::string className = file.stem().string();
         std::string packageName = iequals(file.parent_path().filename().string(), "Classes") ? file.parent_path().parent_path().filename().string() : std::string("MyLevel");
         if (!validName(packageName) || !validName(className)) {
@@ -715,6 +737,13 @@ namespace dx::editor {
     const std::set<UClass*>& ScriptWorkspace::changed() const
     {
         return changedClasses;
+    }
+
+    bool ScriptWorkspace::takeLayoutChange()
+    {
+        bool changed = layoutChanged;
+        layoutChanged = false;
+        return changed;
     }
 
     void ScriptWorkspace::log(const std::string& line, const std::map<std::string, UClass*>& files)

@@ -1,8 +1,9 @@
 #include "compiler/assets.h"
 
 #include "compiler/exec_parse.h"
+#include "core/files.h"
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/package.h"
 #include "engine/resources.h"
 
 #include <algorithm>
@@ -37,16 +38,6 @@ namespace dx::compiler {
                 result = exact;
             }
             return result;
-        }
-
-        UObject* findChild(UObject* outer, Name name, UClass* cls)
-        {
-            for (UObject* object : objects::all()) {
-                if (object && !object->destroyed && object->outer == outer && object->name == name && object->cls == cls) {
-                    return object;
-                }
-            }
-            return nullptr;
         }
 
         struct SoundTarget {
@@ -111,8 +102,8 @@ namespace dx::compiler {
                 context.log("Warning: Unrecognized sound format '" + extension + "' in " + target.name.str());
                 return true;
             }
-            std::ifstream in(path, std::ios::binary);
-            if (!in) {
+            std::optional<std::string> bytes = files::readFile(path);
+            if (!bytes) {
                 context.log("Warning: Can't find file '" + target.file + "' for import");
                 return true;
             }
@@ -123,18 +114,8 @@ namespace dx::compiler {
             }
             USound* sound = cast<USound>(object);
             sound->format = Name(extension);
-            sound->bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+            sound->bytes.assign(bytes->begin(), bytes->end());
             return true;
-        }
-
-        bool writeBytes(const std::filesystem::path& file, const std::vector<uint8_t>& bytes)
-        {
-            if (file.has_parent_path()) {
-                std::filesystem::create_directories(file.parent_path());
-            }
-            std::ofstream out(file, std::ios::binary | std::ios::trunc);
-            out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-            return static_cast<bool>(out);
         }
 
         bool exportAudioSource(ExecContext& context, const std::string& command)
@@ -149,9 +130,8 @@ namespace dx::compiler {
                 return false;
             }
             objects::ensureLoaded(sound);
-            std::string file = target.file;
-            std::replace(file.begin(), file.end(), '\\', '/');
-            return writeBytes(context.directory / file, sound->bytes);
+            std::filesystem::path path;
+            return exportPath(context, context.directory, target.file, path) && files::writeFile(path, sound->bytes);
         }
 
         bool exportAudioObject(UObject* object, const std::string& extension, const std::filesystem::path& file)
@@ -161,13 +141,13 @@ namespace dx::compiler {
                 if (!iequals(extension, "wav")) {
                     return false;
                 }
-                return writeBytes(file, sound->bytes);
+                return files::writeFile(file, sound->bytes);
             }
             if (UMusic* music = cast<UMusic>(object)) {
                 if (!iequals(extension, music->format.str())) {
                     return false;
                 }
-                return writeBytes(file, music->bytes);
+                return files::writeFile(file, music->bytes);
             }
             return false;
         }

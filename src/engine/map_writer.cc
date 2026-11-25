@@ -87,6 +87,7 @@ namespace dx {
                 } else if (UModel* model = cast<UModel>(object)) {
                     visit(model->polys);
                     for (const BspSurf& surf : model->surfs) {
+                        visit(surf.texture);
                         visit(surf.actor);
                     }
                     for (const ZoneProperties& zone : model->zones) {
@@ -98,6 +99,7 @@ namespace dx {
                 } else if (UPolys* polys = cast<UPolys>(object)) {
                     for (const Poly& poly : polys->polys) {
                         visit(poly.actor);
+                        visit(poly.texture);
                     }
                 }
             }
@@ -288,8 +290,8 @@ namespace dx {
                 return false;
             }
             UObject* mapPackage = level->outermost();
-            Linker* linker = level->linker;
-            PackageWriter writer(Name(file.stem().string()));
+            std::u8string stem = file.stem().u8string();
+            PackageWriter writer(Name(std::string(stem.begin(), stem.end())));
             std::unordered_set<UObject*> liveActors;
             for (UObject* a : level->actors) {
                 if (a && !a->destroyed) {
@@ -315,15 +317,10 @@ namespace dx {
                 writer.addExport(object, object->outer == mapPackage ? nullptr : object->outer);
                 queue.push_back(object);
             };
+            // Only what the level reaches is written, so the models and polys of deleted brushes drop out.
             add(level);
-            if (linker && linker->packageObject == mapPackage) {
-                size_t count = linker->file().exports().size();
-                for (size_t i = 0; i < count; i++) {
-                    add(linker->object(static_cast<int32_t>(i + 1)));
-                }
-            }
-            objects::flushLoads();
             while (!queue.empty()) {
+                objects::flushLoads();
                 UObject* object = queue.front();
                 queue.pop_front();
                 if (object->outer != mapPackage) {

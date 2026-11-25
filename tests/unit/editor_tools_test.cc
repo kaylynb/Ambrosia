@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/brush_builder.h"
 #include "engine/csg.h"
@@ -9,6 +11,7 @@
 #include "engine/props_engine.h"
 #include "engine/resources.h"
 #include "engine/world.h"
+#include "fixtures.h"
 #include "render/lightmap.h"
 
 #include <catch_amalgamated.hpp>
@@ -34,7 +37,7 @@ namespace {
 
     Room makeRoom(const char* packageName, bool pillar)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         Room room;
         room.level = make<dx::ULevel>("Level", package);
@@ -84,7 +87,7 @@ namespace {
 
 TEST_CASE("undo and redo restore an actor move", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UObject* package = dx::objects::packageObject(dx::Name("HistoryMoveTest"));
     dx::ULevel* level = make<dx::ULevel>("Level", package);
     dx::UObject* actor = dx::objects::newObject(dx::objects::findClass("Engine.Light"), package, dx::Name(), 0);
@@ -105,7 +108,7 @@ TEST_CASE("undo and redo restore an actor move", "[data]")
 
 TEST_CASE("undo brings back a deleted actor and redo removes it again", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UObject* package = dx::objects::packageObject(dx::Name("HistoryDeleteTest"));
     dx::ULevel* level = make<dx::ULevel>("Level", package);
     dx::UObject* first = dx::objects::newObject(dx::objects::findClass("Engine.Light"), package, dx::Name(), 0);
@@ -147,6 +150,67 @@ TEST_CASE("a light in an empty room lights the floor texels and not the edge tex
     CHECK(model.lightBits[static_cast<size_t>(index.dataOffset) + 1] == 0x00);
     CHECK(model.lightBits[static_cast<size_t>(index.dataOffset) + 2] == 0xfe);
     CHECK(model.lightBits[static_cast<size_t>(index.dataOffset) + 3] == 0x7f);
+}
+
+TEST_CASE("bright corners light the floor texels inside the walls of the room", "[data]")
+{
+    constexpr uint32_t PolyBrightCorners = 0x00080000;
+    dx::engine::initialize(dx::test::gameData());
+    dx::UObject* package = dx::objects::packageObject(dx::Name("LightBrightCornersTest"));
+    dx::ULevel* level = make<dx::ULevel>("Level", package);
+    level->model = make<dx::UModel>("Model", package);
+    dx::UObject* builder = make<dx::UObject>("Brush", package);
+    dx::UModel* builderModel = make<dx::UModel>("Model", package);
+    builderModel->polys = make<dx::UPolys>("Polys", package);
+    dx::actor::Brush(builder) = builderModel;
+    level->actors.push_back(nullptr);
+    level->actors.push_back(builder);
+    dx::csg::buildCube(*builderModel->polys, 512.0f, 512.0f, 256.0f, nullptr);
+    dx::csg::addBrush(level, builder, dx::csg::CsgSubtract, PolyBrightCorners);
+    // A pillar between the light and the far corner, whose shadow the bright corners keep.
+    dx::csg::buildCube(*builderModel->polys, 64.0f, 64.0f, 256.0f, nullptr);
+    dx::actor::Location(builder) = { 128.0f, 0.0f, 0.0f };
+    dx::csg::addBrush(level, builder, dx::csg::CsgAdd);
+    dx::UObject* light = dx::objects::newObject(dx::objects::findClass("Engine.Light"), package, dx::Name(), 0);
+    light->loaded = true;
+    dx::actor::LightType(light) = 1;
+    dx::actor::LightBrightness(light) = 64;
+    dx::actor::LightRadius(light) = 32;
+    dx::actor::bStatic(light) = 1;
+    level->actors.push_back(light);
+    dx::csg::rebuild(level);
+    dx::lightbuild::rebuild(level);
+    const dx::UModel& model = *level->model;
+    const dx::BspSurf* floor = floorSurf(model);
+    REQUIRE(floor != nullptr);
+    REQUIRE(floor->lightMap >= 0);
+    const dx::LightMapIndex& index = model.lightMaps[static_cast<size_t>(floor->lightMap)];
+    REQUIRE(index.uClamp == 16);
+    REQUIRE(index.vClamp == 16);
+    std::string rows;
+    for (int32_t y = 0; y < index.vClamp; y++) {
+        for (int32_t x = 0; x < index.uClamp; x++) {
+            rows += texelLit(model, index, x, y) ? '#' : '.';
+        }
+        rows += '\n';
+    }
+    CHECK(rows
+        == "################\n"
+           "################\n"
+           "################\n"
+           "################\n"
+           "################\n"
+           "################\n"
+           "#############...\n"
+           "#############...\n"
+           "#############...\n"
+           "#############...\n"
+           "################\n"
+           "################\n"
+           "################\n"
+           "################\n"
+           "################\n"
+           "################\n");
 }
 
 TEST_CASE("a pillar casts a shadow on the floor texels behind it", "[data]")
@@ -230,7 +294,7 @@ TEST_CASE("geometry rebuild lists the lights permeating each leaf and lighting k
 
 TEST_CASE("a light behind a wall does not permeate the leaf on the other side", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UObject* package = dx::objects::packageObject(dx::Name("LightTwoRoomTest"));
     dx::ULevel* level = make<dx::ULevel>("Level", package);
     level->model = make<dx::UModel>("Model", package);
@@ -284,7 +348,7 @@ TEST_CASE("a volumetric light in a fog zone is listed in the leaves within its v
 
 TEST_CASE("a surface the light cannot see gets no light list", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UObject* package = dx::objects::packageObject(dx::Name("LightHiddenSurfTest"));
     dx::ULevel* level = make<dx::ULevel>("Level", package);
     level->model = make<dx::UModel>("Model", package);
@@ -329,7 +393,7 @@ TEST_CASE("a surface the light cannot see gets no light list", "[data]")
 
 TEST_CASE("a mover gets its own light maps and shadows the floor below it", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UObject* package = dx::objects::packageObject(dx::Name("LightMoverTest"));
     dx::ULevel* level = make<dx::ULevel>("Level", package);
     level->model = make<dx::UModel>("Model", package);
@@ -400,6 +464,33 @@ TEST_CASE("geometry rebuild attaches zone infos to their zones and sets actor re
     CHECK(dx::region(room.light).iLeaf == 0);
 }
 
+TEST_CASE("a point exactly on a wall or floor is inside the room", "[data]")
+{
+    Room room = makeRoom("SurfacePointZoneTest", false);
+    dx::World world;
+    world.level = room.level;
+    // A point exactly on the plane belongs to the side the surface faces.
+    // A point behind a wall or below the floor is outside the level.
+    const dx::Vector points[] = {
+        { 0.0f, 0.0f, -128.0f },
+        { 0.0f, 0.0f, 128.0f },
+        { 256.0f, 0.0f, 0.0f },
+        { -256.0f, 0.0f, 0.0f },
+        { 0.0f, 256.0f, 0.0f },
+        { 0.0f, -256.0f, 0.0f },
+    };
+    for (const dx::Vector& point : points) {
+        uint8_t zoneNumber = 0;
+        int32_t leaf = -1;
+        world.zoneAt(point, &leaf, &zoneNumber);
+        CHECK(zoneNumber == 1);
+        CHECK(leaf >= 0);
+    }
+    uint8_t below = 1;
+    world.zoneAt({ 0.0f, 0.0f, -128.01f }, nullptr, &below);
+    CHECK(below == 0);
+}
+
 TEST_CASE("surface pan scale align and flag edits update the surface and its brush polygon", "[data]")
 {
     Room room = makeRoom("SurfaceOpsTest", false);
@@ -466,6 +557,73 @@ TEST_CASE("undo restores the level model after a brush is added", "[data]")
     CHECK(model.surfs.size() == surfs + 6);
 }
 
+TEST_CASE("undo history drops its oldest entries past its limits and stays dirty", "[data]")
+{
+    dx::engine::initialize(dx::test::gameData());
+    dx::UObject* package = dx::objects::packageObject(dx::Name("HistoryLimitTest"));
+    dx::ULevel* level = make<dx::ULevel>("Level", package);
+    dx::UObject* actor = dx::objects::newObject(dx::objects::findClass("Engine.Light"), package, dx::Name(), 0);
+    actor->loaded = true;
+    level->actors.push_back(actor);
+    dx::EditorHistory history;
+    history.setLimits(3, dx::EditorHistory::DefaultMaxBytes);
+    uint64_t saved = history.revision();
+    for (int i = 1; i <= 5; i++) {
+        history.begin(level, { actor }, "Move " + std::to_string(i));
+        dx::actor::Location(actor).x = static_cast<float>(i);
+        history.commit();
+    }
+    CHECK(history.undoCount() == 3);
+    CHECK(history.nextUndo() == "Move 5");
+    CHECK(history.revision() != saved);
+    size_t three = history.retainedBytes();
+    CHECK(three > 0);
+    while (history.undo()) {
+    }
+    CHECK(dx::actor::Location(actor).x == 2.0f);
+    CHECK(history.revision() != saved);
+    history.redo();
+    history.setLimits(3, 1);
+    CHECK(history.undoCount() == 1);
+    CHECK(history.redoCount() == 2);
+    history.begin(level, { actor }, "Move 6");
+    dx::actor::Location(actor).x = 6.0f;
+    history.commit();
+    CHECK(history.undoCount() == 1);
+    CHECK(history.redoCount() == 0);
+    CHECK(history.retainedBytes() < three);
+    history.clear();
+    CHECK(history.retainedBytes() == 0);
+}
+
+TEST_CASE("model snapshots share unchanged light maps", "[data]")
+{
+    Room room = makeRoom("HistoryLightTest", false);
+    dx::lightbuild::rebuild(room.level);
+    dx::UModel& model = *room.level->model;
+    REQUIRE_FALSE(model.lightBits.empty());
+    std::vector<uint8_t> bits = model.lightBits;
+    dx::EditorHistory history;
+    history.begin(room.level, { &model }, "Surface flags");
+    model.surfs[0].polyFlags ^= 1;
+    history.commit();
+    size_t first = history.retainedBytes();
+    history.begin(room.level, { &model }, "Surface flags");
+    model.surfs[0].polyFlags ^= 1;
+    history.commit();
+    size_t second = history.retainedBytes() - first;
+    CHECK(second + model.lightBits.size() <= first);
+    model.lightBits.assign(model.lightBits.size(), 0);
+    history.begin(room.level, { &model }, "Light change");
+    model.lightBits[0] = 1;
+    history.commit();
+    REQUIRE(history.undo());
+    CHECK(model.lightBits == std::vector<uint8_t>(bits.size(), 0));
+    REQUIRE(history.undo());
+    REQUIRE(history.undo());
+    CHECK(model.lightBits == bits);
+}
+
 TEST_CASE("the original cube builder script builds the builder brush through the editor natives", "[data]")
 {
     Room room = makeRoom("ScriptBuilderTest", false);
@@ -484,8 +642,7 @@ TEST_CASE("the original cube builder script builds the builder brush through the
     *reinterpret_cast<float*>(builder->propertyAddress(dx::Name("Breadth"))) = 100.0f;
     dx::actor::PrePivot(room.builder) = { 10.0f, 0.0f, 0.0f };
     dx::actor::Location(room.builder) = { 50.0f, 0.0f, 0.0f };
-    dx::brushbuilder::setTarget(room.builder);
-    REQUIRE(dx::brushbuilder::build(builder));
+    REQUIRE(dx::brushbuilder::build(builder, room.builder, nullptr));
     dx::UModel& brush = *dx::cast<dx::UModel>(dx::actor::Brush(room.builder));
     REQUIRE(brush.polys->polys.size() == 6);
     const dx::Poly& first = brush.polys->polys[0];
@@ -497,6 +654,33 @@ TEST_CASE("the original cube builder script builds the builder brush through the
     CHECK(brush.bounds.max.x == 150.0f);
     CHECK(dx::actor::Location(room.builder).x == 40.0f);
     CHECK(dx::actor::PrePivot(room.builder).x == 0.0f);
+}
+
+TEST_CASE("a builder script that rejects its parameters gives its message", "[data]")
+{
+    Room room = makeRoom("ScriptBuilderMessageTest", false);
+    dx::UClass* cube = nullptr;
+    for (dx::UClass* cls : dx::brushbuilder::builderClasses()) {
+        if (cls->name == dx::Name("CubeBuilder")) {
+            cube = cls;
+        }
+    }
+    REQUIRE(cube != nullptr);
+    dx::UObject* builder = dx::brushbuilder::builderFor(cube);
+    REQUIRE(builder != nullptr);
+    float& height = *reinterpret_cast<float*>(builder->propertyAddress(dx::Name("Height")));
+    float saved = height;
+    dx::UModel& brush = *dx::cast<dx::UModel>(dx::actor::Brush(room.builder));
+    size_t polysBefore = brush.polys->polys.size();
+    height = 0.0f;
+    std::string error;
+    CHECK_FALSE(dx::brushbuilder::build(builder, room.builder, &error));
+    CHECK(error == "Bad parameters in brush builder");
+    CHECK(brush.polys->polys.size() == polysBefore);
+    height = saved;
+    REQUIRE(dx::brushbuilder::build(builder, room.builder, &error));
+    CHECK(error.empty());
+    CHECK(brush.polys->polys.size() == 6);
 }
 
 TEST_CASE("brush polygons export to and import from the UnrealEd t3d polylist format", "[data]")
@@ -557,8 +741,8 @@ TEST_CASE("a map with a mover saves and reloads the mover brush with its nodes a
     REQUIRE(brush.lightMaps.size() == 6);
     std::string brushName = brush.name.str();
     size_t nodes = brush.nodes.size();
-    std::filesystem::path file = std::filesystem::temp_directory_path() / "dx-mover-save-test" / "MoverSaved.dx";
-    std::filesystem::remove_all(file.parent_path());
+    dx::test::TempDir folder("mover-save");
+    std::filesystem::path file = folder / "MoverSaved.dx";
     std::string error;
     REQUIRE(dx::mapwriter::saveMap(room.level, file, &error));
     dx::Linker* saved = dx::objects::loadPackageFile(dx::Name("MoverSaved"), file, false);

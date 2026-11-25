@@ -13,6 +13,8 @@ namespace dx::compiler {
         UObject* package = nullptr;
         std::filesystem::path directory;
         LogSink log;
+        // Commands whose handler threw; each is logged as an error.
+        int errors = 0;
     };
 
     struct AssetHandler {
@@ -35,5 +37,12 @@ namespace dx::compiler {
     bool exportAssetObject(UObject* object, const std::string& extension, const std::filesystem::path& file);
     bool serializeAsset(PackageWriter& package, UObject* object, Writer& out);
     void finishAssets(ExecContext& context);
+    bool exportPath(ExecContext& context, const std::filesystem::path& root, std::string file, std::filesystem::path& result);
     std::vector<std::string> conversationImportFiles(UObject* package);
+    // The live object of that name directly in outer, of class cls or, with null, of any class.
+    UObject* findChild(UObject* outer, Name name, UClass* cls);
+    // directory/text with each part of text matched ignoring case where no part of that exact
+    // name exists, as the original's case-insensitive file system found it; backslashes are
+    // folder separators.
+    std::filesystem::path resolveFile(const std::filesystem::path& directory, std::string text);
 }

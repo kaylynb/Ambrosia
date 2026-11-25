@@ -55,6 +55,11 @@ namespace dx {
     int32_t CollisionHash::cellOf(float value)
     {
         float cell = std::floor(value / cellSize);
+        // NaN would pass through the clamp, and casting it is undefined; put it in the lowest
+        // cell, the way x86 turns NaN into the most negative integer.
+        if (std::isnan(cell)) {
+            return -1000000;
+        }
         return static_cast<int32_t>(std::clamp(cell, -1000000.0f, 1000000.0f));
     }
 

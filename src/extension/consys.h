@@ -1,7 +1,8 @@
 #pragma once
 
+#include "core/gc.h"
 #include "core/objects.h"
-#include "engine/reader.h"
+#include "core/reader.h"
 
 #include <string>
 #include <vector>
@@ -17,9 +18,17 @@ namespace dx::extension {
             }
         }
 
+        // The speech sounds of a conversation package, found by index while it plays.
+        void addReferences(ReferenceVisitor& references) override
+        {
+            UObject::addReferences(references);
+            references(sounds);
+        }
+
         std::vector<UObject*> sounds;
     };
 
+    // Holds only label names.
     class UConEventRandomLabel : public UObject {
     public:
         void serialize(Reader& reader, Linker&) override

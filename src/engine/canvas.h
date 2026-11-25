@@ -15,6 +15,9 @@ namespace dx {
         Masked = 2,
         Translucent = 3,
         Modulated = 4,
+        // Not one of Unreal's styles: blends by the texture's own alpha, for smooth-edged
+        // art such as the controller glyphs.
+        Alpha = 5,
     };
 
     struct LinearColor {
@@ -36,7 +39,9 @@ namespace dx {
         virtual void drawLine(float x1, float y1, float x2, float y2, LinearColor color) = 0;
     };
 
-    float textWidth(UFont* font, std::string_view text, float spacing);
-    float textHeight(UFont* font);
-    void drawText(Canvas2D& canvas, UFont* font, std::string_view text, float x, float y, LinearColor color, BlendStyle style, float spacing);
+    // Text measured and drawn at scale times the font's own pixel size; overlays pass the UI's
+    // scale so their text matches the game's.
+    float textWidth(UFont* font, std::string_view text, float spacing, float scale = 1.0f);
+    float textHeight(UFont* font, float scale = 1.0f);
+    void drawText(Canvas2D& canvas, UFont* font, std::string_view text, float x, float y, LinearColor color, BlendStyle style, float spacing, float scale = 1.0f);
 }

@@ -4,11 +4,11 @@ namespace dx::editor {
     void Editor::actorBrowser()
     {
         ImGui::InputText("Filter", filter.data(), filter.size());
-        std::string needle = lower(filter.data());
+        std::string needle = lowered(filter.data());
         std::map<std::string, std::vector<dx::UObject*>> groups;
         for (dx::UObject* actor : actors) {
             std::string className = actor->cls->name.str();
-            if (!needle.empty() && lower(className).find(needle) == std::string::npos && lower(actor->name.str()).find(needle) == std::string::npos) {
+            if (!needle.empty() && lowered(className).find(needle) == std::string::npos && lowered(actor->name.str()).find(needle) == std::string::npos) {
                 continue;
             }
             groups[className].push_back(actor);
@@ -200,13 +200,12 @@ namespace dx::editor {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.7f, 0.1f, 1.0f));
             }
             float size = static_cast<float>(thumbnailSize);
-            bool clicked = info ? ImGui::ImageButton("thumb", static_cast<ImTextureID>(info->id), ImVec2(size, size)) : ImGui::Button("?", ImVec2(size, size));
+            bool clicked = info ? ImGui::ImageButton("thumb", static_cast<ImTextureID>(info->id()), ImVec2(size, size)) : ImGui::Button("?", ImVec2(size, size));
             if (chosen) {
                 ImGui::PopStyleColor();
             }
             if (clicked) {
                 currentTexture = texture;
-                dx::bsp::setCurrentTexture(texture);
             }
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                 command("texprops " + texture->pathName());

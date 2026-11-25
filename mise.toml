@@ -1,0 +1,31 @@
+# The tools the build uses, pinned, the same on Windows and Linux: `mise install`. The build tool is
+# x.nu (`nu x.nu build`, `nu x.nu --help`); `mise run x <command>` runs it in a shell where mise is
+# not activated. The build itself is defined by CMakePresets.json.
+#
+# Machine-specific settings go in mise.local.toml next to this file, which git ignores, for example
+#     [env]
+#     DEUSEX_GAME_DATA = "D:/games/DeusEx"
+#     AMBROSIA_CONTAINER = "1"        # build in the container by default, on a host without the libraries
+#     CONTAINER_RUNTIME = "podman"    # instead of the first that answers (docker, wslc, podman on Windows)
+# The programs and the tests read DEUSEX_GAME_DATA at run time; nothing is compiled in, so changing
+# it needs no reconfigure. Without it they use game-data in the checkout. A mise.local.toml in the
+# main checkout also applies to worktrees under .claude/worktrees.
+
+[tools]
+cmake = "4.5.0"
+ninja = "1.13.2"
+nushell = "0.117.0"
+# For scripts/switch-runner.py.
+python = "3.13.18"
+# The code style in .clang-format needs clang-format 22 or newer.
+"pipx:clang-format" = "23.1.5"
+ast-grep = "0.51.3"
+"github:rhysd/actionlint" = "1.7.12"
+
+[tasks.lint-workflows]
+description = "Check the GitHub Actions workflows"
+run = "actionlint"
+
+[tasks.x]
+description = "The build tool, x.nu: `mise run x build [preset]`, `mise run x -- build --help` and so on"
+run = "nu x.nu"

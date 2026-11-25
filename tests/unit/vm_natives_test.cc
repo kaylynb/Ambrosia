@@ -1,5 +1,8 @@
+#include "core/math.h"
+#include "test_paths.h"
 #include "core/objects.h"
 #include "core/vm.h"
+#include "deusex/startup.h"
 #include "engine/world.h"
 
 #include <catch_amalgamated.hpp>
@@ -12,7 +15,7 @@ namespace {
     {
         static bool initialized = false;
         if (!initialized) {
-            dx::engine::initialize(DEUSEX_GAME_DATA);
+            dx::engine::initialize(dx::test::gameData());
             initialized = true;
         }
     }
@@ -432,6 +435,71 @@ TEST_CASE("GotoState and IsInState follow state inheritance", "[data]")
     }
 }
 
+TEST_CASE("converting a vector to a rotator keeps negative angles", "[vm]")
+{
+    // FVector::Rotation does not wrap: toward -Y is yaw -16384, downward is pitch -16384.
+    dx::Rotator left = dx::vectorRotation({ 0, -1, 0 });
+    CHECK(left.yaw == -16384);
+    dx::Rotator down = dx::vectorRotation({ 1, 0, -1 });
+    CHECK(down.pitch <= -8191);
+    CHECK(down.pitch >= -8192);
+    CHECK(dx::vectorRotation({ -1, 0, 0 }).yaw == 32768);
+    CHECK(dx::vectorRotation({ 0, 1, 0 }).yaw == 16384);
+}
+
+TEST_CASE("strings convert to vectors and rotators one component at a time", "[vm]")
+{
+    dx::Vector full = dx::vm::stringToVector("1.5,-2,3");
+    CHECK(full.x == 1.5f);
+    CHECK(full.y == -2.0f);
+    CHECK(full.z == 3.0f);
+    // A bad or missing component is 0, and the ones after it still count.
+    dx::Vector skipped = dx::vm::stringToVector("x,2,3");
+    CHECK(skipped.x == 0.0f);
+    CHECK(skipped.y == 2.0f);
+    CHECK(skipped.z == 3.0f);
+    dx::Vector gap = dx::vm::stringToVector("1,,3");
+    CHECK(gap.x == 1.0f);
+    CHECK(gap.y == 0.0f);
+    CHECK(gap.z == 3.0f);
+    dx::Vector single = dx::vm::stringToVector("7");
+    CHECK(single.x == 7.0f);
+    CHECK(single.y == 0.0f);
+
+    dx::Rotator rotator = dx::vm::stringToRotator("100, x ,-300");
+    CHECK(rotator.pitch == 100);
+    CHECK(rotator.yaw == 0);
+    CHECK(rotator.roll == -300);
+}
+
+TEST_CASE("GotoState to a missing label stops the state code", "[data]")
+{
+    initEngine();
+    dx::UClass* dispatcher = engineClass("Engine.Dispatcher");
+    dx::UObject* object = dx::objects::newObject(dispatcher, nullptr, dx::Name(), 0);
+    REQUIRE(dx::vm::gotoState(object, dx::Name("Dispatch")));
+    dx::StateFrame& frame = dx::vm::stateFrame(object);
+    REQUIRE(frame.code != nullptr);
+
+    // UObject::GotoLabel cancels the latent action whether or not the label exists,
+    // and with no such label the state code stops.
+    frame.latentAction = 1;
+    {
+        dx::vm::Call call(object, coreFunction("GotoState"));
+        call.n(dx::Name("Dispatch")).n(dx::Name("NoSuchLabel")).run();
+    }
+    CHECK(frame.latentAction == 0);
+    CHECK(frame.code == nullptr);
+    CHECK(dx::vm::stateName(object) == dx::Name("Dispatch"));
+
+    // GotoState with only the current state restarts it at Begin.
+    {
+        dx::vm::Call call(object, coreFunction("GotoState"));
+        call.n(dx::Name("Dispatch")).run();
+    }
+    CHECK(frame.code != nullptr);
+}
+
 TEST_CASE("GetPropertyText reads string property values", "[data]")
 {
     initEngine();
@@ -442,4 +510,25 @@ TEST_CASE("GetPropertyText reads string property values", "[data]")
         call.s("sxx").run();
         CHECK(result<std::string>(call) == "Tim");
     }
+}
+
+TEST_CASE("DebugInfo keeps the strings SetString stores for GetString, keys without case", "[data]")
+{
+    initEngine();
+    dx::UClass* cls = engineClass("Core.DebugInfo");
+    dx::UObject* info = dx::objects::newObject(cls, dx::objects::packageObject(dx::Name("Transient")), dx::Name(), 0);
+    auto getString = [info](const std::string& key) {
+        dx::vm::Call call(info, dx::Name("GetString"));
+        REQUIRE(call.valid());
+        call.s(key);
+        call.run();
+        return result<std::string>(call);
+    };
+    CHECK(getString("NeverSet").empty());
+    dx::vm::Call set(info, dx::Name("SetString"));
+    REQUIRE(set.valid());
+    set.s("Foo").s("bar");
+    set.run();
+    CHECK(getString("Foo") == "bar");
+    CHECK(getString("foo") == "bar");
 }

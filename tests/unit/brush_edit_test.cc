@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/brush_edit.h"
 #include "engine/bsp.h"
@@ -24,7 +26,7 @@ namespace {
 
     dx::UObject* makeBrush(const char* packageName, float width, float depth, float height)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         dx::UObject* brush = make<dx::UObject>("Brush", package);
         dx::UModel* model = make<dx::UModel>("Model", package);
@@ -309,7 +311,7 @@ TEST_CASE("two clip markers in an orthographic view define the clip plane in bru
 
 TEST_CASE("mover keyframes store positions relative to the base and show each key", "[data]")
 {
-    dx::engine::initialize(DEUSEX_GAME_DATA);
+    dx::engine::initialize(dx::test::gameData());
     dx::UClass* moverClass = dx::objects::findClass("Engine.Mover");
     REQUIRE(moverClass);
     dx::UObject* mover = dx::objects::newObject(moverClass, dx::objects::packageObject(dx::Name("BrushEditMoverTest")), dx::Name(), 0);

@@ -1,6 +1,8 @@
 #include "engine/brush_builder.h"
 
+#include "core/gc.h"
 #include "core/objects.h"
+#include "core/scoped_value.h"
 #include "core/vm.h"
 #include "engine/actor.h"
 #include "engine/bsp.h"
@@ -8,8 +10,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <map>
 #include <unordered_map>
+#include <utility>
 
 namespace dx {
     namespace brushbuilder {
@@ -21,28 +25,56 @@ namespace dx {
                 bool mergeCoplanars = false;
             };
 
+            // The shape each builder is putting together, keyed on the builder, and the one
+            // builder made for each class, which keeps its settings for the editor. A builder
+            // is kept while its class's entry names it; a deleted builder or class loses its
+            // entries.
+            struct Builders final : gc::Holder {
+                std::unordered_map<UObject*, State> states;
+                std::map<UClass*, UObject*> instances;
+
+                void addReferences(ReferenceVisitor& references) override
+                {
+                    for (auto it = instances.begin(); it != instances.end();) {
+                        references(it->second);
+                        it = it->second ? std::next(it) : instances.erase(it);
+                    }
+                }
+
+                void objectsReleased(const gc::ReleasedSet& released) override
+                {
+                    std::erase_if(states, [&](const auto& entry) { return released.count(entry.first) != 0; });
+                    std::erase_if(instances, [&](const auto& entry) { return released.count(entry.first) != 0 || released.count(entry.second) != 0; });
+                }
+            };
+
+            Builders& builders()
+            {
+                static Builders instance;
+                return instance;
+            }
+
             std::unordered_map<UObject*, State>& states()
             {
-                static std::unordered_map<UObject*, State> map;
-                return map;
+                return builders().states;
             }
 
             std::map<UClass*, UObject*>& instances()
             {
-                static std::map<UClass*, UObject*> map;
-                return map;
+                return builders().instances;
             }
 
-            UObject*& target()
-            {
-                static UObject* brush = nullptr;
-                return brush;
-            }
+            // The script build in progress, owned by build(). The natives reach it here because
+            // the script calls them with no way to pass it; it is null outside a build.
+            struct ActiveBuild {
+                UObject* brushActor = nullptr;
+                std::string message;
+            };
 
-            std::string& message()
+            ActiveBuild*& activeBuild()
             {
-                static std::string text;
-                return text;
+                static ActiveBuild* active = nullptr;
+                return active;
             }
 
             float snapValue(float location, float grid)
@@ -74,7 +106,8 @@ namespace dx {
             {
                 vm::finish(stack);
                 State& state = states()[self];
-                vm::retBool(result, finishBrush(target(), state.vertices, state.polys, state.group, state.mergeCoplanars));
+                UObject* brushActor = activeBuild() ? activeBuild()->brushActor : nullptr;
+                vm::retBool(result, finishBrush(brushActor, state.vertices, state.polys, state.group, state.mergeCoplanars));
             }
 
             void nativeGetVertexCount(UObject* self, Frame& stack, void* result)
@@ -105,7 +138,9 @@ namespace dx {
             {
                 std::string text = vm::getOpt<std::string>(stack, std::string());
                 vm::finish(stack);
-                message() = text.empty() ? std::string("Bad parameters in brush builder") : text;
+                if (activeBuild()) {
+                    activeBuild()->message = text.empty() ? std::string("Bad parameters in brush builder") : text;
+                }
                 vm::retBool(result, false);
             }
 
@@ -259,11 +294,6 @@ namespace dx {
             vm::registerNative("BrushBuilder", "PolyEnd", nativePolyEnd);
         }
 
-        void setTarget(UObject* builderBrush)
-        {
-            target() = builderBrush;
-        }
-
         Constraints& constraints()
         {
             static Constraints value;
@@ -310,9 +340,11 @@ namespace dx {
             return object;
         }
 
-        bool build(UObject* builder)
+        bool build(UObject* builder, UObject* brushActor, std::string* error)
         {
-            message().clear();
+            if (error) {
+                error->clear();
+            }
             if (!builder) {
                 return false;
             }
@@ -320,14 +352,15 @@ namespace dx {
             if (!call.valid()) {
                 return false;
             }
+            ActiveBuild active;
+            active.brushActor = brushActor;
+            ScopedValue<ActiveBuild*> building(activeBuild(), &active);
             call.run();
+            if (error) {
+                *error = active.message;
+            }
             uint8_t* value = call.returnValue();
             return value && *reinterpret_cast<uint32_t*>(value) != 0;
-        }
-
-        std::string lastMessage()
-        {
-            return message();
         }
 
         void validateBrush(UModel& brush, bool force)

@@ -164,30 +164,21 @@ namespace dx::extension {
         }
     }
 
-    void UListWindow::setRow(int32_t rowId, bool select, bool clearRows)
+    // XListWindow::SetRow: MoveToRow without invert.
+    void UListWindow::setRow(int32_t rowId, bool select, bool clearRows, bool drag)
     {
         int32_t index = indexOf(rowId);
         if (index < 0) {
-            return;
-        }
-        bool changed = false;
-        if (clearRows) {
-            for (size_t i = 0; i < rows.size(); i++) {
-                if (rows[i].selected && !(select && i == static_cast<size_t>(index))) {
-                    rows[i].selected = false;
-                    changed = true;
+            // Row 0 means no row: the focus (and, unless dragging, the anchor) is cleared.
+            if (rowId == 0) {
+                listwindow::focusLine(this) = -1;
+                if (!drag) {
+                    listwindow::anchorLine(this) = -1;
                 }
             }
+            return;
         }
-        if (select && !rows[static_cast<size_t>(index)].selected) {
-            rows[static_cast<size_t>(index)].selected = true;
-            changed = true;
-        }
-        listwindow::anchorLine(this) = index;
-        setFocusLine(index, true);
-        if (changed) {
-            notifySelection();
-        }
+        moveToRow(index, select, clearRows, false, drag, true);
     }
 
     void UListWindow::visibilityChanged(bool value)
@@ -218,6 +209,11 @@ namespace dx::extension {
     void UListWindow::notifyActivated(int32_t rowId)
     {
         playWindowSound(listwindow::ActivateSound(this));
+        // XListWindow::ActivateListRow sends the event
+        // only when the list and all its parents are visible.
+        if (!effectivelyVisible()) {
+            return;
+        }
         for (UWindow* current = this; current; current = current->parent()) {
             if (current->listRowActivated(this, rowId)) {
                 return;
@@ -225,12 +221,82 @@ namespace dx::extension {
         }
     }
 
-    void UListWindow::moveRow(uint8_t move, bool select, bool clearRows)
+    // XListWindow::MoveToRow. Without multi-select,
+    // drag is off and the rows are always cleared. A drag selects from the anchor
+    // to the row (after unselecting the old anchor-to-focus span when not
+    // clearing); otherwise the row is selected, or toggled with invert. The row
+    // becomes the focus, and the anchor too unless dragging. The selection event
+    // goes out only if something changed, and the move sound plays only if the
+    // focus moved.
+    void UListWindow::moveToRow(int32_t index, bool select, bool clearRows, bool invert, bool drag, bool setFocus)
+    {
+        int32_t count = static_cast<int32_t>(rows.size());
+        if (index < 0 || index >= count) {
+            return;
+        }
+        if (!listwindow::bMultiSelect(this)) {
+            drag = false;
+            clearRows = true;
+        }
+        int32_t oldFocus = listwindow::focusLine(this);
+        bool changed = false;
+        auto change = [&](int32_t i, bool value) {
+            if (i >= 0 && i < count && rows[static_cast<size_t>(i)].selected != value) {
+                rows[static_cast<size_t>(i)].selected = value;
+                changed = true;
+            }
+        };
+        auto span = [&](int32_t a, int32_t b, bool value) {
+            for (int32_t i = std::min(a, b); i <= std::max(a, b); i++) {
+                change(i, value);
+            }
+        };
+        if (select) {
+            int32_t focus = oldFocus >= 0 && oldFocus < count ? oldFocus : 0;
+            int32_t anchorLine = listwindow::anchorLine(this);
+            int32_t anchor = anchorLine >= 0 && anchorLine < count ? anchorLine : focus;
+            if (clearRows) {
+                for (int32_t i = 0; i < count; i++) {
+                    change(i, false);
+                }
+            } else if (drag) {
+                span(anchor, focus, false);
+            }
+            if (drag) {
+                span(anchor, index, true);
+            } else if (invert) {
+                change(index, !rows[static_cast<size_t>(index)].selected);
+            } else {
+                change(index, true);
+            }
+        }
+        if (setFocus) {
+            if (!drag) {
+                listwindow::anchorLine(this) = index;
+            }
+            setFocusLine(index, true);
+        }
+        if (changed) {
+            selectedCount();
+            notifySelection();
+        }
+        if (listwindow::focusLine(this) != oldFocus) {
+            playWindowSound(listwindow::moveSound(this));
+        }
+    }
+
+    // XListWindow::MoveRow: from the focus row (or far above the
+    // top with none), clamped to the list, then as SetRow.
+    void UListWindow::moveRow(uint8_t move, bool select, bool clearRows, bool drag)
     {
         if (rows.empty()) {
+            listwindow::focusLine(this) = -1;
             return;
         }
         int32_t focus = listwindow::focusLine(this);
+        if (focus < 0 || focus >= static_cast<int32_t>(rows.size())) {
+            focus = -0xffff;
+        }
         int32_t last = static_cast<int32_t>(rows.size()) - 1;
         float lh = lineHeight();
         float visibleHeight = height();
@@ -240,10 +306,10 @@ namespace dx::extension {
         int32_t page = std::max(static_cast<int32_t>(visibleHeight / lh) - 1, 1);
         switch (move) {
         case 0:
-            focus = focus < 0 ? 0 : focus - 1;
+            focus -= 1;
             break;
         case 1:
-            focus = focus < 0 ? 0 : focus + 1;
+            focus += 1;
             break;
         case 2:
             focus -= page;
@@ -261,16 +327,7 @@ namespace dx::extension {
             break;
         }
         focus = std::clamp(focus, 0, last);
-        if (select) {
-            if (clearRows) {
-                for (Row& entry : rows) {
-                    entry.selected = false;
-                }
-            }
-            rows[static_cast<size_t>(focus)].selected = true;
-        }
-        playWindowSound(listwindow::moveSound(this));
-        setFocusLine(focus, true);
+        moveToRow(focus, select, clearRows, false, drag, true);
     }
 
     void UListWindow::sortRows()
@@ -278,8 +335,7 @@ namespace dx::extension {
         if (sortKeys.empty()) {
             return;
         }
-        int32_t focus = listwindow::focusLine(this);
-        int32_t focusId = focus >= 0 && focus < static_cast<int32_t>(rows.size()) ? rows[static_cast<size_t>(focus)].id : 0;
+        RowKeeper keeper(this);
         std::stable_sort(rows.begin(), rows.end(), [this](const Row& a, const Row& b) {
             for (const SortKey& key : sortKeys) {
                 size_t column = static_cast<size_t>(std::max(key.column, 0));
@@ -307,8 +363,30 @@ namespace dx::extension {
             }
             return false;
         });
-        if (focusId != 0) {
-            listwindow::focusLine(this) = indexOf(focusId);
+        keeper.restore();
+    }
+
+    // XListWindow keeps its focus and anchor rows as row pointers (0x1ac and
+    // 0x1b0), so they follow their row when rows are sorted or removed.
+    UListWindow::RowKeeper::RowKeeper(UListWindow* owner)
+        : list(owner)
+    {
+        int32_t count = static_cast<int32_t>(owner->rows.size());
+        int32_t focus = listwindow::focusLine(owner);
+        int32_t anchor = listwindow::anchorLine(owner);
+        hasFocus = focus >= 0 && focus < count;
+        hasAnchor = anchor >= 0 && anchor < count;
+        focusId = hasFocus ? owner->rows[static_cast<size_t>(focus)].id : 0;
+        anchorId = hasAnchor ? owner->rows[static_cast<size_t>(anchor)].id : 0;
+    }
+
+    void UListWindow::RowKeeper::restore()
+    {
+        if (hasFocus) {
+            listwindow::focusLine(list) = list->indexOf(focusId);
+        }
+        if (hasAnchor) {
+            listwindow::anchorLine(list) = list->indexOf(anchorId);
         }
     }
 
@@ -429,9 +507,8 @@ namespace dx::extension {
                         textX = x + (w - textWidth) * 0.5f;
                     }
                     float textY = y + lh - textHeight - fieldMarginHeight + 1.0f;
-                    gc->pushClip(gc->offsetX + x + fieldMarginWidth, gc->offsetY + y + fieldMarginHeight, w - fieldMarginWidth * 2.0f, lh - fieldMarginHeight * 2.0f);
+                    UGC::ClipScope clip(gc, gc->offsetX + x + fieldMarginWidth, gc->offsetY + y + fieldMarginHeight, w - fieldMarginWidth * 2.0f, lh - fieldMarginHeight * 2.0f);
                     gc->drawText(textX, textY, textWidth, textHeight, entry.fields[c]);
-                    gc->popClip();
                 }
                 x += w;
             }
@@ -456,48 +533,64 @@ namespace dx::extension {
         if (button != IK_LeftMouse && button != IK_RightMouse) {
             return false;
         }
-        setFocusWindow(this);
-        int32_t index = static_cast<int32_t>(std::floor(pointY / lineHeight()));
-        if (index < 0 || index >= static_cast<int32_t>(rows.size())) {
+        // The focus moves in the root window (XRootWindow::HandleButtons), not here.
+        // XListWindow::MouseButtonPressed: the row under the pointer,
+        // clamped to the list (a click below the last row picks the last row), goes
+        // through MoveToRow with Ctrl toggling instead of clearing and Shift dragging.
+        float lh = lineHeight();
+        int32_t count = static_cast<int32_t>(rows.size());
+        if (lh <= 0 || count == 0) {
             return true;
         }
+        int32_t index = std::clamp(static_cast<int32_t>(pointY / lh), 0, count - 1);
         bool ctrl = state().keys[IK_Ctrl] || state().keys[IK_LControl] || state().keys[IK_RControl];
         bool shift = state().keys[IK_Shift] || state().keys[IK_LShift] || state().keys[IK_RShift];
-        bool multi = listwindow::bMultiSelect(this) != 0;
-        Row& entry = rows[static_cast<size_t>(index)];
-        if (multi && ctrl) {
-            entry.selected = !entry.selected;
-            listwindow::anchorLine(this) = index;
-        } else if (multi && shift && listwindow::anchorLine(this) >= 0) {
-            int32_t anchor = std::min(listwindow::anchorLine(this), static_cast<int32_t>(rows.size()) - 1);
-            for (Row& other : rows) {
-                other.selected = false;
-            }
-            for (int32_t i = std::min(anchor, index); i <= std::max(anchor, index); i++) {
-                rows[static_cast<size_t>(i)].selected = true;
-            }
-        } else {
-            for (Row& other : rows) {
-                other.selected = false;
-            }
-            entry.selected = true;
-            listwindow::anchorLine(this) = index;
+        moveToRow(index, true, !ctrl, ctrl, shift, true);
+        return true;
+    }
+
+    // XListWindow::MouseButtonReleased: the release of
+    // a second (or later) left click over a row focuses that row and activates it.
+    bool UListWindow::mouseButtonReleased(float pointX, float pointY, uint8_t button, int32_t numClicks)
+    {
+        if (UWindow::mouseButtonReleased(pointX, pointY, button, numClicks)) {
+            return true;
         }
-        setFocusLine(index, true);
-        int32_t rowId = entry.id;
-        notifySelection();
-        if (numClicks >= 2 && button == IK_LeftMouse) {
-            notifyActivated(rowId);
+        if (button != IK_LeftMouse) {
+            return false;
+        }
+        float lh = lineHeight();
+        if (numClicks > 1 && lh > 0) {
+            int32_t index = static_cast<int32_t>(pointY / lh);
+            if (index >= 0 && index < static_cast<int32_t>(rows.size())) {
+                listwindow::anchorLine(this) = index;
+                setFocusLine(index, true);
+                notifyActivated(rows[static_cast<size_t>(index)].id);
+            }
         }
         return true;
     }
 
     bool UListWindow::virtualKeyPressed(uint8_t key, bool repeat)
     {
-        if (UWindow::virtualKeyPressed(key, repeat)) {
+        // XListWindow::VirtualKeyPressed: after the
+        // script (ListWindow.uc moves the selection), the arrows and Escape clear
+        // the hot-key string and Enter activates the focus row, whatever the
+        // script returned.
+        bool handled = UWindow::virtualKeyPressed(key, repeat);
+        if (key == IK_Left || key == IK_Right || key == IK_Up || key == IK_Down || key == IK_Escape) {
+            listwindow::hotKeyString(this).clear();
+        }
+        if (key == IK_Enter) {
+            // With no focus row the event still goes out, with row 0.
+            int32_t focus = listwindow::focusLine(this);
+            bool valid = focus >= 0 && focus < static_cast<int32_t>(rows.size());
+            notifyActivated(valid ? rows[static_cast<size_t>(focus)].id : 0);
             return true;
         }
-        bool multi = listwindow::bMultiSelect(this) != 0;
+        if (handled) {
+            return true;
+        }
         bool shift = state().keys[IK_Shift] || state().keys[IK_LShift] || state().keys[IK_RShift];
         int move = -1;
         switch (key) {
@@ -519,19 +612,10 @@ namespace dx::extension {
         case IK_End:
             move = 5;
             break;
-        case IK_Enter: {
-            int32_t focus = listwindow::focusLine(this);
-            if (focus >= 0 && focus < static_cast<int32_t>(rows.size())) {
-                notifyActivated(rows[static_cast<size_t>(focus)].id);
-                return true;
-            }
-            return false;
-        }
         default:
             return false;
         }
-        moveRow(static_cast<uint8_t>(move), true, !(multi && shift));
-        notifySelection();
+        moveRow(static_cast<uint8_t>(move), true, true, shift);
         return true;
     }
 
@@ -682,10 +766,19 @@ namespace dx::extension {
             if (index < 0) {
                 return;
             }
+            // XListWindow::DeleteRow clears the focus
+            // and anchor rows when they are the deleted row; otherwise they stay
+            // on their row.
+            UListWindow::RowKeeper keeper(list);
+            bool focusDeleted = listwindow::focusLine(list) == index;
+            bool anchorDeleted = listwindow::anchorLine(list) == index;
             list->rows.erase(list->rows.begin() + index);
-            int32_t& focus = listwindow::focusLine(list);
-            if (focus >= static_cast<int32_t>(list->rows.size())) {
-                focus = static_cast<int32_t>(list->rows.size()) - 1;
+            keeper.restore();
+            if (focusDeleted) {
+                listwindow::focusLine(list) = -1;
+            }
+            if (anchorDeleted) {
+                listwindow::anchorLine(list) = -1;
             }
             list->selectedCount();
             list->askParentForReconfigure();
@@ -728,7 +821,11 @@ namespace dx::extension {
             vm::finish(stack);
             UListWindow* list = self(object);
             UListWindow::Row* entry = list ? list->row(rowId) : nullptr;
-            if (entry && column >= 0) {
+            // XListWindow::SetField ignores a column
+            // that IsColumnValid rejects: outside the column count,
+            // which XListWindow::Init starts at 1.
+            size_t numColumns = list ? std::max<size_t>(list->columns.size(), 1) : 0;
+            if (entry && column >= 0 && static_cast<size_t>(column) < numColumns) {
                 if (entry->fields.size() <= static_cast<size_t>(column)) {
                     entry->fields.resize(static_cast<size_t>(column) + 1);
                 }
@@ -902,11 +999,10 @@ namespace dx::extension {
             uint8_t move = vm::get<uint8_t>(stack);
             bool select = optionalBoolDefault(stack, true);
             bool clearRows = optionalBoolDefault(stack, true);
-            optionalBoolDefault(stack, false);
+            bool drag = optionalBoolDefault(stack, false);
             vm::finish(stack);
             if (UListWindow* list = self(object)) {
-                list->moveRow(move, select, clearRows);
-                list->notifySelection();
+                list->moveRow(move, select, clearRows, drag);
             }
         }
 
@@ -915,10 +1011,10 @@ namespace dx::extension {
             int32_t rowId = vm::get<int32_t>(stack);
             bool select = optionalBoolDefault(stack, true);
             bool clearRows = optionalBoolDefault(stack, true);
-            optionalBoolDefault(stack, false);
+            bool drag = optionalBoolDefault(stack, false);
             vm::finish(stack);
             if (UListWindow* list = self(object)) {
-                list->setRow(rowId, select, clearRows);
+                list->setRow(rowId, select, clearRows, drag);
             }
         }
 
@@ -968,6 +1064,13 @@ namespace dx::extension {
         {
             int32_t count = vm::get<int32_t>(stack);
             vm::finish(stack);
+            // XListWindow::SetNumColumns has no limit
+            // and fails to allocate a huge count. Ambrosia ignores counts above
+            // MaxColumns instead of terminating.
+            constexpr int32_t MaxColumns = 4096;
+            if (count > MaxColumns) {
+                return;
+            }
             if (UListWindow* list = self(object)) {
                 list->columns.resize(static_cast<size_t>(std::max(count, 0)));
                 list->askParentForReconfigure();
@@ -1181,9 +1284,11 @@ namespace dx::extension {
             if (UListWindow* list = self(object)) {
                 list->sortKeys.clear();
                 if (sort) {
+                    UListWindow::RowKeeper keeper(list);
                     std::sort(list->rows.begin(), list->rows.end(), [](const UListWindow::Row& a, const UListWindow::Row& b) {
                         return a.id < b.id;
                     });
+                    keeper.restore();
                 }
             }
         }

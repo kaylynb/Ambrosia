@@ -1,5 +1,7 @@
 #include "core/config.h"
+#include "test_paths.h"
 #include "core/objects.h"
+#include "deusex/startup.h"
 #include "engine/actor.h"
 #include "engine/console.h"
 #include "engine/props_engine.h"
@@ -8,6 +10,7 @@
 #include <catch_amalgamated.hpp>
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <random>
 #include <vector>
@@ -15,7 +18,7 @@
 namespace {
     std::unique_ptr<dx::World> loadWorld(const std::string& map)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::config::system().set("Engine.Engine", "Root", "DeusEx.DeusExRootWindow");
         dx::objects::unloadPackage(dx::Name(map));
         auto world = std::make_unique<dx::World>();
@@ -133,6 +136,26 @@ TEST_CASE("collision hash finds movers where traces hit them", "[data]")
         }
     }
     CHECK(hits >= 10);
+    unloadWorld(world, "01_NYC_UNATCOIsland");
+}
+
+TEST_CASE("collision hash puts a NaN coordinate in the lowest cell", "[data]")
+{
+    std::unique_ptr<dx::World> world = loadWorld("01_NYC_UNATCOIsland");
+    float nan = std::numeric_limits<float>::quiet_NaN();
+    // Only actors too big to place in cells are found there; NaN fails every bounds test, so
+    // they all come back.
+    std::vector<dx::UObject*> fromNan = world->collisionHash.query({ nan, nan, nan }, { nan, nan, nan });
+    std::vector<dx::UObject*> lowest = world->collisionHash.query({ -1e9f, -1e9f, -1e9f }, { 1e9f, 1e9f, 1e9f });
+    for (dx::UObject* a : fromNan) {
+        CHECK(std::find(lowest.begin(), lowest.end(), a) != lowest.end());
+    }
+    CHECK(fromNan.size() < lowest.size());
+    dx::UObject* player = world->player();
+    REQUIRE(player != nullptr);
+    dx::Vector location = dx::actor::Location(player);
+    std::vector<dx::UObject*> near = world->collisionHash.query(location - dx::Vector { 4, 4, 4 }, location + dx::Vector { 4, 4, 4 });
+    CHECK(std::find(near.begin(), near.end(), player) != near.end());
     unloadWorld(world, "01_NYC_UNATCOIsland");
 }
 

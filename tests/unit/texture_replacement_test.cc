@@ -1,6 +1,9 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/resources.h"
 #include "engine/world.h"
+#include "fixtures.h"
 #include "render/procedural.h"
 #include "render/texture_replacement.h"
 
@@ -93,7 +96,7 @@ namespace {
 
     dx::UTexture* loadTexture(const char* path, const char* className)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         std::string text(path);
         REQUIRE(dx::objects::loadPackage(dx::Name(text.substr(0, text.find('.')))) != nullptr);
         dx::UObject* object = dx::objects::findObject(path, dx::objects::findClass(className));
@@ -103,14 +106,6 @@ namespace {
         dx::UTexture* texture = dx::cast<dx::UTexture>(object);
         REQUIRE(texture != nullptr);
         return texture;
-    }
-
-    std::filesystem::path freshRoot(const char* name)
-    {
-        std::filesystem::path root = std::filesystem::temp_directory_path() / name;
-        std::filesystem::remove_all(root);
-        std::filesystem::create_directories(root);
-        return root;
     }
 }
 
@@ -136,7 +131,8 @@ TEST_CASE("HD replacements are found by package group and name, ignoring case, w
     REQUIRE(texture->outer->name == dx::Name("Metal"));
     uint32_t width = texture->width();
     uint32_t height = texture->height();
-    std::filesystem::path root = freshRoot("dx-hd-replacement-test");
+    dx::test::TempDir folder("hd-replacement");
+    std::filesystem::path root = folder.path();
     std::filesystem::path user = root / "user";
     std::filesystem::path game = root / "game";
     dx::TextureReplacements replacements({ user, game });
@@ -168,7 +164,6 @@ TEST_CASE("HD replacements are found by package group and name, ignoring case, w
     std::filesystem::remove(ungrouped);
     replacements.rescan();
     CHECK(replacements.find(texture) == grouped);
-    std::filesystem::remove_all(root);
 }
 
 TEST_CASE("procedural textures and font pages are never replaced by HD images", "[data]")
@@ -185,7 +180,8 @@ TEST_CASE("procedural textures and font pages are never replaced by HD images", 
     REQUIRE(page->outer == font);
     dx::UTexture* plain = loadTexture("CoreTexMetal.Metal.StanGrayMetal_A", "Engine.Texture");
 
-    std::filesystem::path root = freshRoot("dx-hd-excluded-test");
+    dx::test::TempDir folder("hd-excluded");
+    std::filesystem::path root = folder.path();
     std::filesystem::path hd = root / "Textures" / "HD";
     std::vector<uint8_t> red = solid(4, 4, { 255, 0, 0, 255 });
     writePng(hd / "Effects" / (fire->outer->name.str()) / "LaserSpot2.png", 4, 4, red);
@@ -204,5 +200,4 @@ TEST_CASE("procedural textures and font pages are never replaced by HD images", 
     CHECK_FALSE(replacements.load(fire, image));
     CHECK_FALSE(replacements.load(page, image));
     CHECK(replacements.find(plain) == hd / "CoreTexMetal" / "StanGrayMetal_A.png");
-    std::filesystem::remove_all(root);
 }

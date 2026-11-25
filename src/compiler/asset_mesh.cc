@@ -2,9 +2,10 @@
 
 #include "compiler/asset_mesh_lod.h"
 #include "compiler/exec_parse.h"
+#include "core/files.h"
 #include "core/objects.h"
 #include "engine/mesh.h"
-#include "engine/package.h"
+#include "core/package.h"
 
 #include <algorithm>
 #include <array>
@@ -57,34 +58,6 @@ namespace dx::compiler {
             LodSettings lod;
         };
 
-        std::filesystem::path resolveFile(const std::filesystem::path& directory, std::string text)
-        {
-            std::replace(text.begin(), text.end(), '\\', '/');
-            std::filesystem::path result = directory;
-            for (const std::filesystem::path& part : std::filesystem::path(text)) {
-                std::filesystem::path exact = result / part;
-                if (std::filesystem::exists(exact) || !std::filesystem::is_directory(result)) {
-                    result = exact;
-                    continue;
-                }
-                std::filesystem::path match = exact;
-                for (const auto& entry : std::filesystem::directory_iterator(result)) {
-                    if (iequals(entry.path().filename().string(), part.string())) {
-                        match = entry.path();
-                        break;
-                    }
-                }
-                result = match;
-            }
-            return result;
-        }
-
-        std::vector<uint8_t> readFile(const std::filesystem::path& path)
-        {
-            std::ifstream in(path, std::ios::binary);
-            return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-        }
-
         uint16_t readU16(const std::vector<uint8_t>& data, size_t at)
         {
             return static_cast<uint16_t>(data[at] | (data[at + 1] << 8));
@@ -94,14 +67,6 @@ namespace dx::compiler {
         {
             data.push_back(static_cast<uint8_t>(value & 0xff));
             data.push_back(static_cast<uint8_t>(value >> 8));
-        }
-
-        bool writeFile(const std::filesystem::path& path, const std::vector<uint8_t>& data)
-        {
-            std::filesystem::create_directories(path.parent_path());
-            std::ofstream out(path, std::ios::binary | std::ios::trunc);
-            out.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
-            return static_cast<bool>(out);
         }
 
         bool getVector(std::string_view stream, Vector& value)
@@ -517,8 +482,10 @@ namespace dx::compiler {
 
         void importMesh(ExecContext& context, const ImportSettings& settings)
         {
-            std::vector<uint8_t> aniv = readFile(resolveFile(context.directory, settings.anivFile));
-            std::vector<uint8_t> data = readFile(resolveFile(context.directory, settings.dataFile));
+            std::string anivText = files::readFile(resolveFile(context.directory, settings.anivFile)).value_or(std::string());
+            std::string dataText = files::readFile(resolveFile(context.directory, settings.dataFile)).value_or(std::string());
+            std::vector<uint8_t> aniv(anivText.begin(), anivText.end());
+            std::vector<uint8_t> data(dataText.begin(), dataText.end());
             if (aniv.size() < 4 || data.size() < DataHeaderSize) {
                 context.log("Warning: MESH IMPORT could not read " + settings.anivFile + " / " + settings.dataFile);
                 return;
@@ -1279,7 +1246,11 @@ namespace dx::compiler {
             bool ok = true;
             std::vector<uint8_t> data = dataFileBytes(mesh->tris, {}, identity, identity.size(), ok);
             std::vector<uint8_t> aniv = anivFileBytes(meshVerts(mesh), identity.size(), static_cast<size_t>(mesh->animFrames), identity);
-            return ok && writeFile(resolveFile(context.directory, settings.dataFile), data) && writeFile(resolveFile(context.directory, settings.anivFile), aniv);
+            std::filesystem::path checked;
+            if (!exportPath(context, context.directory, settings.dataFile, checked) || !exportPath(context, context.directory, settings.anivFile, checked)) {
+                return false;
+            }
+            return ok && files::writeFile(resolveFile(context.directory, settings.dataFile), data) && files::writeFile(resolveFile(context.directory, settings.anivFile), aniv);
         }
 
         bool exportLodGroup(ExecContext& context, std::vector<SourceMesh>& group)
@@ -1336,16 +1307,25 @@ namespace dx::compiler {
             for (size_t i = 0; i < order.size(); i++) {
                 newIndex[static_cast<size_t>(order[i])] = special + static_cast<int32_t>(i);
             }
+            std::filesystem::path checked;
+            if (!exportPath(context, context.directory, base.settings.dataFile, checked)) {
+                return false;
+            }
+            for (const SourceMesh& source : group) {
+                if (!exportPath(context, context.directory, source.settings.anivFile, checked)) {
+                    return false;
+                }
+            }
             bool ok = true;
             std::vector<uint8_t> data = dataFileBytes(lodTris(base.mesh), textures, newIndex, static_cast<size_t>(vertexCount), ok);
-            ok = ok && writeFile(resolveFile(context.directory, base.settings.dataFile), data);
+            ok = ok && files::writeFile(resolveFile(context.directory, base.settings.dataFile), data);
             for (SourceMesh& source : group) {
                 std::vector<int32_t> sourceOf(static_cast<size_t>(vertexCount));
                 for (size_t from = 0; from < source.toCanonical.size(); from++) {
                     sourceOf[static_cast<size_t>(newIndex[static_cast<size_t>(source.toCanonical[from])])] = static_cast<int32_t>(from);
                 }
                 std::vector<uint8_t> aniv = anivFileBytes(source.verts, static_cast<size_t>(vertexCount), static_cast<size_t>(source.mesh->animFrames), sourceOf);
-                ok = ok && writeFile(resolveFile(context.directory, source.settings.anivFile), aniv);
+                ok = ok && files::writeFile(resolveFile(context.directory, source.settings.anivFile), aniv);
             }
             return ok;
         }

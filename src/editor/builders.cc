@@ -1,4 +1,5 @@
 #include "editor/editor.h"
+#include "debugui/imgui_setup.h"
 
 namespace dx::editor {
     namespace {
@@ -28,11 +29,11 @@ namespace dx::editor {
     bool Editor::applyBuilder(const std::string& label, const std::function<bool(dx::UObject*, std::string*)>& build)
     {
         dx::UObject* builder = builderBrush();
-        if (!builder) {
+        dx::UModel* brush = builderModel();
+        if (!brush) {
             status = "no builder brush";
             return false;
         }
-        dx::UModel* brush = dx::cast<dx::UModel>(dx::actor::Brush(builder));
         history.begin(level, { builder, brush, brush->polys }, label);
         std::string error;
         bool done = build(builder, &error);
@@ -51,14 +52,6 @@ namespace dx::editor {
         ImGui::Separator();
         if (ImGui::MenuItem("Add Special...")) {
             command("addspecialdialog 1");
-        }
-        if (ImGui::BeginMenu("Advanced")) {
-            for (const dx::specialbrush::Preset& zone : dx::specialbrush::advancedZones()) {
-                if (ImGui::MenuItem(zone.name.c_str())) {
-                    command("addzone " + zone.name);
-                }
-            }
-            ImGui::EndMenu();
         }
         if (ImGui::MenuItem("Height Map...")) {
             command("heightmapdialog 1");
@@ -98,28 +91,15 @@ namespace dx::editor {
             showAddSpecial = rest != "0";
             return true;
         }
-        if (verb == "addzone") {
-            for (const dx::specialbrush::Preset& zone : dx::specialbrush::advancedZones()) {
-                if (lower(zone.name) == lower(rest)) {
-                    bool done = command("csgadd " + std::to_string(zone.flags));
-                    if (done) {
-                        status = zone.name + " added; it takes effect the next time geometry is rebuilt";
-                    }
-                    return done;
-                }
-            }
-            status = "no advanced zone " + rest;
-            return false;
-        }
         if (verb == "heightmap") {
-            std::string file;
+            std::string file = readArg(input);
             double cell = heightMapCell;
             double scale = heightMapScale;
             double base = heightMapBase;
-            input >> file >> cell >> scale >> base;
+            input >> cell >> scale >> base;
             return applyBuilder("Height Map", [&](dx::UObject* builder, std::string* error) {
                 dx::brushbuilder::GreyImage image;
-                if (!dx::brushbuilder::loadGreyImage(file, image, error)) {
+                if (!dx::brushbuilder::loadGreyImage(utf8Path(file), image, error)) {
                     return false;
                 }
                 return dx::brushbuilder::buildFloor(dx::brushbuilder::heightMapGrid(image, cell, scale, base), builder, error);
@@ -184,12 +164,12 @@ namespace dx::editor {
             return true;
         }
         if (action == "heightmap") {
-            std::string file;
+            std::string file = readArg(input);
             double scale = 16;
-            input >> file >> scale;
+            input >> scale;
             dx::brushbuilder::GreyImage image;
             std::string error;
-            if (!dx::brushbuilder::loadGreyImage(file, image, &error)) {
+            if (!dx::brushbuilder::loadGreyImage(utf8Path(file), image, &error)) {
                 status = error;
                 return false;
             }
@@ -304,9 +284,10 @@ namespace dx::editor {
         }
         if (action == "save" || action == "load") {
             std::string file;
-            std::getline(input >> std::ws, file);
+            std::getline(input, file);
+            file = restArg(file);
             std::string error;
-            bool done = action == "save" ? dx::shapeeditor::save(shapeDocument, file, &error) : dx::shapeeditor::load(shapeDocument, file, &error);
+            bool done = action == "save" ? dx::shapeeditor::save(shapeDocument, utf8Path(file), &error) : dx::shapeeditor::load(shapeDocument, utf8Path(file), &error);
             status = done ? action + "d " + file : error;
             if (done) {
                 copyText(shapeFile, file);
@@ -352,8 +333,8 @@ namespace dx::editor {
         if (!showShapeEditor) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(300, 90), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(720), debugui::scaled(560)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(300), debugui::scaled(90)), ImGuiCond_FirstUseEver);
         std::string title = "2D Shape Editor";
         if (shapeFile[0]) {
             title += std::string(" - [") + shapeFile.data() + "]";
@@ -389,7 +370,7 @@ namespace dx::editor {
         }
         ImGui::EndDisabled();
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(70);
+        ImGui::SetNextItemWidth(debugui::scaled(70));
         if (ImGui::BeginCombo("Grid", std::to_string(shapeGrid).c_str())) {
             for (int grid : ShapeGrids) {
                 if (ImGui::Selectable(std::to_string(grid).c_str(), grid == shapeGrid)) {
@@ -398,47 +379,47 @@ namespace dx::editor {
             }
             ImGui::EndCombo();
         }
-        ImGui::SetNextItemWidth(260);
+        ImGui::SetNextItemWidth(debugui::scaled(260));
         ImGui::InputText("##shapeFile", shapeFile.data(), shapeFile.size());
         ImGui::SameLine();
         if (ImGui::Button("Open") && shapeFile[0]) {
-            command(std::string("shape load ") + shapeFile.data());
+            command("shape load " + quoteArg(shapeFile.data()));
         }
         ImGui::SameLine();
         if (ImGui::Button("Save") && shapeFile[0]) {
-            command(std::string("shape save ") + shapeFile.data());
+            command("shape save " + quoteArg(shapeFile.data()));
         }
         if (ImGui::Button("Sheet")) {
             command("shape sheet");
         }
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(60);
+        ImGui::SetNextItemWidth(debugui::scaled(60));
         ImGui::InputInt("##extrudeDepth", &shapeDepth, 0);
         ImGui::SameLine();
         if (ImGui::Button("Extrude")) {
             command("shape extrude " + std::to_string(shapeDepth));
         }
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(60);
+        ImGui::SetNextItemWidth(debugui::scaled(60));
         ImGui::InputInt("##pointDepth", &shapePointDepth, 0);
         ImGui::SameLine();
         if (ImGui::Button("Extrude to Point")) {
             command("shape extrudepoint " + std::to_string(shapePointDepth));
         }
-        ImGui::SetNextItemWidth(60);
+        ImGui::SetNextItemWidth(debugui::scaled(60));
         ImGui::InputInt("Depth##bevel", &shapeBevelDepth, 0);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(60);
+        ImGui::SetNextItemWidth(debugui::scaled(60));
         ImGui::InputInt("Cap##bevel", &shapeBevelCap, 0);
         ImGui::SameLine();
         if (ImGui::Button("Extrude to Bevel")) {
             command("shape bevel " + std::to_string(shapeBevelDepth) + " " + std::to_string(shapeBevelCap));
         }
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(50);
+        ImGui::SetNextItemWidth(debugui::scaled(50));
         ImGui::InputInt("Per 360##revolve", &shapeRevolveTotal, 0);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(50);
+        ImGui::SetNextItemWidth(debugui::scaled(50));
         ImGui::InputInt("Sides##revolve", &shapeRevolveSides, 0);
         ImGui::SameLine();
         if (ImGui::Button("Revolve")) {
@@ -599,30 +580,30 @@ namespace dx::editor {
             return;
         }
         dx::brushbuilder::resizeFloor(floorGrid);
-        ImGui::SetNextWindowSize(ImVec2(560, 440), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(760, 90), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(560), debugui::scaled(440)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(760), debugui::scaled(90)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Floor Lofter", &showFloorLofter)) {
             ImGui::End();
             return;
         }
-        ImGui::SetNextItemWidth(80);
+        ImGui::SetNextItemWidth(debugui::scaled(80));
         ImGui::InputInt("Grid X", &floorNewSize[0]);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(80);
+        ImGui::SetNextItemWidth(debugui::scaled(80));
         ImGui::InputInt("Grid Y", &floorNewSize[1]);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(80);
+        ImGui::SetNextItemWidth(debugui::scaled(80));
         ImGui::InputInt("Cell Size", &floorNewSize[2], 0);
         ImGui::SameLine();
         if (ImGui::Button("New")) {
             command("floor new " + std::to_string(floorNewSize[0]) + " " + std::to_string(floorNewSize[1]) + " " + std::to_string(floorNewSize[2]));
         }
-        ImGui::SetNextItemWidth(80);
+        ImGui::SetNextItemWidth(debugui::scaled(80));
         ImGui::InputDouble("Render Scale", &floorGrid.renderScale);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(80);
+        ImGui::SetNextItemWidth(debugui::scaled(80));
         ImGui::InputDouble("Base Depth", &floorGrid.baseDepth);
-        ImGui::SetNextItemWidth(200);
+        ImGui::SetNextItemWidth(debugui::scaled(200));
         ImGui::SliderInt("Level", &floorRow, 0, floorGrid.sizeY);
         floorRow = std::clamp(floorRow, 0, floorGrid.sizeY);
         if (floorRow < floorGrid.sizeY) {
@@ -637,11 +618,11 @@ namespace dx::editor {
                 ImGui::PopID();
             }
         }
-        ImGui::SetNextItemWidth(260);
+        ImGui::SetNextItemWidth(debugui::scaled(260));
         ImGui::InputText("##floorImage", floorImage.data(), floorImage.size());
         ImGui::SameLine();
         if (ImGui::Button("Get Height Map") && floorImage[0]) {
-            command(std::string("floor heightmap ") + floorImage.data() + " 16");
+            command("floor heightmap " + quoteArg(floorImage.data()) + " 16");
         }
         ImGui::SameLine();
         if (ImGui::Button("Build")) {
@@ -701,19 +682,19 @@ namespace dx::editor {
         if (!showHeightMap) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(380, 180), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(340, 640), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(380), debugui::scaled(180)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(340), debugui::scaled(640)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Height Map", &showHeightMap)) {
             ImGui::End();
             return;
         }
-        ImGui::TextWrapped("Builds a terrain brush from a greyscale BMP or PCX image: one vertex per pixel.");
+        ImGui::TextWrapped("Builds a terrain brush from a grayscale BMP or PCX image: one vertex per pixel.");
         ImGui::InputText("Image", heightMapFile.data(), heightMapFile.size());
         ImGui::InputDouble("Step Size", &heightMapCell);
         ImGui::InputDouble("Height Scale", &heightMapScale);
         ImGui::InputDouble("Base Depth", &heightMapBase);
         if (ImGui::Button("Build") && heightMapFile[0]) {
-            command(std::string("heightmap ") + heightMapFile.data() + " " + std::to_string(heightMapCell) + " " + std::to_string(heightMapScale) + " " + std::to_string(heightMapBase));
+            command("heightmap " + quoteArg(heightMapFile.data()) + " " + std::to_string(heightMapCell) + " " + std::to_string(heightMapScale) + " " + std::to_string(heightMapBase));
         }
         ImGui::End();
     }
@@ -723,8 +704,8 @@ namespace dx::editor {
         if (!showAddSpecial) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(340, 300), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(760, 560), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(debugui::scaled(340), debugui::scaled(300)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(debugui::scaled(760), debugui::scaled(560)), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Add Special Brush", &showAddSpecial)) {
             ImGui::End();
             return;

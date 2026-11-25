@@ -1,11 +1,13 @@
 #include "extension/windows.h"
 
 #include "core/objects.h"
-#include "engine/package.h"
+#include "core/random.h"
+#include "core/package.h"
+#include "core/text.h"
 #include "engine/props_consys.h"
 #include "engine/props_deusex.h"
 #include "engine/props_engine.h"
-#include "engine/reader.h"
+#include "core/reader.h"
 #include "engine/resources.h"
 #include "engine/world.h"
 #include "extension/consys.h"
@@ -20,6 +22,13 @@
 namespace dx::extension {
     class UTextParser : public UObject {
     public:
+        // The ExtString being read, which may come from a package that is later released.
+        void addReferences(ReferenceVisitor& references) override
+        {
+            UObject::addReferences(references);
+            references(textObject);
+        }
+
         UObject* textObject = nullptr;
     };
 
@@ -41,15 +50,6 @@ namespace dx::extension {
                 }
             }
             return true;
-        }
-
-        std::string lowerText(const std::string& text)
-        {
-            std::string result = text;
-            for (char& c : result) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
-            return result;
         }
 
         bool readU32(const std::vector<uint8_t>& bytes, size_t at, uint32_t& value)
@@ -96,7 +96,8 @@ namespace dx::extension {
                 uint32_t dataSize = 0;
                 readU32(bytes, 0x1c, byteRate);
                 readU32(bytes, 0x28, dataSize);
-                return byteRate == 0 ? 0.0f : static_cast<float>(static_cast<double>(dataSize) / static_cast<int32_t>(byteRate));
+                // DConversation::GetSoundLength divides in floats.
+                return byteRate == 0 ? 0.0f : static_cast<float>(dataSize) / static_cast<float>(static_cast<int32_t>(byteRate));
             }
             if ((header & 0xff) != 0xff || (header & 0xe000) != 0xe000) {
                 return 0.0f;
@@ -118,7 +119,7 @@ namespace dx::extension {
                 }
             }
             int32_t bitsPerSecond = bitrates[(header >> 20) & 0xf][column] * 1000;
-            return static_cast<float>(static_cast<double>(static_cast<int32_t>(bytes.size() * 8)) / bitsPerSecond);
+            return static_cast<float>(static_cast<int32_t>(bytes.size() * 8)) / static_cast<float>(bitsPerSecond);
         }
 
         void bindEvent(UObject* event, const std::unordered_map<std::string, UObject*>& actors, bool clear)
@@ -127,7 +128,7 @@ namespace dx::extension {
                 if (clear) {
                     return nullptr;
                 }
-                auto it = actors.find(lowerText(name));
+                auto it = actors.find(lowered(name));
                 return it == actors.end() ? nullptr : it->second;
             };
             switch (conevent::eventType(event)) {
@@ -160,7 +161,7 @@ namespace dx::extension {
             }
             const std::string& bind = actor::BindName(actor);
             if (!bind.empty()) {
-                actors[lowerText(bind)] = actor;
+                actors[lowered(bind)] = actor;
             }
         }
 
@@ -173,8 +174,8 @@ namespace dx::extension {
                 return;
             }
             std::unordered_map<std::string, UObject*> actors;
-            if (World::current) {
-                for (UObject* actor : World::current->actors) {
+            if (World::hasActive()) {
+                for (UObject* actor : World::active().actors) {
                     addActor(actors, actor);
                 }
             }
@@ -364,16 +365,16 @@ namespace dx::extension {
                 vm::ret<std::string>(result, std::string());
                 return;
             }
-            static std::mt19937 random(12345u);
+            std::mt19937& generator = random::engine(random::Stream::ConSys);
             int32_t count = static_cast<int32_t>(event->labels.size());
             int32_t& cycle = coneventrandomlabel::cycleIndex(event);
             int32_t index = 0;
             if (!coneventrandomlabel::bCycleEvents(event)) {
-                index = static_cast<int32_t>(random() % static_cast<uint32_t>(count));
+                index = static_cast<int32_t>(generator() % static_cast<uint32_t>(count));
             } else if (coneventrandomlabel::bLabelsCycled(event) && coneventrandomlabel::bCycleOnce(event)) {
                 index = count - 1;
             } else if (coneventrandomlabel::bLabelsCycled(event) && coneventrandomlabel::bCycleRandom(event)) {
-                index = static_cast<int32_t>(random() % static_cast<uint32_t>(count));
+                index = static_cast<int32_t>(generator() % static_cast<uint32_t>(count));
             } else {
                 index = cycle % count;
                 cycle++;
@@ -785,6 +786,11 @@ namespace dx::extension {
         objects::registerFactory(Name("ConAudioList"), [] { return new UConAudioList(); });
         objects::registerFactory(Name("ConEventRandomLabel"), [] { return new UConEventRandomLabel(); });
         objects::registerFactory(Name("DeusExTextParser"), [] { return new UTextParser(); });
+    }
+
+    void registerConSysReferences()
+    {
+        gc::reportsReferences<UConAudioList, UConEventRandomLabel, UTextParser>();
     }
 
     void registerConSysNatives()

@@ -1,19 +1,19 @@
 #include "core/config.h"
+#include "core/log.h"
 #include "core/objects.h"
+#include "core/random.h"
 #include "core/vm.h"
 #include "deusex/deusex.h"
+#include "deusex/startup.h"
+#include "core/gc.h"
 #include "engine/actor.h"
-#include "engine/latent.h"
-#include "engine/net.h"
 #include "engine/props_consys.h"
 #include "engine/props_deusex.h"
 #include "engine/savegame.h"
 #include "engine/world.h"
-#include "extension/windows.h"
 
 #include <algorithm>
 #include <climits>
-#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -39,7 +39,7 @@ namespace dx {
         {
             UClass* cls = objects::findClass(path);
             if (!cls) {
-                std::fprintf(stderr, "missing class %s\n", path);
+                log::error("Warning", "missing class {}", path);
                 return nullptr;
             }
             return objects::newObject(cls, outer ? outer : objects::packageObject(Name("Transient")), Name(), 0);
@@ -70,46 +70,65 @@ namespace dx {
             return address ? *reinterpret_cast<std::string*>(address) : std::string();
         }
 
+        int32_t* ownerRefCount(UObject* conversation)
+        {
+            return reinterpret_cast<int32_t*>(field(conversation, "ownerRefCount"));
+        }
+
+        // ConBindEvents and its copies and DConversationList::BindConversations
+        // with PurgeBoundConversations first.
         void bindConversations(UObject* self)
         {
+            uint8_t* list = field(self, "ConListItems");
+            if (!list) {
+                return;
+            }
+            UObject*& head = *reinterpret_cast<UObject**>(list);
+            for (UObject* entry = head; entry; entry = objectField(entry, "Next")) {
+                if (UObject* conversation = objectField(entry, "con")) {
+                    if (int32_t* count = ownerRefCount(conversation)) {
+                        (*count)--;
+                    }
+                }
+            }
+            head = nullptr;
+            if (deusex::skipTriggers) {
+                return;
+            }
+
             UObject* mission = state().mission;
             UClass* listItemClass = objects::findClass("ConSys.ConListItem");
-            UObject* head = nullptr;
-            for (UObject* item = objectField(self, "ConListItems"); item; item = objectField(item, "Next")) {
-                UObject* bound = objectField(item, "con");
-                if (bound && conversation::ownerRefCount(bound) > 0) {
-                    conversation::ownerRefCount(bound)--;
-                }
+            if (!mission || !listItemClass) {
+                return;
             }
-            if (mission && listItemClass) {
-                std::string names[2] = { stringField(self, "BindName"), stringField(self, "BarkBindName") };
-                if (iequals(names[0], names[1])) {
-                    names[1].clear();
+            std::string bindName = stringField(self, "BindName");
+            std::string barkBindName = stringField(self, "BarkBindName");
+            for (UObject* item = objectField(mission, "conversations"); item; item = objectField(item, "Next")) {
+                UObject* conversation = objectField(item, "ConObject");
+                if (!conversation) {
+                    continue;
                 }
-                for (const std::string& bindName : names) {
-                    if (bindName.empty()) {
-                        continue;
-                    }
-                    for (UObject* item = objectField(mission, "conversations"); item; item = objectField(item, "Next")) {
-                        UObject* conversation = objectField(item, "ConObject");
-                        if (!conversation) {
-                            continue;
-                        }
-                        objects::ensureLoaded(conversation);
-                        if (!iequals(stringField(conversation, "conOwnerName"), bindName)) {
-                            continue;
-                        }
-                        conversation::ownerRefCount(conversation)++;
-                        UObject* entry = objects::newObject(listItemClass, objects::packageObject(Name("Transient")), Name(), RF_Transient);
-                        *reinterpret_cast<UObject**>(field(entry, "con")) = conversation;
-                        *reinterpret_cast<UObject**>(field(entry, "Next")) = head;
-                        head = entry;
-                    }
+                objects::ensureLoaded(conversation);
+                uint8_t* conName = field(conversation, "conName");
+                bool isBark = conName && reinterpret_cast<Name*>(conName)->str().find("_Bark") != std::string::npos;
+                const std::string owner = stringField(conversation, "conOwnerName");
+                bool bind = false;
+                if (iequals(barkBindName, owner) && isBark) {
+                    bind = true;
+                } else if (iequals(bindName, owner)) {
+                    // With a BarkBindName, barks bind only through it.
+                    bind = barkBindName.empty() || !isBark;
                 }
-            }
-            uint8_t* list = field(self, "ConListItems");
-            if (list) {
-                *reinterpret_cast<UObject**>(list) = head;
+                if (!bind) {
+                    continue;
+                }
+                if (int32_t* count = ownerRefCount(conversation)) {
+                    (*count)++;
+                }
+                UObject* entry = objects::newObject(listItemClass, objects::packageObject(Name("Transient")), Name(), RF_Transient);
+                *reinterpret_cast<UObject**>(field(entry, "con")) = conversation;
+                *reinterpret_cast<UObject**>(field(entry, "Next")) = head;
+                head = entry;
             }
         }
 
@@ -121,10 +140,11 @@ namespace dx {
 
         uint8_t allianceType(UObject* self, Name alliance)
         {
+            // AScriptedPawn::GetAllianceType.
             uint8_t result = 1;
             static const Name nameAlliancesEx("AlliancesEx");
             UProperty* property = self->cls->findProperty(nameAlliancesEx);
-            if (property && property->structType) {
+            if (alliance != Name() && property && property->structType) {
                 UStruct* layout = property->structType;
                 static const Name nameAllianceName("AllianceName");
                 UProperty* nameProperty = layout->findProperty(nameAllianceName);
@@ -192,13 +212,10 @@ namespace dx {
             bool checkAlliance = vm::getBoolOpt(stack, true);
             vm::finish(stack);
             bool valid = enemy && enemy != self && !enemy->destroyed && isPawn(enemy) && pawn::Health(enemy) > 0 && !actor::bDeleteMe(enemy);
+            // AScriptedPawn::IsValidEnemy checks bDetectable but not bIgnore.
             if (valid) {
                 uint8_t* detectable = field(enemy, "bDetectable");
                 if (detectable && !*reinterpret_cast<uint32_t*>(detectable)) {
-                    valid = false;
-                }
-                uint8_t* ignore = field(enemy, "bIgnore");
-                if (ignore && *reinterpret_cast<uint32_t*>(ignore)) {
                     valid = false;
                 }
             }
@@ -307,8 +324,8 @@ namespace dx {
             int32_t index = vm::get<int32_t>(stack);
             std::string description = vm::getOpt<std::string>(stack, std::string());
             vm::finish(stack);
-            if (World::current) {
-                savegame::saveGame(*World::current, index, description);
+            if (World::hasActive()) {
+                savegame::saveGame(World::active(), index, description);
             }
         }
 
@@ -513,8 +530,7 @@ namespace dx {
 
         float particleRandom()
         {
-            static std::mt19937 engine(4242);
-            return std::uniform_real_distribution<float>(0.0f, 1.0f)(engine);
+            return std::uniform_real_distribution<float>(0.0f, 1.0f)(random::engine(random::Stream::Particles));
         }
 
         struct ElementLayout {
@@ -535,7 +551,18 @@ namespace dx {
 
         const ElementLayout& elementLayout(UObject* object, const char* arrayName)
         {
+            // Keyed on the class without keeping it: a class that goes takes its layouts along,
+            // as does one whose array property goes.
             static std::unordered_map<UClass*, std::unordered_map<std::string, ElementLayout>> cache;
+            static gc::ReleaseHook released([](const gc::ReleasedSet& objects) {
+                std::erase_if(cache, [&](auto& entry) {
+                    if (objects.count(entry.first)) {
+                        return true;
+                    }
+                    std::erase_if(entry.second, [&](const auto& layout) { return objects.count(layout.second.array) != 0; });
+                    return entry.second.empty();
+                });
+            });
             ElementLayout& layout = cache[object->cls][arrayName];
             if (!layout.array) {
                 layout.array = object->cls->findProperty(Name(arrayName));
@@ -561,8 +588,8 @@ namespace dx {
             vm::finish(stack);
             const ElementLayout& particles = elementLayout(self, "Particles");
             bool noneActive = true;
-            float ownerLifeSpan = particleiterator::OwnerLifeSpan(self);
-            float ownerDrawScale = particleiterator::OwnerDrawScale(self);
+            float ownerLifeSpan = propOr(particleiterator::OwnerLifeSpan(self), 0.0f);
+            float ownerDrawScale = propOr(particleiterator::OwnerDrawScale(self), 0.0f);
             for (int32_t i = 0; i < particles.array->arrayDim; i++) {
                 if (!particles.at<uint32_t>(self, i, "bActive")) {
                     continue;
@@ -583,18 +610,18 @@ namespace dx {
                 Vector& velocity = particles.at<Vector>(self, i, "Velocity");
                 velocity.x = (initVel.x + 2.0f) - particleRandom() * 5.0f;
                 velocity.y = (initVel.y + 2.0f) - particleRandom() * 5.0f;
-                if (particleiterator::bOwnerUsesGravity(self)) {
-                    velocity.z = velocity.z + deltaTime * particleiterator::OwnerZoneGravity(self) * 0.2f;
+                if (propOr(particleiterator::bOwnerUsesGravity(self), 0)) {
+                    velocity.z = velocity.z + deltaTime * propOr(particleiterator::OwnerZoneGravity(self), 0.0f) * 0.2f;
                 } else {
-                    velocity.z = initVel.z + (particleRandom() * 0.2f + 0.9f) * ((ownerLifeSpan - lifeSpan) * particleiterator::OwnerRiseRate(self));
+                    velocity.z = initVel.z + (particleRandom() * 0.2f + 0.9f) * ((ownerLifeSpan - lifeSpan) * propOr(particleiterator::OwnerRiseRate(self), 0.0f));
                 }
                 float& drawScale = particles.at<float>(self, i, "DrawScale");
-                if (particleiterator::bOwnerScales(self)) {
+                if (propOr(particleiterator::bOwnerScales(self), 0)) {
                     drawScale = std::clamp((ownerLifeSpan - lifeSpan + 1.0f) * ownerDrawScale, 0.01f, 3.0f);
                 } else {
                     drawScale = ownerDrawScale;
                 }
-                particles.at<float>(self, i, "ScaleGlow") = particleiterator::bOwnerFades(self) ? lifeSpan / ownerLifeSpan : 1.0f;
+                particles.at<float>(self, i, "ScaleGlow") = propOr(particleiterator::bOwnerFades(self), 0) ? lifeSpan / ownerLifeSpan : 1.0f;
                 Vector& location = particles.at<Vector>(self, i, "Location");
                 location = location + velocity * deltaTime;
             }
@@ -638,14 +665,38 @@ namespace dx {
             }
             int32_t segments = beams.at<int32_t>(iterator, selected, "numSegments");
             float t = std::clamp(1.0f - static_cast<float>(end - index) / static_cast<float>(segments), 0.0f, 1.0f);
+            // ULaserIterator::CurrentItem: the point a fraction t along the beam.
             Rotator rotation = beams.at<Rotator>(iterator, selected, "Rotation");
-            Vector point = beams.at<Vector>(iterator, selected, "Location") + rotationVector(rotation) * (t * beams.at<float>(iterator, selected, "Length"));
+            const Vector& start = beams.at<Vector>(iterator, selected, "Location");
+            Vector tip = start + rotationVector(rotation) * beams.at<float>(iterator, selected, "Length");
+            Vector point = (tip - start) * t + start;
             Vector& prevLoc = *reinterpret_cast<Vector*>(field(iterator, "prevLoc"));
             Vector& prevRand = *reinterpret_cast<Vector*>(field(iterator, "prevRand"));
+            // The original draws this item's random numbers afresh every frame: the bends of a
+            // random beam, and which item the beam's extra last item repeats. Steady timing
+            // draws the same ones until the effect clock steps (light_effects.h), from a
+            // generator seeded by the beam, the step and the item.
+            bool steady = steadyTiming();
+            uint64_t itemState = 0;
+            if (steady) {
+                itemState = (static_cast<uint64_t>(reinterpret_cast<uintptr_t>(iterator)) * 0x9E3779B97F4A7C15ull)
+                    ^ ((static_cast<uint64_t>(world.effectSteps) << 32) | static_cast<uint32_t>(index));
+            }
+            auto itemRandom = [&]() {
+                if (!steady) {
+                    return particleRandom();
+                }
+                // splitmix64
+                uint64_t z = (itemState += 0x9E3779B97F4A7C15ull);
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+                z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+                z ^= z >> 31;
+                return static_cast<float>(z >> 40) * (1.0f / 16777216.0f);
+            };
             if (*reinterpret_cast<uint32_t*>(field(iterator, "bRandomBeam"))) {
                 Vector v;
                 do {
-                    v = { 2.0f * particleRandom() - 1.0f, 2.0f * particleRandom() - 1.0f, 2.0f * particleRandom() - 1.0f };
+                    v = { 2.0f * itemRandom() - 1.0f, 2.0f * itemRandom() - 1.0f, 2.0f * itemRandom() - 1.0f };
                 } while (v.sizeSquared() > 1.0f);
                 Vector n = v / v.size();
                 point = point + n + prevRand;
@@ -660,7 +711,7 @@ namespace dx {
             Vector& savedLoc = *reinterpret_cast<Vector*>(field(iterator, "savedLoc"));
             Rotator& savedRot = *reinterpret_cast<Rotator*>(field(iterator, "savedRot"));
             int32_t& nextItem = *reinterpret_cast<int32_t*>(field(iterator, "nextItem"));
-            if (savedLoc == actor::Location(iterator->outer) && static_cast<float>(nextItem) / static_cast<float>(maxItems) > particleRandom()) {
+            if (savedLoc == actor::Location(iterator->outer) && static_cast<float>(nextItem) / static_cast<float>(maxItems) > itemRandom()) {
                 savedLoc = point;
                 savedRot = rotation;
             }
@@ -698,7 +749,10 @@ namespace dx {
                     continue;
                 }
                 objects::ensureLoaded(conversation);
-                conversation::ownerRefCount(conversation) = 0;
+                // The original loads the conversations afresh with each map, so no owners are counted yet.
+                if (int32_t* count = ownerRefCount(conversation)) {
+                    *count = 0;
+                }
                 uint8_t* eventList = field(conversation, "eventList");
                 if (!eventList) {
                     continue;
@@ -738,210 +792,6 @@ namespace dx {
                         *reinterpret_cast<UObject**>(checkObject) = cls;
                     }
                 }
-            }
-        }
-
-        void applyMatchSpeed(World& world)
-        {
-            static std::unordered_map<UClass*, std::pair<float, float>> baseSpeeds;
-            float speed = 1.0f;
-            std::string option = world.urlOption("Speed");
-            if (world.netMode != NM_Standalone && !option.empty()) {
-                speed = std::clamp(static_cast<float>(std::atof(option.c_str())) / 100.0f, 0.5f, 2.0f);
-            }
-            UClass* human = objects::findClass("DeusEx.Human");
-            for (UObject* object : objects::all()) {
-                UClass* cls = cast<UClass>(object);
-                if (!cls || !cls->defaultObject || !cls->isChildOf(human)) {
-                    continue;
-                }
-                float* ground = reinterpret_cast<float*>(cls->defaultObject->propertyAddress(Name("mpGroundSpeed")));
-                float* water = reinterpret_cast<float*>(cls->defaultObject->propertyAddress(Name("mpWaterSpeed")));
-                const std::pair<float, float>& base = baseSpeeds.try_emplace(cls, *ground, *water).first->second;
-                *ground = base.first * speed;
-                *water = base.second * speed;
-            }
-        }
-
-        bool callBool(vm::Call& call)
-        {
-            call.run();
-            return call.returnValue() && *reinterpret_cast<uint32_t*>(call.returnValue()) != 0;
-        }
-
-        void nativeIncapacitatedTakeDamage(UObject* self, Frame& stack, void*)
-        {
-            int32_t damage = vm::get<int32_t>(stack);
-            UObject* instigatedBy = vm::get<UObject*>(stack);
-            Vector hitLocation = vm::get<Vector>(stack);
-            Vector momentum = vm::get<Vector>(stack);
-            Name damageType = vm::get<Name>(stack);
-            vm::finish(stack);
-            static const Name nameTakeDamageBase("TakeDamageBase");
-            vm::Call(self, nameTakeDamageBase).i(damage).obj(instigatedBy).v(hitLocation).v(momentum).n(damageType).b(true).run();
-        }
-
-        void nativeIncapacitatedReactToInjury(UObject* self, Frame& stack, void*)
-        {
-            UObject* instigatedBy = vm::get<UObject*>(stack);
-            Name damageType = vm::get<Name>(stack);
-            uint8_t hitPos = vm::get<uint8_t>(stack);
-            vm::finish(stack);
-            static const Name nameTearGas("TearGas");
-            static const Name nameHalonGas("HalonGas");
-            static const Name nameStunned("Stunned");
-            if (damageType == nameTearGas || damageType == nameHalonGas || damageType == nameStunned || pawn::Health(self) <= 0) {
-                return;
-            }
-            if (instigatedBy && (scriptedpawn::bLookingForInjury(self) || scriptedpawn::bLookingForIndirectInjury(self))) {
-                static const Name nameShouldReact("ShouldReactToInjuryType");
-                static const Name nameIncreaseAgitation("IncreaseAgitation");
-                static const Name nameIncreaseFear("IncreaseFear");
-                static const Name nameSetEnemy("SetEnemy");
-                static const Name nameSetDistressTimer("SetDistressTimer");
-                static const Name nameSetNextState("SetNextState");
-                static const Name nameIsFearful("IsFearful");
-                static const Name nameHandlingEnemy("HandlingEnemy");
-                static const Name nameFleeing("Fleeing");
-                vm::Call hate(self, nameShouldReact);
-                hate.n(damageType).b(scriptedpawn::bHateInjury(self) != 0).b(scriptedpawn::bHateIndirectInjury(self) != 0);
-                bool hateThisInjury = callBool(hate);
-                vm::Call fear(self, nameShouldReact);
-                fear.n(damageType).b(scriptedpawn::bFearInjury(self) != 0).b(scriptedpawn::bFearIndirectInjury(self) != 0);
-                bool fearThisInjury = callBool(fear);
-                if (hateThisInjury) {
-                    vm::Call(self, nameIncreaseAgitation).obj(instigatedBy).run();
-                }
-                if (fearThisInjury) {
-                    vm::Call(self, nameIncreaseFear).obj(instigatedBy).f(2.0f).run();
-                }
-                vm::Call enemy(self, nameSetEnemy);
-                enemy.obj(instigatedBy);
-                if (callBool(enemy)) {
-                    vm::Call(self, nameSetDistressTimer).run();
-                    vm::Call(self, nameSetNextState).n(nameHandlingEnemy).run();
-                } else {
-                    vm::Call fearful(self, nameIsFearful);
-                    if (fearThisInjury && callBool(fearful)) {
-                        vm::Call(self, nameSetDistressTimer).run();
-                        vm::Call(self, nameSetEnemy).obj(instigatedBy).skip().b(true).run();
-                        vm::Call(self, nameSetNextState).n(nameFleeing).run();
-                    }
-                }
-            }
-            if (hitPos != 0) {
-                static const Name namePlayTakingHit("PlayTakingHit");
-                vm::Call(self, namePlayTakingHit).byte(hitPos).run();
-                scriptedpawn::TakeHitTimer(self) = 2.0f;
-            }
-        }
-
-        bool vanillaFixes = false;
-
-        void overrideStateFunction(UClass* cls, const char* stateName, const char* functionName, NativeFunction native)
-        {
-            UState* state = cls->findState(Name(stateName));
-            UFunction* function = state ? state->findStateFunction(Name(functionName)) : nullptr;
-            if (function) {
-                function->scriptOverride = native;
-            }
-        }
-
-        UFunction* hudConfigurationChanged = nullptr;
-
-        void nativeHudConfigurationChanged(UObject* self, Frame& stack, void*)
-        {
-            vm::finish(stack);
-            NativeFunction native = hudConfigurationChanged->scriptOverride;
-            hudConfigurationChanged->scriptOverride = nullptr;
-            vm::Call(self, hudConfigurationChanged->name).run();
-            hudConfigurationChanged->scriptOverride = native;
-            extension::UWindow* hud = cast<extension::UWindow>(self);
-            uint8_t* crossAddress = self->propertyAddress(Name("cross"));
-            extension::UWindow* cross = crossAddress ? cast<extension::UWindow>(*reinterpret_cast<UObject**>(crossAddress)) : nullptr;
-            if (!hud || !cross) {
-                return;
-            }
-            float centerX = std::floor(hud->width() * 0.5f) - 1.0f;
-            float centerY = std::floor(hud->height() * 0.5f) - 1.0f;
-            float crossX = centerX - std::floor((cross->width() - 1.0f) * 0.5f);
-            float crossY = centerY - std::floor((cross->height() - 1.0f) * 0.5f);
-            cross->configureChild(crossX, crossY, cross->width(), cross->height());
-        }
-
-        void alignCrosshair()
-        {
-            UClass* hudClass = objects::findClass("DeusEx.DeusExHUD");
-            UFunction* function = hudClass ? hudClass->findFunction(Name("ConfigurationChanged")) : nullptr;
-            if (!function || function->outer != hudClass) {
-                return;
-            }
-            hudConfigurationChanged = function;
-            function->scriptOverride = nativeHudConfigurationChanged;
-        }
-
-        UFunction* scopeDrawWindow = nullptr;
-
-        void nativeScopeDrawWindow(UObject* self, Frame& stack, void*)
-        {
-            UObject* gcObject = vm::get<UObject*>(stack);
-            vm::finish(stack);
-            extension::UWindow* view = cast<extension::UWindow>(self);
-            extension::UGC* gc = cast<extension::UGC>(gcObject);
-            if (!view || !gc) {
-                return;
-            }
-            float width = view->width();
-            float height = view->height();
-            float scale = std::max(std::min(width / 640.0f, height / 480.0f), 1.0f);
-            float bleedLeft = gc->bleedLeft;
-            float bleedRight = gc->bleedRight;
-            float bleedEdge = gc->bleedEdge;
-            view->width() = width / scale;
-            view->height() = height / scale;
-            gc->drawScale = scale;
-            gc->bleedLeft = bleedLeft / scale;
-            gc->bleedRight = bleedRight / scale;
-            gc->bleedEdge = std::floor(bleedEdge / scale);
-            NativeFunction native = scopeDrawWindow->scriptOverride;
-            scopeDrawWindow->scriptOverride = nullptr;
-            vm::Call call(self, scopeDrawWindow->name);
-            call.obj(gcObject);
-            call.run();
-            scopeDrawWindow->scriptOverride = native;
-            gc->drawScale = 1;
-            gc->bleedLeft = bleedLeft;
-            gc->bleedRight = bleedRight;
-            gc->bleedEdge = bleedEdge;
-            view->width() = width;
-            view->height() = height;
-        }
-
-        void scaleScopeView()
-        {
-            UClass* scopeClass = objects::findClass("DeusEx.DeusExScopeView");
-            UFunction* function = scopeClass ? scopeClass->findFunction(Name("DrawWindow")) : nullptr;
-            if (!function || function->outer != scopeClass) {
-                return;
-            }
-            scopeDrawWindow = function;
-            function->scriptOverride = nativeScopeDrawWindow;
-        }
-
-        void resumeIncapacitatedAnim(UObject* pawn)
-        {
-            if (!vanillaFixes || !pawn->stateFrame || pawn->stateFrame->latentAction != latent::Sleep || !actor::bAnimFinished(pawn) || actor::bAnimLoop(pawn)) {
-                return;
-            }
-            static const Name nameStunned("Stunned");
-            static const Name nameRubbingEyes("RubbingEyes");
-            static const Name namePlayStunned("PlayStunned");
-            static const Name namePlayRubbingEyes("PlayRubbingEyes");
-            Name state = vm::stateName(pawn);
-            if (state == nameStunned) {
-                vm::Call(pawn, namePlayStunned).run();
-            } else if (state == nameRubbingEyes) {
-                vm::Call(pawn, namePlayRubbingEyes).run();
             }
         }
     }
@@ -986,40 +836,67 @@ namespace dx {
             return true;
         }
 
+        bool onEffectClock(UObject* actor)
+        {
+            static const Name nameElectricityEmitter("ElectricityEmitter");
+            static const Name nameLaserTrigger("LaserTrigger");
+            static const Name nameBeamTrigger("BeamTrigger");
+            if (actor->isA(nameElectricityEmitter)) {
+                return true;
+            }
+            if (actor->isA(nameLaserTrigger) || actor->isA(nameBeamTrigger)) {
+                uint8_t* confused = field(actor, "bConfused");
+                return confused && *reinterpret_cast<uint32_t*>(confused) != 0;
+            }
+            return false;
+        }
+
         bool scriptedPawnTick(World& world, UObject* pawn, float deltaSeconds)
         {
+            // AScriptedPawn::Tick, with UpdateAgitation and
+            // UpdateFear inlined.
             float lastRendered = std::max(world.timeSeconds - actor::LastRenderTime(pawn), 0.0f);
-            if (scriptedpawn::bDisappear(pawn) && lastRendered > 5.0f) {
+            if (scriptedpawn::bDisappear(pawn) && (world.inStasis(pawn) || lastRendered > 5.0f)) {
                 world.destroy(pawn);
                 return false;
             }
             float& prePivotTime = scriptedpawn::PrePivotTime(pawn);
-            if (prePivotTime > 0 && deltaSeconds < prePivotTime) {
-                actor::PrePivot(pawn) = actor::PrePivot(pawn) + (scriptedpawn::DesiredPrePivot(pawn) - actor::PrePivot(pawn)) * deltaSeconds / prePivotTime;
-                prePivotTime -= deltaSeconds;
-            } else {
-                actor::PrePivot(pawn) = scriptedpawn::DesiredPrePivot(pawn);
-                prePivotTime = 0;
+            if (prePivotTime > 0) {
+                if (prePivotTime <= deltaSeconds) {
+                    actor::PrePivot(pawn) = scriptedpawn::DesiredPrePivot(pawn);
+                    prePivotTime = 0;
+                } else {
+                    float scale = 1.0f / prePivotTime;
+                    Vector& prePivot = actor::PrePivot(pawn);
+                    const Vector& desired = scriptedpawn::DesiredPrePivot(pawn);
+                    prePivot.x += (desired.x - prePivot.x) * deltaSeconds * scale;
+                    prePivot.y += (desired.y - prePivot.y) * deltaSeconds * scale;
+                    prePivot.z += (desired.z - prePivot.z) * deltaSeconds * scale;
+                    prePivotTime -= deltaSeconds;
+                }
             }
-            resumeIncapacitatedAnim(pawn);
             bool lowPriority = !(scriptedpawn::bTickVisibleOnly(pawn) && actor::DistanceFromPlayer(pawn) > 1200.0f);
 
+            // Timers count down only while positive, and stop at zero.
             auto decrement = [deltaSeconds](float& timer) {
-                timer = std::max(timer - deltaSeconds, 0.0f);
+                if (timer > 0) {
+                    timer -= deltaSeconds;
+                    if (timer < 0) {
+                        timer = 0;
+                    }
+                }
             };
             auto sustainDecay = [deltaSeconds](float& timer, float rate) {
-                float decay = 0;
-                if (timer > 0) {
-                    if (timer < deltaSeconds) {
-                        decay = (1.0f - timer / deltaSeconds) * deltaSeconds * rate;
-                        timer = 0;
-                    } else {
-                        timer -= deltaSeconds;
-                    }
-                } else {
-                    decay = deltaSeconds * rate;
+                if (timer <= 0) {
+                    return deltaSeconds * rate;
                 }
-                return decay;
+                if (deltaSeconds <= timer) {
+                    timer -= deltaSeconds;
+                    return 0.0f;
+                }
+                float remaining = timer;
+                timer = 0;
+                return deltaSeconds * rate * (1.0f - remaining / deltaSeconds);
             };
 
             decrement(scriptedpawn::AgitationCheckTimer(pawn));
@@ -1041,15 +918,28 @@ namespace dx {
                         bool permanent = *reinterpret_cast<uint32_t*>(entry + permanentProperty->offset) != 0;
                         if (*reinterpret_cast<Name*>(entry + nameProperty->offset) != Name() && !permanent && agitation > 0) {
                             scriptedpawn::bAlliancesChanged(pawn) = 1;
-                            agitation = std::max(agitation - agitationDecay, 0.0f);
+                            agitation -= agitationDecay;
+                            if (agitation < 0) {
+                                agitation = 0;
+                            }
                         }
                     }
                 }
             }
             float fearDecay = sustainDecay(scriptedpawn::FearTimer(pawn), scriptedpawn::FearDecayRate(pawn));
-            scriptedpawn::FearLevel(pawn) = std::max(scriptedpawn::FearLevel(pawn) - fearDecay, 0.0f);
+            float& fearLevel = scriptedpawn::FearLevel(pawn);
+            if (fearDecay > 0 && fearLevel > 0) {
+                fearLevel -= fearDecay;
+                if (fearLevel < 0) {
+                    fearLevel = 0;
+                }
+            }
 
-            decrement(scriptedpawn::AlarmTimer(pawn));
+            float& alarmTimer = scriptedpawn::AlarmTimer(pawn);
+            alarmTimer -= deltaSeconds;
+            if (alarmTimer < 0) {
+                alarmTimer = 0;
+            }
             if (pawn::Weapon(pawn)) {
                 scriptedpawn::WeaponTimer(pawn) += deltaSeconds;
             } else {
@@ -1057,10 +947,11 @@ namespace dx {
             }
             decrement(scriptedpawn::FireTimer(pawn));
             decrement(scriptedpawn::SpecialTimer(pawn));
-            if (pawn::Weapon(pawn)) {
-                scriptedpawn::ReloadTimer(pawn) -= deltaSeconds;
+            float& reloadTimer = scriptedpawn::ReloadTimer(pawn);
+            if (reloadTimer <= 0 || !pawn::Weapon(pawn)) {
+                reloadTimer = 0;
             } else {
-                scriptedpawn::ReloadTimer(pawn) = 0;
+                reloadTimer -= deltaSeconds;
             }
             decrement(scriptedpawn::AvoidWallTimer(pawn));
             decrement(scriptedpawn::AvoidBumpTimer(pawn));
@@ -1069,10 +960,12 @@ namespace dx {
             decrement(scriptedpawn::TakeHitTimer(pawn));
             decrement(scriptedpawn::CarcassCheckTimer(pawn));
             float& potentialEnemyTimer = scriptedpawn::PotentialEnemyTimer(pawn);
-            potentialEnemyTimer -= deltaSeconds;
-            if (potentialEnemyTimer <= 0) {
-                potentialEnemyTimer = 0;
-                scriptedpawn::PotentialEnemyAlliance(pawn) = Name();
+            if (potentialEnemyTimer > 0) {
+                potentialEnemyTimer -= deltaSeconds;
+                if (potentialEnemyTimer <= 0) {
+                    potentialEnemyTimer = 0;
+                    scriptedpawn::PotentialEnemyAlliance(pawn) = Name();
+                }
             }
             decrement(scriptedpawn::BeamCheckTimer(pawn));
             decrement(scriptedpawn::FutzTimer(pawn));
@@ -1113,17 +1006,19 @@ namespace dx {
             if (pawn->destroyed) {
                 return false;
             }
-            if (lowPriority && scriptedpawn::BleedRate(pawn) > 0 && scriptedpawn::bCanBleed(pawn)) {
-                float speed = std::clamp(actor::Velocity(pawn).size() / 512.0f, 0.05f, 1.0f);
-                float period = ((1.0f - std::clamp(scriptedpawn::BleedRate(pawn), 0.0f, 1.0f)) + 0.1f) / speed;
+            if (lowPriority) {
                 float& dropCounter = scriptedpawn::DropCounter(pawn);
-                dropCounter += deltaSeconds;
-                static const Name nameSpurtBlood("SpurtBlood");
-                while (dropCounter >= period && !pawn->destroyed) {
-                    vm::Call(pawn, nameSpurtBlood).run();
-                    dropCounter -= period;
+                if (scriptedpawn::BleedRate(pawn) > 0 && scriptedpawn::bCanBleed(pawn)) {
+                    float speed = std::clamp(actor::Velocity(pawn).size() / 512.0f, 0.05f, 1.0f);
+                    float period = ((1.0f - std::clamp(scriptedpawn::BleedRate(pawn), 0.0f, 1.0f)) + 0.1f) / speed;
+                    dropCounter += deltaSeconds;
+                    static const Name nameSpurtBlood("SpurtBlood");
+                    while (dropCounter >= period && !pawn->destroyed) {
+                        vm::Call(pawn, nameSpurtBlood).run();
+                        dropCounter -= period;
+                    }
+                    scriptedpawn::BleedRate(pawn) -= deltaSeconds / scriptedpawn::ClotPeriod(pawn);
                 }
-                scriptedpawn::BleedRate(pawn) -= deltaSeconds / scriptedpawn::ClotPeriod(pawn);
                 if (scriptedpawn::BleedRate(pawn) <= 0) {
                     dropCounter = 0;
                     scriptedpawn::BleedRate(pawn) = 0;
@@ -1132,27 +1027,8 @@ namespace dx {
             return !pawn->destroyed;
         }
 
-        void applyVanillaFixes()
-        {
-            std::string section = config::system().get("Engine.Engine", "GameEngine").value_or("DeusEx.DeusExGameEngine");
-            vanillaFixes = !iequals(config::system().get(section, "FixVanillaBugs").value_or("True"), "False");
-            UClass* scripted = engineClasses().scriptedPawn;
-            if (!scripted) {
-                return;
-            }
-            for (const char* stateName : { "Stunned", "RubbingEyes" }) {
-                overrideStateFunction(scripted, stateName, "TakeDamage", vanillaFixes ? nativeIncapacitatedTakeDamage : nullptr);
-                overrideStateFunction(scripted, stateName, "ReactToInjury", vanillaFixes ? nativeIncapacitatedReactToInjury : nullptr);
-            }
-        }
-
         void levelLoaded(World& world)
         {
-            applyVanillaFixes();
-            alignCrosshair();
-            scaleScopeView();
-            resetBots(world);
-            applyMatchSpeed(world);
             DeusExState& s = state();
             s.levelInfo = nullptr;
             s.mission = nullptr;
@@ -1163,17 +1039,74 @@ namespace dx {
                     break;
                 }
             }
-            std::string conversations = s.levelInfo ? deusexlevelinfo::ConversationPackage(s.levelInfo) : std::string();
+            const std::string* conversationPackage = s.levelInfo ? deusexlevelinfo::ConversationPackage(s.levelInfo) : nullptr;
+            std::string conversations = conversationPackage ? *conversationPackage : std::string();
             std::string textPackage = conversations.empty() || iequals(conversations, "DeusExConversations") ? "DeusExConText" : conversations + "Text";
             if (!s.missionList || !iequals(s.missionList->outermost()->name.str(), textPackage)) {
                 objects::loadPackage(Name(textPackage));
                 s.missionList = objects::findObject(textPackage + ".ConMissionList", nullptr);
                 objects::flushLoads();
             }
-            if (!s.missionList || !s.levelInfo) {
+            if (skipTriggers && world.levelInfo && !levelinfo::bBegunPlay(world.levelInfo)) {
+                int triggers = 0;
+                for (size_t i = 0; i < world.actors.size(); i++) {
+                    UObject* a = world.actors[i];
+                    if (a && !a->destroyed && a->isA(Name("Trigger"))) {
+                        world.destroy(a);
+                        triggers++;
+                    }
+                }
+                log::info("Init", "No triggers: destroyed {}", triggers);
+            }
+            if (skipMissionScripts && world.levelInfo && !levelinfo::bBegunPlay(world.levelInfo)) {
+                if (uint8_t* script = s.levelInfo ? s.levelInfo->propertyAddress(Name("Script")) : nullptr) {
+                    if (UObject*& cls = *reinterpret_cast<UObject**>(script)) {
+                        log::info("Init", "No mission script: not spawning {}", cls->name.str());
+                        cls = nullptr;
+                    }
+                }
+                // The cutscenes' camera paths start themselves, freeze the player and move them
+                // along the path, so they go too.
+                int cameras = 0;
+                for (size_t i = 0; i < world.actors.size(); i++) {
+                    UObject* a = world.actors[i];
+                    if (a && !a->destroyed && a->isA(Name("CameraPoint"))) {
+                        world.destroy(a);
+                        cameras++;
+                    }
+                }
+                if (cameras > 0) {
+                    log::info("Init", "No mission script: destroyed {} camera points", cameras);
+                }
+            }
+            if (!s.levelInfo) {
                 return;
             }
             int32_t missionNumber = deusexlevelinfo::missionNumber(s.levelInfo);
+            if (missionNumber < 0) {
+                return;
+            }
+            // The original loads <ConversationPackage>Text.ConList_Mission<NN>, reading
+            // DeusExConversations as DeusExCon.
+            std::string package = stringField(s.levelInfo, "ConversationPackage");
+            if (iequals(package, "DeusExConversations")) {
+                package = "DeusExCon";
+            }
+            if (!package.empty()) {
+                char listName[32];
+                std::snprintf(listName, sizeof(listName), "ConList_Mission%02d", missionNumber);
+                objects::loadPackage(Name(package + "Text"));
+                s.mission = objects::findObject(package + "Text." + listName, nullptr);
+                objects::flushLoads();
+                if (s.mission) {
+                    objects::ensureLoaded(s.mission);
+                    linkConversations();
+                    return;
+                }
+            }
+            if (!s.missionList) {
+                return;
+            }
             for (UObject* item = objectField(s.missionList, "missions"); item; item = objectField(item, "Next")) {
                 UObject* mission = objectField(item, "ConObject");
                 if (!mission) {
@@ -1194,6 +1127,27 @@ namespace dx {
     namespace engine {
         void registerDeusExNatives()
         {
+            deusex::registerConversationLayout();
+            gameHooks().levelLoaded = deusex::levelLoaded;
+            gameHooks().scriptedPawnTick = deusex::scriptedPawnTick;
+            gameHooks().onEffectClock = deusex::onEffectClock;
+            static gc::ReleaseHook released([](const gc::ReleasedSet& objects) {
+                std::erase_if(listings(), [&](const auto& entry) { return objects.count(entry.first) != 0; });
+                DeusExState& s = state();
+                if (objects.count(s.levelInfo)) {
+                    s.levelInfo = nullptr;
+                }
+                if (objects.count(s.mission)) {
+                    s.mission = nullptr;
+                }
+                if (objects.count(s.missionList)) {
+                    s.missionList = nullptr;
+                }
+            });
+            // Deus Ex defines no native classes of its own. Every object pointer its C++ state
+            // keeps is reported: the caches of textures made at run time and the fonts hold
+            // theirs (deusex/references.h), and the rest forget theirs when the object goes.
+            gc::libraryReported("deusex");
             vm::registerNative(2100, nativeConBindEvents);
             vm::registerNative(2101, nativeConBindEvents);
             vm::registerNative(2102, nativeConBindEvents);

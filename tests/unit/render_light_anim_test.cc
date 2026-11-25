@@ -1,5 +1,8 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/csg.h"
+#include "engine/light_effects.h"
 #include "engine/lightmap_builder.h"
 #include "engine/props_engine.h"
 #include "engine/resources.h"
@@ -14,7 +17,7 @@
 namespace {
     dx::UObject* makeLight(uint8_t type, uint8_t period, uint8_t phase)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* light = dx::objects::newObject(dx::objects::findClass("Engine.Light"), dx::objects::packageObject(dx::Name("LightAnimTest")), dx::Name(), 0);
         light->loaded = true;
         dx::actor::LightType(light) = type;
@@ -59,7 +62,7 @@ namespace {
 
     Room makeLitRoom(const char* packageName)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* package = dx::objects::packageObject(dx::Name(packageName));
         Room room;
         room.level = make<dx::ULevel>("Level", package);
@@ -172,6 +175,104 @@ TEST_CASE("continuous randoms move at most a sixteenth per tick while bases are 
     CHECK(largestStep <= 1.0f / 16.0f + 0.00001f);
 }
 
+TEST_CASE("flicker bases are redrawn every frame in Original timing and five times a second in Steady")
+{
+    auto basesChangedBy = [](float from, float to) {
+        dx::tickLightRandoms(from);
+        float bases[256];
+        for (int32_t i = 0; i < 256; i++) {
+            bases[i] = dx::lightRandomBase(i);
+        }
+        dx::tickLightRandoms(to);
+        int32_t changed = 0;
+        for (int32_t i = 0; i < 256; i++) {
+            changed += dx::lightRandomBase(i) != bases[i];
+        }
+        return changed;
+    };
+    dx::FrameTiming saved = dx::frameTiming;
+    dx::frameTiming = dx::FrameTiming::Original;
+    CHECK(basesChangedBy(20.01f, 20.02f) > 250);
+    dx::frameTiming = dx::FrameTiming::Steady;
+    CHECK(basesChangedBy(20.01f, 20.02f) == 0);
+    CHECK(basesChangedBy(20.02f, 20.19f) == 0);
+    CHECK(basesChangedBy(20.19f, 20.21f) > 250);
+    dx::frameTiming = saved;
+}
+
+TEST_CASE("flicker bases hold while the level is paused in Steady timing but not in Original")
+{
+    auto basesChangedBy = [](float from, float to) {
+        dx::tickLightRandoms(from, true);
+        float bases[256];
+        for (int32_t i = 0; i < 256; i++) {
+            bases[i] = dx::lightRandomBase(i);
+        }
+        dx::tickLightRandoms(to, true);
+        int32_t changed = 0;
+        for (int32_t i = 0; i < 256; i++) {
+            changed += dx::lightRandomBase(i) != bases[i];
+        }
+        return changed;
+    };
+    dx::FrameTiming saved = dx::frameTiming;
+    dx::frameTiming = dx::FrameTiming::Original;
+    CHECK(basesChangedBy(40.01f, 40.02f) > 250);
+    dx::frameTiming = dx::FrameTiming::Steady;
+    CHECK(basesChangedBy(40.05f, 41.05f) == 0);
+    // Unpaused, the next step draws again.
+    dx::tickLightRandoms(41.25f, true);
+    float held = dx::lightRandomBase(7);
+    dx::tickLightRandoms(41.45f, false);
+    CHECK(dx::lightRandomBase(7) != held);
+    dx::frameTiming = saved;
+}
+
+TEST_CASE("strobe lights hold while the level is paused in Steady timing but not in Original", "[data]")
+{
+    dx::UObject* light = makeLight(5, 0, 0);
+    dx::UObject* info = dx::objects::newObject(dx::objects::findClass("Engine.LevelInfo"), dx::objects::packageObject(dx::Name("LightAnimTest")), dx::Name(), 0);
+    info->loaded = true;
+    dx::actor::Level(light) = info;
+    auto at = [&](float seconds, bool paused) {
+        dx::levelinfo::TimeSeconds(info) = seconds;
+        dx::levelinfo::Pauser(info) = paused ? "Player" : "";
+        return dx::strobeDark(light, 0);
+    };
+    dx::FrameTiming saved = dx::frameTiming;
+    dx::frameTiming = dx::FrameTiming::Original;
+    bool first = at(50.01f, true);
+    CHECK(at(50.02f, true) != first);
+    dx::frameTiming = dx::FrameTiming::Steady;
+    CHECK_FALSE(at(50.05f, false));
+    CHECK_FALSE(at(50.25f, true));
+    CHECK_FALSE(at(50.45f, true));
+    CHECK(at(50.25f, false));
+    CHECK(at(50.65f, true));
+    CHECK(at(50.85f, true));
+    dx::actor::Level(light) = nullptr;
+    dx::frameTiming = saved;
+}
+
+TEST_CASE("strobe lights switch every call in Original timing and five times a second in Steady", "[data]")
+{
+    dx::UObject* light = makeLight(5, 0, 0);
+    dx::FrameTiming saved = dx::frameTiming;
+    dx::frameTiming = dx::FrameTiming::Original;
+    bool first = dx::strobeDark(light, 30.01f);
+    CHECK(dx::strobeDark(light, 30.02f) != first);
+    CHECK(dx::strobeDark(light, 30.03f) == first);
+    dx::frameTiming = dx::FrameTiming::Steady;
+    CHECK_FALSE(dx::strobeDark(light, 30.01f));
+    CHECK_FALSE(dx::strobeDark(light, 30.15f));
+    CHECK(dx::strobeDark(light, 30.25f));
+    CHECK(dx::strobeDark(light, 30.35f));
+    CHECK_FALSE(dx::strobeDark(light, 30.45f));
+    CHECK(brightnessRatio(light, 30.25f) == 0.0f);
+    CHECK(brightnessRatio(light, 30.45f) == Catch::Approx(1.0f));
+    dx::frameTiming = saved;
+}
+
 TEST_CASE("a pulsing static light relights its surface over time while a steady one stays baked", "[data]")
 {
     Room room = makeLitRoom("LightAnimRoomTest");
@@ -198,4 +299,30 @@ TEST_CASE("a pulsing static light relights its surface over time while a steady 
     CHECK(bright.colors[texel].x == Catch::Approx(steadyEarly.colors[texel].x * 0.99f).margin(2.0f / 127.5f));
     CHECK(dim.colors[texel].x == Catch::Approx(steadyEarly.colors[texel].x * 0.21f).margin(2.0f / 127.5f));
     CHECK(dim.colors[texel].x < bright.colors[texel].x - 0.05f);
+}
+
+TEST_CASE("a trigger light that is off when the lightmaps are made lights its surface once turned on", "[data]")
+{
+    // The training map's dark room: a saved game has its TriggerLights at brightness 0, and the
+    // light switch turns them up after the level's lightmaps are made.
+    Room room = makeLitRoom("TriggerLightOffRoomTest");
+    dx::UModel& model = *room.level->model;
+    const dx::BspSurf* floor = floorSurf(model);
+    REQUIRE(floor != nullptr);
+    REQUIRE(floor->lightMap >= 0);
+    dx::Vector ambient {};
+    size_t texel = 8 * 16 + 8;
+
+    dx::actor::bStatic(room.light) = 0;
+    dx::actor::LightBrightness(room.light) = 0;
+    dx::SurfaceLighting lighting = dx::prepareSurfaceLighting(&model, *floor, ambient);
+    REQUIRE(lighting.lights.size() == 1);
+    std::vector<uint8_t> bytes;
+    dx::evaluateSurfaceLighting(lighting, &model, *floor, 0, bytes);
+    REQUIRE(bytes.size() > texel * 3);
+    CHECK(bytes[texel * 3] == 0);
+
+    dx::actor::LightBrightness(room.light) = 64;
+    dx::evaluateSurfaceLighting(lighting, &model, *floor, 0, bytes);
+    CHECK(bytes[texel * 3] > 6);
 }

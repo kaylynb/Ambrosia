@@ -480,11 +480,8 @@ namespace dx::extension {
         return UWindow::mouseButtonReleased(pointX, pointY, button, numClicks);
     }
 
-    bool UScaleWindow::virtualKeyPressed(uint8_t key, bool repeat)
+    bool UScaleWindow::stepAlongAxis(uint8_t key)
     {
-        if (UWindow::virtualKeyPressed(key, repeat)) {
-            return true;
-        }
         bool horizontal = scalewindow::orientation(this) == 0;
         if ((horizontal && key == IK_Left) || (!horizontal && key == IK_Up)) {
             moveThumb(4);
@@ -492,6 +489,14 @@ namespace dx::extension {
         }
         if ((horizontal && key == IK_Right) || (!horizontal && key == IK_Down)) {
             moveThumb(5);
+            return true;
+        }
+        return false;
+    }
+
+    bool UScaleWindow::virtualKeyPressed(uint8_t key, bool repeat)
+    {
+        if (UWindow::virtualKeyPressed(key, repeat) || stepAlongAxis(key)) {
             return true;
         }
         if (key == IK_Home) {
@@ -1057,7 +1062,9 @@ namespace dx::extension {
             std::string text = vm::get<std::string>(stack);
             vm::finish(stack);
             UScaleWindow* scale = self(object);
-            if (!scale || position < 0) {
+            // XScaleWindow::SetEnumeration ignores
+            // positions outside 0..0x1ff.
+            if (!scale || position < 0 || position >= 0x200) {
                 return;
             }
             if (scale->enumerations.size() <= static_cast<size_t>(position)) {

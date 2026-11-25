@@ -1,4 +1,6 @@
 #include "core/objects.h"
+#include "test_paths.h"
+#include "deusex/startup.h"
 #include "engine/resources.h"
 #include "engine/world.h"
 
@@ -7,7 +9,7 @@
 namespace {
     dx::UTexture* loadTexture(const char* path)
     {
-        dx::engine::initialize(DEUSEX_GAME_DATA);
+        dx::engine::initialize(dx::test::gameData());
         dx::UObject* object = dx::objects::loadObject(path, nullptr);
         return dx::cast<dx::UTexture>(object);
     }

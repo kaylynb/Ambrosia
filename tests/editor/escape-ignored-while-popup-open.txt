@@ -1,0 +1,15 @@
+wait 4
+exec editmode vertex
+wait 1
+rclick 400 200
+wait 4
+key Escape
+wait 5
+expect status Vertex mode
+wait 1
+click 600 390
+wait 4
+key Escape
+wait 5
+expect status Object mode
+quit
