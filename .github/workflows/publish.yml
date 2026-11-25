@@ -73,14 +73,16 @@ jobs:
           github-token: ${{ github.token }}
           path: zips/symbols
           skip-decompress: true
-      - name: Name the Windows zips after their artifacts
+      # The release page lists assets by file name, so the symbols get a prefix that sorts them
+      # after both game archives.
+      - name: Name the Windows zips for the release
         shell: bash
         env:
           VERSION: ${{ steps.find.outputs.version }}
         run: |
           set -euo pipefail
           ls -lR zips
-          for pair in "windows:ambrosia-$VERSION-windows-x64.zip" "symbols:ambrosia-$VERSION-windows-x64-symbols.zip"; do
+          for pair in "windows:ambrosia-$VERSION-windows-x64.zip" "symbols:symbols-ambrosia-$VERSION-windows-x64.zip"; do
             dir="zips/${pair%%:*}"
             mapfile -t found < <(find "$dir" -type f)
             [[ ${#found[@]} -eq 1 ]] || { echo "expected one file in $dir, found ${#found[@]}" >&2; exit 1; }
@@ -96,11 +98,11 @@ jobs:
         run: |
           set -euo pipefail
           files=("assets/ambrosia-$VERSION-windows-x64.zip" "assets/ambrosia-$VERSION-linux-x64.tar.gz"
-            "assets/ambrosia-$VERSION-windows-x64-symbols.zip")
+            "assets/symbols-ambrosia-$VERSION-windows-x64.zip")
           ls -l "${files[@]}"
           assets=("${files[0]}#Ambrosia $VERSION for Windows (x64)"
             "${files[1]}#Ambrosia $VERSION for Linux (x64)"
-            "${files[2]}#Windows debug symbols (for crash reports, not needed to play)")
+            "${files[2]}#Debug symbols - Windows")
           flags=()
           if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
           gh release create "$TAG" --verify-tag --title "Ambrosia $VERSION" \

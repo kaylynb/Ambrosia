@@ -736,9 +736,10 @@ To publish a release:
    package build at the commit it points to, and downloads its three archives by their
    versioned names, failing if any digest does not match. It then publishes them without
    rebuilding, each under a label instead of its file name: "Ambrosia X.Y.Z for Windows
-   (x64)", "Ambrosia X.Y.Z for Linux (x64)", and "Windows debug symbols (for crash
-   reports, not needed to play)". Versions with a suffix are marked as prereleases. If you
-   move the tag, wait for its new build before publishing.
+   (x64)", "Ambrosia X.Y.Z for Linux (x64)", and "Debug symbols - Windows". The
+   symbols are published as `symbols-ambrosia-X.Y.Z-windows-x64.zip` so they sort after the
+   game archives on the release page. Versions with a suffix are marked as prereleases. If
+   you move the tag, wait for its new build before publishing.
 
 ## Generated files
 
