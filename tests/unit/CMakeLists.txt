@@ -61,7 +61,7 @@ endif()
 if(NOT WIN32)
     set_tests_properties(${UNIT_TESTS} PROPERTIES ENVIRONMENT "${OFFSCREEN_TEST_ENV}")
     # The tests that open a GL context (SDL_GL_CreateContext).
-    foreach(gl_test unit-scene_pass_test unit-ambient_occlusion_test unit-mesh_modulated_test unit-gc_render_test)
+    foreach(gl_test unit-scene_pass_test unit-ambient_occlusion_test unit-mesh_modulated_test unit-gc_render_test unit-dynamic_lights_test)
         if(TEST ${gl_test})
             set_tests_properties(${gl_test} PROPERTIES ENVIRONMENT "${GL_TEST_ENV}")
         endif()
