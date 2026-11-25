@@ -55,20 +55,38 @@ jobs:
           run-id: ${{ steps.find.outputs.run_id }}
           github-token: ${{ github.token }}
           path: assets
+      # download-artifact extracts a .zip by default, which would publish its contents instead of
+      # the archive. Keep each zip whole, in a folder of its own, since the saved name isn't documented.
       - name: Download the Windows archive
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ambrosia-${{ steps.find.outputs.version }}-windows-x64.zip
           run-id: ${{ steps.find.outputs.run_id }}
           github-token: ${{ github.token }}
-          path: assets
+          path: zips/windows
+          skip-decompress: true
       - name: Download the Windows symbols
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ambrosia-${{ steps.find.outputs.version }}-windows-x64-symbols.zip
           run-id: ${{ steps.find.outputs.run_id }}
           github-token: ${{ github.token }}
-          path: assets
+          path: zips/symbols
+          skip-decompress: true
+      - name: Name the Windows zips after their artifacts
+        shell: bash
+        env:
+          VERSION: ${{ steps.find.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -lR zips
+          for pair in "windows:ambrosia-$VERSION-windows-x64.zip" "symbols:ambrosia-$VERSION-windows-x64-symbols.zip"; do
+            dir="zips/${pair%%:*}"
+            mapfile -t found < <(find "$dir" -type f)
+            [[ ${#found[@]} -eq 1 ]] || { echo "expected one file in $dir, found ${#found[@]}" >&2; exit 1; }
+            unzip -tq "${found[0]}" >/dev/null || { echo "${found[0]} is not a zip archive" >&2; exit 1; }
+            mv "${found[0]}" "assets/${pair#*:}"
+          done
       # The release lists each asset by its label (file#label) instead of its file name, so the
       # symbols cannot be mistaken for the game; each still downloads under its file name.
       - name: Publish without rebuilding
