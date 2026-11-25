@@ -3,6 +3,7 @@
 #include "core/gc.h"
 #include "test_paths.h"
 #include "core/objects.h"
+#include "offscreen_gl.h"
 #include "deusex/startup.h"
 #include "engine/mesh.h"
 #include "engine/props_engine.h"
@@ -21,46 +22,6 @@
 namespace {
     constexpr int frameWidth = 320;
     constexpr int frameHeight = 240;
-
-    struct OffscreenContext {
-        SDL_Window* window = nullptr;
-        SDL_GLContext context = nullptr;
-
-        OffscreenContext()
-        {
-            SDL_SetMainReady();
-            if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-                return;
-            }
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-            SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-            window = SDL_CreateWindow("gc render", frameWidth, frameHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
-            if (!window) {
-                return;
-            }
-            context = SDL_GL_CreateContext(window);
-            if (context && !gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-                SDL_GL_DestroyContext(context);
-                context = nullptr;
-            }
-        }
-
-        ~OffscreenContext()
-        {
-            if (context) {
-                SDL_GL_DestroyContext(context);
-            }
-            if (window) {
-                SDL_DestroyWindow(window);
-            }
-            SDL_QuitSubSystem(SDL_INIT_VIDEO);
-        }
-
-        OffscreenContext(const OffscreenContext&) = delete;
-        OffscreenContext& operator=(const OffscreenContext&) = delete;
-    };
 
     // A texture of the transient package with the pixels of a loaded one, so that it can be
     // collected without touching any package.
@@ -104,8 +65,10 @@ namespace {
 
 TEST_CASE("the texture cache forgets a texture that is collected", "[data][gc]")
 {
-    OffscreenContext gl;
-    REQUIRE(gl.context != nullptr);
+    dx::test::OffscreenContext gl("gc render", frameWidth, frameHeight);
+    if (!gl.context) {
+        SKIP("no OpenGL 3.3 context");
+    }
     dx::engine::initialize(dx::test::gameData());
     dx::UTexture* pink = dx::cast<dx::UTexture>(dx::objects::loadObject("DeusExItems.Skins.PinkMaskTex", nullptr));
     REQUIRE(pink != nullptr);
@@ -135,8 +98,10 @@ TEST_CASE("the texture cache forgets a texture that is collected", "[data][gc]")
 
 TEST_CASE("the scene renderer drops what it kept for a collected actor, mesh light and texture", "[data][gc]")
 {
-    OffscreenContext gl;
-    REQUIRE(gl.context != nullptr);
+    dx::test::OffscreenContext gl("gc render", frameWidth, frameHeight);
+    if (!gl.context) {
+        SKIP("no OpenGL 3.3 context");
+    }
     dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     {

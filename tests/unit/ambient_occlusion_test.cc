@@ -1,6 +1,7 @@
 #define SDL_MAIN_HANDLED
 
 #include "core/objects.h"
+#include "offscreen_gl.h"
 #include "test_paths.h"
 #include "deusex/startup.h"
 #include "engine/props_engine.h"
@@ -19,46 +20,6 @@
 namespace {
     constexpr int frameWidth = 640;
     constexpr int frameHeight = 480;
-
-    struct OffscreenContext {
-        SDL_Window* window = nullptr;
-        SDL_GLContext context = nullptr;
-
-        OffscreenContext()
-        {
-            SDL_SetMainReady();
-            if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-                return;
-            }
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-            SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-            window = SDL_CreateWindow("ao", frameWidth, frameHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
-            if (!window) {
-                return;
-            }
-            context = SDL_GL_CreateContext(window);
-            if (context && !gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-                SDL_GL_DestroyContext(context);
-                context = nullptr;
-            }
-        }
-
-        ~OffscreenContext()
-        {
-            if (context) {
-                SDL_GL_DestroyContext(context);
-            }
-            if (window) {
-                SDL_DestroyWindow(window);
-            }
-            SDL_QuitSubSystem(SDL_INIT_VIDEO);
-        }
-
-        OffscreenContext(const OffscreenContext&) = delete;
-        OffscreenContext& operator=(const OffscreenContext&) = delete;
-    };
 
     struct Box {
         int x0 = frameWidth;
@@ -100,8 +61,10 @@ namespace {
 
 TEST_CASE("every ambient occlusion level darkens the floor around a crate and leaves open floor unchanged", "[data]")
 {
-    OffscreenContext gl;
-    REQUIRE(gl.context != nullptr);
+    dx::test::OffscreenContext gl("ao", frameWidth, frameHeight);
+    if (!gl.context) {
+        SKIP("no OpenGL 3.3 context");
+    }
     dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;
@@ -201,8 +164,10 @@ TEST_CASE("every ambient occlusion level darkens the floor around a crate and le
 
 TEST_CASE("ambient occlusion at the foot of a crate is no darker than a wall would make it", "[data]")
 {
-    OffscreenContext gl;
-    REQUIRE(gl.context != nullptr);
+    dx::test::OffscreenContext gl("ao", frameWidth, frameHeight);
+    if (!gl.context) {
+        SKIP("no OpenGL 3.3 context");
+    }
     dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;
@@ -264,8 +229,10 @@ TEST_CASE("ambient occlusion at the foot of a crate is no darker than a wall wou
 
 TEST_CASE("ambient occlusion leaves an unlit sprite beside a crate untouched", "[data]")
 {
-    OffscreenContext gl;
-    REQUIRE(gl.context != nullptr);
+    dx::test::OffscreenContext gl("ao", frameWidth, frameHeight);
+    if (!gl.context) {
+        SKIP("no OpenGL 3.3 context");
+    }
     dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;
@@ -335,8 +302,10 @@ TEST_CASE("ambient occlusion leaves an unlit sprite beside a crate untouched", "
 
 TEST_CASE("a view of the sky renders without GL errors with and without ambient occlusion", "[data]")
 {
-    OffscreenContext gl;
-    REQUIRE(gl.context != nullptr);
+    dx::test::OffscreenContext gl("ao", frameWidth, frameHeight);
+    if (!gl.context) {
+        SKIP("no OpenGL 3.3 context");
+    }
     dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOIsland"));
     dx::World world;
@@ -355,8 +324,10 @@ TEST_CASE("a view of the sky renders without GL errors with and without ambient 
 
 TEST_CASE("ambient occlusion at an odd resolution darkens the floor around a crate and leaves open floor unchanged", "[data]")
 {
-    OffscreenContext gl;
-    REQUIRE(gl.context != nullptr);
+    dx::test::OffscreenContext gl("ao", frameWidth, frameHeight);
+    if (!gl.context) {
+        SKIP("no OpenGL 3.3 context");
+    }
     dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;

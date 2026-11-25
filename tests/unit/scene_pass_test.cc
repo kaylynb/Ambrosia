@@ -1,5 +1,6 @@
 #define SDL_MAIN_HANDLED
 
+#include "offscreen_gl.h"
 #include "render/gl_shader.h"
 
 #include <SDL3/SDL.h>
@@ -13,46 +14,6 @@ namespace {
     constexpr int frameWidth = 320;
     constexpr int frameHeight = 240;
 
-    struct OffscreenContext {
-        SDL_Window* window = nullptr;
-        SDL_GLContext context = nullptr;
-
-        OffscreenContext()
-        {
-            SDL_SetMainReady();
-            if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-                return;
-            }
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-            SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-            window = SDL_CreateWindow("scene pass", frameWidth, frameHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
-            if (!window) {
-                return;
-            }
-            context = SDL_GL_CreateContext(window);
-            if (context && !gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-                SDL_GL_DestroyContext(context);
-                context = nullptr;
-            }
-        }
-
-        ~OffscreenContext()
-        {
-            if (context) {
-                SDL_GL_DestroyContext(context);
-            }
-            if (window) {
-                SDL_DestroyWindow(window);
-            }
-            SDL_QuitSubSystem(SDL_INIT_VIDEO);
-        }
-
-        OffscreenContext(const OffscreenContext&) = delete;
-        OffscreenContext& operator=(const OffscreenContext&) = delete;
-    };
-
     float centerDepth()
     {
         float depth = -1;
@@ -63,7 +24,7 @@ namespace {
 
 TEST_CASE("the multisampled and occlusion scene passes hand their depth to the target for later overlays")
 {
-    OffscreenContext gl;
+    dx::test::OffscreenContext gl("scene pass", frameWidth, frameHeight);
     if (!gl.context) {
         SKIP("no OpenGL 3.3 context");
     }

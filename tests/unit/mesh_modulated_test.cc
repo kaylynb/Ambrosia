@@ -1,6 +1,7 @@
 #define SDL_MAIN_HANDLED
 
 #include "core/objects.h"
+#include "offscreen_gl.h"
 #include "test_paths.h"
 #include "deusex/startup.h"
 #include "engine/mesh.h"
@@ -19,46 +20,6 @@
 namespace {
     constexpr int frameWidth = 640;
     constexpr int frameHeight = 480;
-
-    struct OffscreenContext {
-        SDL_Window* window = nullptr;
-        SDL_GLContext context = nullptr;
-
-        OffscreenContext()
-        {
-            SDL_SetMainReady();
-            if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
-                return;
-            }
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-            SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-            window = SDL_CreateWindow("mesh", frameWidth, frameHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
-            if (!window) {
-                return;
-            }
-            context = SDL_GL_CreateContext(window);
-            if (context && !gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-                SDL_GL_DestroyContext(context);
-                context = nullptr;
-            }
-        }
-
-        ~OffscreenContext()
-        {
-            if (context) {
-                SDL_GL_DestroyContext(context);
-            }
-            if (window) {
-                SDL_DestroyWindow(window);
-            }
-            SDL_QuitSubSystem(SDL_INIT_VIDEO);
-        }
-
-        OffscreenContext(const OffscreenContext&) = delete;
-        OffscreenContext& operator=(const OffscreenContext&) = delete;
-    };
 
     std::vector<uint8_t> render(dx::SceneRenderer& renderer, dx::World& world, const dx::Vector& eye, const dx::Rotator& rotation)
     {
@@ -84,8 +45,10 @@ namespace {
 
 TEST_CASE("modulated mesh faces ignore vertex lighting so a 50 percent gray skin leaves the scene unchanged", "[data]")
 {
-    OffscreenContext gl;
-    REQUIRE(gl.context != nullptr);
+    dx::test::OffscreenContext gl("mesh", frameWidth, frameHeight);
+    if (!gl.context) {
+        SKIP("no OpenGL 3.3 context");
+    }
     dx::engine::initialize(dx::test::gameData());
     dx::objects::unloadPackage(dx::Name("01_NYC_UNATCOHQ"));
     dx::World world;
