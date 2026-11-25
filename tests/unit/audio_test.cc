@@ -27,6 +27,12 @@
 #include <thread>
 #include <vector>
 
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+#include <intrin.h>
+#elif (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
+#include <cpuid.h>
+#endif
+
 namespace {
     std::vector<uint8_t> resourceBytes(const std::string& path, const char* className, const char* objectName)
     {
@@ -1891,6 +1897,60 @@ TEST_CASE("set ini switches the HRTF mode from the console", "[data]")
 }
 
 namespace {
+    // The processor the mix ran on. Steam Audio's FFTs come from Intel IPP, which picks its code for
+    // the processor, so a CI runner of another kind can give a different HRTF checksum.
+    std::string processorName()
+    {
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+        auto cpuid = [](uint32_t leaf, uint32_t sub, uint32_t (&out)[4]) {
+            int registers[4] = {};
+            __cpuidex(registers, static_cast<int>(leaf), static_cast<int>(sub));
+            for (int i = 0; i < 4; i++) {
+                out[i] = static_cast<uint32_t>(registers[i]);
+            }
+        };
+#elif (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
+        auto cpuid = [](uint32_t leaf, uint32_t sub, uint32_t (&out)[4]) {
+            __cpuid_count(leaf, sub, out[0], out[1], out[2], out[3]);
+        };
+#else
+        return "not x86";
+#endif
+#if (defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))) || ((defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__)))
+        uint32_t regs[4] = {};
+        cpuid(0, 0, regs);
+        uint32_t highest = regs[0];
+        char vendor[13] = {};
+        std::memcpy(vendor, &regs[1], 4);
+        std::memcpy(vendor + 4, &regs[3], 4);
+        std::memcpy(vendor + 8, &regs[2], 4);
+        bool fma = false;
+        bool avx2 = false;
+        bool avx512 = false;
+        if (highest >= 1) {
+            cpuid(1, 0, regs);
+            fma = (regs[2] >> 12) & 1;
+        }
+        if (highest >= 7) {
+            cpuid(7, 0, regs);
+            avx2 = (regs[1] >> 5) & 1;
+            avx512 = (regs[1] >> 16) & 1;
+        }
+        char brand[49] = {};
+        cpuid(0x80000000u, 0, regs);
+        if (regs[0] >= 0x80000004u) {
+            for (uint32_t i = 0; i < 3; i++) {
+                cpuid(0x80000002u + i, 0, regs);
+                std::memcpy(brand + i * 16, regs, 16);
+            }
+        }
+        std::string name(brand);
+        name.erase(0, name.find_first_not_of(' '));
+        name.erase(name.find_last_not_of(' ') + 1);
+        return name + " (" + vendor + "; FMA " + (fma ? "yes" : "no") + ", AVX2 " + (avx2 ? "yes" : "no") + ", AVX-512F " + (avx512 ? "yes" : "no") + ")";
+#endif
+    }
+
     std::vector<uint8_t> checksumWave(uint32_t seed, uint32_t rate, uint32_t frames)
     {
         std::vector<int16_t> samples(frames);
@@ -1949,6 +2009,7 @@ namespace {
 TEST_CASE("the stereo and HRTF mixes are unchanged sample for sample")
 {
     [[maybe_unused]] constexpr uint64_t HrtfChecksum = 0x9e161b90c8dc8602ull;
+    std::printf("processor %s\n", processorName().c_str());
     uint64_t stereo = mixChecksum(false);
     std::printf("stereo mix checksum %016llx\n", static_cast<unsigned long long>(stereo));
 #if defined(_MSC_VER)
