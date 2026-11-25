@@ -114,12 +114,28 @@ namespace dx {
             return *current;
         }
 
-        // Makes a world the one in play until the end of the scope, then puts back the one
-        // that was before.
+        // Keeps a world in play until the end of the scope, then puts back the one that was in
+        // play before. A World makes itself current as it is constructed, so the scope can be
+        // made before the world it is for: it saves the one from before, and activate() switches
+        // to the new one once it exists.
         class ActiveScope {
         public:
+            // Saves the world in play now, for a world that is constructed afterwards.
+            ActiveScope()
+                : previous(current)
+            {
+            }
+
+            // Makes world current until the end of the scope.
             explicit ActiveScope(World& world)
                 : previous(current)
+            {
+                current = &world;
+            }
+
+            // Makes world current until the end of the scope, for a world constructed after the
+            // scope. The scope already saved the world that was in play before it.
+            void activate(World& world)
             {
                 current = &world;
             }

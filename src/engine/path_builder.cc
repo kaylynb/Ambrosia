@@ -59,8 +59,10 @@ namespace dx {
             public:
                 explicit Builder(ULevel* target)
                     : level(target)
-                    , active(world)
                 {
+                    // active is declared before world, so it saved the world from before this
+                    // one. Now that world exists, make it the world in play.
+                    active.activate(world);
                     world.level = level;
                     world.levelInfo = level->actors.empty() ? nullptr : level->actors[0];
                     world.actors = level->actors;
@@ -1053,7 +1055,7 @@ namespace dx {
                 }
 
                 ULevel* level = nullptr;
-                // Before world, so that it keeps the world that was in play before this one.
+                // Before world, so that it saves the world in play before this Builder's world.
                 World::ActiveScope active;
                 World world;
                 UObject* scout = nullptr;
