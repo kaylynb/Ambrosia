@@ -688,7 +688,13 @@ comes from the argument and the revision defaults to `git rev-parse HEAD`. For a
 release candidate, use a clean checkout. Ordinary builds say `Ambrosia dev` and
 never ask Git for a version; only one generated source file contains the stamp.
 
-`build/package/artifacts` holds the game, DentEd, `ucc`, Steam Audio runtime and
+On Linux, `--container` builds and tests in the Debian 13 image from
+[Containerfile](container/Containerfile) instead, in `build/container-package`, and
+verifies the archive on the host. This is how CI builds the Linux release, so its
+glibc (2.41) is the oldest the release runs on. The host's glibc must be at least that new to run
+the check. `--runtime` picks Docker or Podman as for `build`.
+
+`build/package/artifacts` (or `build/container-package/artifacts`) holds the game, DentEd, `ucc`, Steam Audio runtime and
 licenses in a Windows ZIP or Linux tarball, alongside a SHA-256 checksum. Windows
 also produces a separate symbols ZIP. Crash dumps require the PDBs from the matching build.
 Game data isn't included. To recheck a downloaded archive, put its `.sha256`
@@ -708,8 +714,10 @@ at the bottom right. The startup line in `Ambrosia.log` includes the commit too.
 Each push to `main` runs **Package desktop builds** with version `0.0.0-ci.<run number>`.
 The run's **Artifacts** section contains `desktop-linux` and `desktop-windows`.
 These builds do not create tags or GitHub Releases. The jobs use `jdx/mise-action`
-for the tools pinned in `mise.toml` and the runner's native compiler and SDK.
-The hosted Linux build targets Ubuntu 24.04 x64.
+for the tools pinned in `mise.toml`. Windows builds with the runner's Visual Studio. Linux runs
+`package --container` on an Ubuntu 26.04 runner, building in the same Debian 13 image as local
+container builds and verifying the archive on the runner. The Linux release needs glibc 2.41 or
+newer (Debian 13, Ubuntu 25.04 and later).
 
 To publish a release:
 

@@ -35,6 +35,8 @@ def main [] {
 def "main package" [
     --version: string       # version without the v tag prefix
     --commit: string        # full Git revision (defaults to HEAD)
+    --container             # Linux only: build and test in the Debian 13 container, in build/container-package
+    --runtime: string       # docker or podman with --container (default: $CONTAINER_RUNTIME, else the first that answers)
 ] {
     cd $ROOT
     if ($version | default "") !~ '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+([.-][A-Za-z0-9]+)*)?$' {
@@ -45,15 +47,27 @@ def "main package" [
     exec-checked ["actionlint"]
     let win = $nu.os-info.name == "windows"
     if $nu.os-info.name not-in [linux windows] or $nu.os-info.arch != "x86_64" { fail "desktop packages require a native x64 Windows or Linux host" }
-    let dir = $ROOT | path join build package
+    # The smoke test runs the packaged programs on this machine, so a container package needs a
+    # Linux host, and one whose glibc is at least the container's.
+    if $container and $win { fail "--container packages the Linux build, which needs a Linux host to verify it" }
+    let dir = $ROOT | path join build (if $container { "container-package" } else { "package" })
     let out = $dir | path join artifacts
     let bin = if $win { $dir | path join bin Release } else { $dir | path join bin }
     let name = $"ambrosia-($version)-($nu.os-info.name)-x64"
     let archive = $out | path join $"($name).(if $win { 'zip' } else { 'tar.gz' })"
-    with-env (host-env) {
-        exec-checked (["cmake" "--preset" "release" "-B" $dir "-DAMBROSIA_DEV_BUILD=OFF" "-DAMBROSIA_DATA_TESTS=OFF" "-DAMBROSIA_STEAM_AUDIO=ON" $"-DAMBROSIA_VERSION=($version)" $"-DAMBROSIA_COMMIT=($revision)"] ++ (if $win { ["-DAMBROSIA_RELEASE_SYMBOLS=ON"] } else { [] }))
-        exec-checked ["cmake" "--build" $dir "--config" "Release"]
-        exec-checked ["ctest" "--test-dir" $dir "-C" "Release" "--output-on-failure" "-j2"]
+    let steps = [
+        (["cmake" "--preset" "release" "-B" $dir "-DAMBROSIA_DEV_BUILD=OFF" "-DAMBROSIA_DATA_TESTS=OFF" "-DAMBROSIA_STEAM_AUDIO=ON" $"-DAMBROSIA_VERSION=($version)" $"-DAMBROSIA_COMMIT=($revision)"] ++ (if $win { ["-DAMBROSIA_RELEASE_SYMBOLS=ON"] } else { [] }))
+        ["cmake" "--build" $dir "--config" "Release"]
+        ["ctest" "--test-dir" $dir "-C" "Release" "--output-on-failure" "-j2"]
+    ]
+    if $container {
+        let rt = find-runtime $runtime --skip ["wslc"]
+        build-image $rt $DESKTOP_IMAGE "Containerfile"
+        run-in-container $rt $DESKTOP_IMAGE $steps null (runtime-memory $rt) true
+    } else {
+        with-env (host-env) {
+            for step in $steps { exec-checked $step }
+        }
     }
     mkdir $out
     cd $bin

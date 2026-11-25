@@ -1,5 +1,7 @@
 # The Linux build's compilers and libraries, and the list of what a Linux host needs to build
 # without it (BUILD.md): Debian 13 with GCC, and the MinGW cross compiler for the mingw preset.
+# Mesa's software drivers let the GL tests run on SDL's offscreen driver, which needs EGL.
+# CI packages the Linux release here too, so its glibc (2.41) is the oldest the release runs on.
 FROM debian:13
 
 RUN apt-get update \
@@ -9,6 +11,7 @@ RUN apt-get update \
         libxss-dev libxtst-dev libxkbcommon-dev libgl-dev libegl-dev libasound2-dev \
         libpulse-dev libpipewire-0.3-dev libwayland-dev wayland-protocols libdecor-0-dev libudev-dev \
         libdbus-1-dev libibus-1.0-dev \
+        libgl1-mesa-dri libegl-mesa0 \
         gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 \
     && rm -rf /var/lib/apt/lists/*
 

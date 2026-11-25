@@ -21,31 +21,31 @@ jobs:
         include:
           - os: windows-2025-vs2026
             platform: windows
-          - os: ubuntu-24.04
+            container: false
+            dir: package
+          # The Linux build happens in container/Containerfile (Debian 13), the same image as local
+          # container builds. The host only verifies the package, so it needs a glibc at least as new.
+          - os: ubuntu-26.04
             platform: linux
+            container: true
+            dir: container-package
     runs-on: ${{ matrix.os }}
     env:
       MISE_ENABLE_TOOLS: cmake,ninja,nushell,github:rhysd/actionlint
       BUILD_VERSION: ${{ inputs.version || format('0.0.0-ci.{0}', github.run_number) }}
+      PACKAGE_CONTAINER: ${{ matrix.container }}
+      CONTAINER_RUNTIME: docker
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5
         with:
           cache: false
-      - name: Install Linux development libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
-            libxss-dev libxtst-dev libxkbcommon-dev libgl-dev libegl-dev libasound2-dev \
-            libpulse-dev libpipewire-0.3-dev libwayland-dev wayland-protocols libdecor-0-dev \
-            libudev-dev libdbus-1-dev libibus-1.0-dev libgl1-mesa-dri
       - name: Build, test, and verify the distribution
         shell: nu {0}
-        run: nu x.nu package --version $env.BUILD_VERSION --commit $env.GITHUB_SHA
+        run: nu x.nu package --version $env.BUILD_VERSION --commit $env.GITHUB_SHA --container=($env.PACKAGE_CONTAINER == "true")
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: desktop-${{ matrix.platform }}
-          path: build/package/artifacts/*
+          path: build/${{ matrix.dir }}/artifacts/*
           if-no-files-found: error
           compression-level: 0
