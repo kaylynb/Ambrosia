@@ -6,6 +6,7 @@
 #include "editor/editor.h"
 
 #include <SDL3/SDL_main.h>
+#include <glad/gl.h>
 
 #include <tabler_icons.h>
 
@@ -65,8 +66,14 @@ int main(int argc, char** argv)
     dx::platform::setWindowIcon(window);
     std::unique_ptr<SDL_GLContextState, decltype(&SDL_GL_DestroyContext)> contextOwner(SDL_GL_CreateContext(window), &SDL_GL_DestroyContext);
     SDL_GLContext context = contextOwner.get();
-    if (!context || !gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-        dx::log::error("Critical", "failed to create OpenGL 3.3 context");
+    const int glVersion = context ? gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress)) : 0;
+    if (glVersion < GLAD_MAKE_VERSION(3, 3)) {
+        if (glVersion == 0) {
+            dx::log::error("Critical", "failed to create an OpenGL context");
+        } else {
+            const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+            dx::log::error("Critical", "OpenGL 3.3 or newer is required; this driver gives {}", version ? version : "no version");
+        }
         return 1;
     }
     SDL_GL_SetSwapInterval(options.automated() ? 0 : 1);

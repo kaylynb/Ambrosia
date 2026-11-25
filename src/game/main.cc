@@ -91,8 +91,13 @@ int main(int argc, char** argv)
     if (!context) {
         return fail(std::string("SDL_GL_CreateContext failed: ") + SDL_GetError(), 1);
     }
-    if (!gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress))) {
-        return fail("failed to load OpenGL", 1);
+    const int glVersion = gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress));
+    if (glVersion < GLAD_MAKE_VERSION(3, 3)) {
+        if (glVersion == 0) {
+            return fail("failed to load OpenGL", 1);
+        }
+        const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        return fail(std::string("OpenGL 3.3 or newer is required; this driver gives ") + (version ? version : "no version"), 1);
     }
     dx::game::report::stage("OpenGL %s, %s, %s", reinterpret_cast<const char*>(glGetString(GL_VERSION)), reinterpret_cast<const char*>(glGetString(GL_RENDERER)), reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
     SDL_GL_SetSwapInterval(options.automated() ? 0 : 1);
