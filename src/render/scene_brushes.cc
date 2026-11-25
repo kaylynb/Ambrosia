@@ -195,7 +195,10 @@ namespace dx {
             }
         }
         for (EmittedGroup& group : cache.groups) {
-            group.lightMask = group.lightmap ? litMask(group.low, group.high, (group.flags & PF_SpecialLit) != 0) : 0;
+            group.lights.clear();
+            if (group.lightmap) {
+                litLights(group.low, group.high, (group.flags & PF_SpecialLit) != 0, group.lights);
+            }
         }
         appendGroups(cache.groups, brushBatches);
     }

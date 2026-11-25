@@ -59,7 +59,12 @@ namespace dx {
     constexpr int32_t SHADER_Detail = 32;
     constexpr int32_t SHADER_Fog = 64;
     constexpr int32_t SHADER_Fullbright = 128;
-    constexpr size_t MaxDynamicLights = 8;
+    // The dynamic lights one draw can be given. The original lights each surface with every
+    // dynamic light reaching it (FLightManager::SetupForSurf, up to 256); no view in the shipped
+    // maps has more than 16 in sight, so a draw reached by more keeps the nearest.
+    constexpr size_t MaxDynamicLights = 32;
+    // The dynamic lights a scene gathers, the size of the original's light array for a surface.
+    constexpr size_t MaxSceneDynamicLights = 256;
 
     enum class BlendMode : uint8_t {
         Opaque,

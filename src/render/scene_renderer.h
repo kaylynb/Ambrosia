@@ -248,7 +248,8 @@ namespace dx {
 
         struct GroupExtra {
             uint32_t lightmap = 0;
-            uint32_t lightMask = 0;
+            // Indices into dynamicLights of the lights reaching the group (litLights).
+            std::vector<uint16_t> lights;
             bool cull = false;
             // A mover's brush, drawn pushed back in depth: see EmittedGroup::brush.
             bool brush = false;
@@ -282,7 +283,8 @@ namespace dx {
             uint32_t texture = 0;
             bool translucent = false;
             uint32_t lightmap = 0;
-            uint32_t lightMask = 0;
+            // See GroupExtra::lights.
+            std::vector<uint16_t> lights;
             bool cull = false;
             // A brush actor's (a mover's) surfaces. The original filters them into the level's
             // BSP (FMovingBrushTracker), where a level surface on the same plane is drawn first
@@ -390,7 +392,14 @@ namespace dx {
         void buildLevel(ULevel* level, const std::vector<UObject*>& actors);
         void drawLevelGeometry(const View& view, bool translucentPass);
         void drawDetail(const Batch& batch, const View& view, int32_t onlyNode);
-        void drawBatch(const Batch& batch, const View& view, const int32_t* firsts, const int32_t* counts, int32_t ranges, int32_t onlyNode, uint32_t& uploadedLights);
+
+        // The dynamic lights last given to the device, so a draw with the same ones sends none.
+        struct UploadedLights {
+            bool valid = false;
+            std::vector<uint16_t> lights;
+        };
+
+        void drawBatch(const Batch& batch, const View& view, const int32_t* firsts, const int32_t* counts, int32_t ranges, int32_t onlyNode, UploadedLights& uploaded);
         void occludeView(View& view, const std::vector<ScreenSpan>* open);
         void gatherVisible(const View& view);
         void drawMirrors(const View& view, const std::vector<UObject*>& actors);
@@ -415,7 +424,11 @@ namespace dx {
         void drawActors(const std::vector<UObject*>& actors, const View& view, UObject* viewActor, bool occlude);
         // Known: the bounds a query is drawn with. Small: a mesh too small to be worth a query,
         // drawn on the CPU culling alone as sprites are. Unknown: not drawn at this scale yet.
-        enum class ActorBounds { Unknown, Small, Known };
+        enum class ActorBounds {
+            Unknown,
+            Small,
+            Known,
+        };
         ActorBounds actorBounds(UObject* actor, Vector& center, float& radius) const;
         void cullOccluded(std::vector<UObject*>& candidates, const View& view);
         void applyView(const View& view);
@@ -443,7 +456,12 @@ namespace dx {
         uint64_t visibleZones(uint8_t zone) const;
         bool inFrustum(const View& view, const Vector& center, float radius) const;
         bool sphereReachesVisible(const View& view, const Vector& center, float radius);
-        uint32_t litMask(const Vector& low, const Vector& high, bool specialLit) const;
+        // The dynamicLights whose sphere reaches the box, as the original files each light into the
+        // surfaces it reaches (FDynamicLight::Filter), and only those of the same bSpecialLit. When
+        // more than MaxDynamicLights do, the ones nearest the box.
+        void litLights(const Vector& low, const Vector& high, bool specialLit, std::vector<uint16_t>& out) const;
+        // Gives the device the dynamicLights at these indices.
+        void setLights(const std::vector<uint16_t>& indices);
         void addCorona(UObject* light, const Vector& origin, float delta, size_t& free, UObject* viewportActor);
         void drawCoronas(const View& view, int x, int y, int width, int height);
         bool sphereOutsideView(const View& view, const Vector& location, float radius) const;
@@ -482,6 +500,7 @@ namespace dx {
         std::vector<UObject*> actorLights;
         std::vector<DynamicLight> dynamicLights;
         std::vector<DynamicLight> batchLights;
+        std::vector<uint16_t> scratchLitLights;
         std::vector<PreparedLight> actorLightPrepared;
         std::vector<Vector> actorLightColors;
 

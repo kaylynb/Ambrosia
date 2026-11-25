@@ -474,7 +474,7 @@ namespace dx {
         device->useShader();
         device->setViewProj(view.viewProj);
         device->setTint(1, 1, 1, 1);
-        uint32_t uploadedLights = ~0u;
+        UploadedLights uploadedLights;
         device->setDepthTest(true);
         device->setDepthFunc(DepthFunc::LessEqual);
         device->setFrontFace(!view.mirrored);
@@ -530,7 +530,7 @@ namespace dx {
                     drawTranslucentItem(items[nextItem++]);
                 }
                 // drawGroup may change the dynamic lights.
-                uploadedLights = ~0u;
+                uploadedLights.valid = false;
             };
             for (const TranslucentSurface& surface : surfaces) {
                 drawItemsBefore(surface.order);
@@ -592,7 +592,7 @@ namespace dx {
         device->setBlend(BlendMode::Opaque);
     }
 
-    void SceneRenderer::drawBatch(const Batch& batch, const View& view, const int32_t* firsts, const int32_t* counts, int32_t ranges, int32_t onlyNode, uint32_t& uploadedLights)
+    void SceneRenderer::drawBatch(const Batch& batch, const View& view, const int32_t* firsts, const int32_t* counts, int32_t ranges, int32_t onlyNode, UploadedLights& uploaded)
     {
         bool backdropMask = (batch.polyFlags & PF_FakeBackdrop) && view.sky;
         UTexture* matrix = matrixTexture(sceneWorld ? sceneWorld->player() : nullptr);
@@ -603,18 +603,17 @@ namespace dx {
         uint32_t textureId = info && !flat && renderMode != RenderMode::LightingOnly ? info->id() : device->whiteTexture();
         int32_t extra = 0;
         bool batchUnlit = flat || (batch.polyFlags & (PF_Unlit | PF_Modulated)) != 0;
-        uint32_t lightMask = batchUnlit ? 0u : litMask(batch.boundsMin, batch.boundsMax, (batch.polyFlags & PF_SpecialLit) != 0);
-        if (lightMask) {
+        std::vector<uint16_t>& lit = scratchLitLights;
+        lit.clear();
+        if (!batchUnlit) {
+            litLights(batch.boundsMin, batch.boundsMax, (batch.polyFlags & PF_SpecialLit) != 0, lit);
+        }
+        if (!lit.empty()) {
             extra |= SHADER_Dynamic;
-            if (lightMask != uploadedLights) {
-                batchLights.clear();
-                for (size_t i = 0; i < dynamicLights.size(); i++) {
-                    if (lightMask & (1u << i)) {
-                        batchLights.push_back(dynamicLights[i]);
-                    }
-                }
-                device->setDynamicLights(batchLights);
-                uploadedLights = lightMask;
+            if (!uploaded.valid || lit != uploaded.lights) {
+                setLights(lit);
+                uploaded.valid = true;
+                uploaded.lights = lit;
             }
         }
         if (batch.lightmapPage >= 0 && !flat) {

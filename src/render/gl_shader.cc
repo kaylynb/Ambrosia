@@ -14,6 +14,9 @@
 #include <string>
 
 namespace dx {
+    // The fragment shader's light arrays hold MaxDynamicLights.
+    static_assert(MaxDynamicLights == 32);
+
     namespace {
         const char* vertexSource = R"(#version 330 core
 layout(location = 0) in vec3 aPosition;
@@ -72,9 +75,9 @@ uniform sampler2D uLightmap;
 uniform int uFlags;
 uniform vec4 uTint;
 uniform int uLightCount;
-uniform vec4 uLightPosition[8];
-uniform vec4 uLightColor[8];
-uniform vec4 uLightDirection[8];
+uniform vec4 uLightPosition[32];
+uniform vec4 uLightColor[32];
+uniform vec4 uLightDirection[32];
 uniform int uSmoothLightmap;
 uniform float uOcclusion;
 layout(location = 0) out vec4 fragColor;

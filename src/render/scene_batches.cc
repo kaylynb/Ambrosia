@@ -123,15 +123,9 @@ namespace dx {
             return;
         }
         int32_t shaderFlags = SHADER_Lightmap;
-        if (extra.lightMask) {
+        if (!extra.lights.empty()) {
             shaderFlags |= SHADER_Dynamic;
-            batchLights.clear();
-            for (size_t i = 0; i < dynamicLights.size(); i++) {
-                if (extra.lightMask & (1u << i)) {
-                    batchLights.push_back(dynamicLights[i]);
-                }
-            }
-            device->setDynamicLights(batchLights);
+            setLights(extra.lights);
         }
         device->bindLightmap(extra.lightmap);
         device->bindTexture(renderMode == RenderMode::LightingOnly ? device->whiteTexture() : texture);
@@ -160,12 +154,12 @@ namespace dx {
         DX_TIME("Mesh group copy");
         for (const EmittedGroup& group : groups) {
             if (group.translucent) {
-                queueTranslucent(group.flags, group.texture, { group.lightmap, group.lightMask, group.cull, group.brush, group.mirror }, group.vertices);
+                queueTranslucent(group.flags, group.texture, { group.lightmap, group.lights, group.cull, group.brush, group.mirror }, group.vertices);
                 continue;
             }
             meshBatchFlags[group.key] = group.flags;
             meshBatchTextures[group.key] = group.texture;
-            meshBatchExtras[group.key] = { group.lightmap, group.lightMask, group.cull, group.brush, group.mirror };
+            meshBatchExtras[group.key] = { group.lightmap, group.lights, group.cull, group.brush, group.mirror };
             std::vector<GLVertex>& out = opaque[group.key];
             out.insert(out.end(), group.vertices.begin(), group.vertices.end());
         }

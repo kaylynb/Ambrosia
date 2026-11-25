@@ -17,9 +17,9 @@ namespace dx {
         }
     }
 
-    uint32_t SceneRenderer::litMask(const Vector& low, const Vector& high, bool specialLit) const
+    void SceneRenderer::litLights(const Vector& low, const Vector& high, bool specialLit, std::vector<uint16_t>& out) const
     {
-        uint32_t mask = 0;
+        out.clear();
         for (size_t i = 0; i < dynamicLights.size(); i++) {
             const DynamicLight& light = dynamicLights[i];
             if (light.specialLit != specialLit) {
@@ -27,10 +27,32 @@ namespace dx {
             }
             Vector closest { std::clamp(light.location.x, low.x, high.x), std::clamp(light.location.y, low.y, high.y), std::clamp(light.location.z, low.z, high.z) };
             if ((closest - light.location).sizeSquared() < light.radius * light.radius) {
-                mask |= 1u << i;
+                out.push_back(static_cast<uint16_t>(i));
             }
         }
-        return mask;
+        if (out.size() <= MaxDynamicLights) {
+            return;
+        }
+        // How far into the light's sphere the box reaches, most first.
+        auto depth = [&](uint16_t index) {
+            const DynamicLight& light = dynamicLights[index];
+            Vector closest { std::clamp(light.location.x, low.x, high.x), std::clamp(light.location.y, low.y, high.y), std::clamp(light.location.z, low.z, high.z) };
+            return light.radius - (closest - light.location).size();
+        };
+        std::stable_sort(out.begin(), out.end(), [&](uint16_t a, uint16_t b) {
+            return depth(a) > depth(b);
+        });
+        out.resize(MaxDynamicLights);
+        std::sort(out.begin(), out.end());
+    }
+
+    void SceneRenderer::setLights(const std::vector<uint16_t>& indices)
+    {
+        batchLights.clear();
+        for (uint16_t index : indices) {
+            batchLights.push_back(dynamicLights[index]);
+        }
+        device->setDynamicLights(batchLights);
     }
 
     void SceneRenderer::selectLights(const Vector& location, float extent)
@@ -200,9 +222,11 @@ namespace dx {
         std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
             return a.first < b.first;
         });
+        // Every dynamic light, as URender::SetupDynamics gathers them; each draw takes the ones
+        // reaching it (litLights). Nearest the view first, should a scene have more than fit.
         dynamicLights.clear();
         for (const auto& [distance, light] : candidates) {
-            if (dynamicLights.size() >= MaxDynamicLights) {
+            if (dynamicLights.size() >= MaxSceneDynamicLights) {
                 break;
             }
             DynamicLight entry;
