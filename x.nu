@@ -33,17 +33,20 @@ def main [] {
 
 # Build the desktop distribution on its target OS. This build tree is independent of development.
 def "main package" [
-    --version: string       # version without the v tag prefix
-    --commit: string        # full Git revision (defaults to HEAD)
-    --container             # Linux only: build and test in the Debian 13 container, in build/container-package
-    --runtime: string       # docker or podman with --container (default: $CONTAINER_RUNTIME, else the first that answers)
+    --version: string = "dev"   # X.Y.Z or X.Y.Z-suffix, without the v tag prefix; dev when not a release
+    --commit: string            # full Git revision (defaults to HEAD)
+    --container                 # Linux only: build and test in the Debian 13 container, in build/container-package
+    --runtime: string           # docker or podman with --container (default: $CONTAINER_RUNTIME, else the first that answers)
 ] {
     cd $ROOT
-    if ($version | default "") !~ '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+([.-][A-Za-z0-9]+)*)?$' {
-        fail "supply --version X.Y.Z or X.Y.Z-suffix"
+    let release = $version != "dev"
+    if $release and $version !~ '^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+([.-][A-Za-z0-9]+)*)?$' {
+        fail "supply --version X.Y.Z or X.Y.Z-suffix, or leave it out for a dev build"
     }
     let revision = $commit | default { ^git rev-parse HEAD | str trim }
     if $revision !~ '^[0-9a-f]{40}$' { fail "expected a full Git commit" }
+    # Dev archives carry the short commit, so two of them never share a name.
+    let label = if $release { $version } else { $"dev-($revision | str substring 0..<12)" }
     exec-checked ["actionlint"]
     let win = $nu.os-info.name == "windows"
     if $nu.os-info.name not-in [linux windows] or $nu.os-info.arch != "x86_64" { fail "desktop packages require a native x64 Windows or Linux host" }
@@ -53,7 +56,7 @@ def "main package" [
     let dir = $ROOT | path join build (if $container { "container-package" } else { "package" })
     let out = $dir | path join artifacts
     let bin = if $win { $dir | path join bin Release } else { $dir | path join bin }
-    let name = $"ambrosia-($version)-($nu.os-info.name)-x64"
+    let name = $"ambrosia-($label)-($nu.os-info.name)-x64"
     let archive = $out | path join $"($name).(if $win { 'zip' } else { 'tar.gz' })"
     let steps = [
         (["cmake" "--preset" "release" "-B" $dir "-DAMBROSIA_DEV_BUILD=OFF" "-DAMBROSIA_DATA_TESTS=OFF" "-DAMBROSIA_STEAM_AUDIO=ON" $"-DAMBROSIA_VERSION=($version)" $"-DAMBROSIA_COMMIT=($revision)"] ++ (if $win { ["-DAMBROSIA_RELEASE_SYMBOLS=ON"] } else { [] }))

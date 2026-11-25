@@ -1,14 +1,11 @@
 name: Publish verified desktop builds
 
+# Publishes the archives that the tag's own push built in package.yml, without rebuilding them.
 on:
   workflow_dispatch:
     inputs:
-      run_id:
-        description: Successful packaging run ID from the default branch
-        required: true
-        type: string
       tag:
-        description: Existing tag pointing at that commit (e.g. v0.1.0)
+        description: Pushed tag on the default branch whose package build succeeded (e.g. v0.1.0)
         required: true
         type: string
 
@@ -25,24 +22,29 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      RUN_ID: ${{ inputs.run_id }}
       TAG: ${{ inputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - name: Verify run, tag and archives; publish without rebuilding
+      - name: Verify tag, run and archives; publish without rebuilding
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9]+([.-][A-Za-z0-9]+)*)?$ ]]
           sha=$(git rev-parse --verify "refs/tags/$TAG^{commit}")
+          git merge-base --is-ancestor "$sha" "origin/$DEFAULT_BRANCH" \
+            || { echo "$TAG is not on $DEFAULT_BRANCH" >&2; exit 1; }
+          # The newest successful package build of the tag's push at the commit it points at now.
+          RUN_ID=$(gh api "repos/$GH_REPO/actions/workflows/package.yml/runs?event=push&branch=$TAG&status=success&head_sha=$sha" \
+            --jq '.workflow_runs[0].id // empty')
+          [[ -n "$RUN_ID" ]] || { echo "no successful package build of $TAG at $sha; wait for it, or rerun it" >&2; exit 1; }
           gh api "repos/$GH_REPO/actions/runs/$RUN_ID" | jq -e \
-            --arg repo "$GH_REPO" --arg branch "$DEFAULT_BRANCH" --arg sha "$sha" \
-            '.path == ".github/workflows/package.yml" and .event == "workflow_dispatch"
-             and .head_repository.full_name == $repo and .head_branch == $branch
+            --arg repo "$GH_REPO" --arg tag "$TAG" --arg sha "$sha" \
+            '.path == ".github/workflows/package.yml" and .event == "push"
+             and .head_repository.full_name == $repo and .head_branch == $tag
              and .head_sha == $sha and .conclusion == "success"'
+          echo "Publishing the archives of run $RUN_ID"
           version=${TAG#v}
           mkdir assets
           cd assets

@@ -685,8 +685,10 @@ This uses `build/package`, separate from the normal `build/release` tree. It bui
 with the shipped game-data search paths, runs CTest with game-data tests excluded,
 then unpacks and verifies the distribution in a temporary directory. The version
 comes from the argument and the revision defaults to `git rev-parse HEAD`. For a
-release candidate, use a clean checkout. Ordinary builds say `Ambrosia dev` and
-never ask Git for a version; only one generated source file contains the stamp.
+release candidate, use a clean checkout. Without `--version` the package is a dev build: the
+programs say `Ambrosia dev (<commit>)` and the archives are named
+`ambrosia-dev-<short commit>-…`. Ordinary builds say `Ambrosia dev` and never ask Git for a
+version; only one generated source file contains the stamp.
 
 On Linux, `--container` builds and tests in the Debian 13 image from
 [Containerfile](container/Containerfile) instead, in `build/container-package`, and
@@ -711,9 +713,12 @@ at the bottom right. The startup line in `Ambrosia.log` includes the commit too.
 
 ### GitHub Actions
 
-Each push to `main` runs **Package desktop builds** with version `0.0.0-ci.<run number>`.
-The run's **Artifacts** section contains `desktop-linux` and `desktop-windows`.
-These builds do not create tags or GitHub Releases. The jobs use `jdx/mise-action`
+**Package desktop builds** runs on every push to `main`, on every pull request (a newer push to
+the pull request cancels its running build), on pushes of `v*` tags, and manually. A tag
+`vX.Y.Z` or `vX.Y.Z-suffix` builds version `X.Y.Z[-suffix]`. A tag of any other form fails
+the build. Everything else is a dev build. The run's **Artifacts** section contains
+`desktop-linux` and `desktop-windows`. These builds do not create GitHub Releases.
+The jobs use `jdx/mise-action`
 for the tools pinned in `mise.toml`. Windows builds with the runner's Visual Studio. Linux runs
 `package --container` on an Ubuntu 26.04 runner, building in the same Debian 13 image as local
 container builds and verifying the archive on the runner. The Linux release needs glibc 2.41 or
@@ -721,16 +726,17 @@ newer (Debian 13, Ubuntu 25.04 and later).
 
 To publish a release:
 
-1. Run **Package desktop builds** manually on the default branch with the release
-   version, for example `0.1.0-rc.1`. Download both artifacts from the successful
-   run, extract the distribution archives from the Actions ZIPs, and test them.
-2. Tag the tested commit with the same version prefixed by `v` (for example,
-   `v0.1.0-rc.1`) and push the tag. The tag alone does not publish a release.
-3. Run **Publish verified desktop builds** on the default branch with the tag and
-   the packaging run ID (the number after `/actions/runs/` in the run URL).
-   The workflow checks the run, commit, versioned filenames and checksums, then
-   publishes the tested archives without rebuilding. Versions with a suffix are
-   marked as prereleases.
+1. Tag a commit on the default branch with the version prefixed by `v` (for example,
+   `v0.1.0-rc.1`) and push the tag. That push packages the version. The tag alone does
+   not publish a release.
+2. Download both artifacts from that run, extract the distribution archives from the
+   Actions ZIPs, and test them.
+3. Run **Publish verified desktop builds** on the default branch with the tag. The
+   workflow checks that the tag is on the default branch, finds the tag's successful
+   package build at the commit it points to, checks the versioned filenames and
+   checksums, then publishes those archives without rebuilding. Versions with a suffix
+   are marked as prereleases. If you move the tag, wait for its new build before
+   publishing.
 
 ## Generated files
 
