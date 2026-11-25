@@ -413,7 +413,10 @@ namespace dx {
         void drawFog(const Batch& batch, const View& view, int32_t onlyNode);
         Vector meshFog(const Vector& point, const View& view, size_t count) const;
         void drawActors(const std::vector<UObject*>& actors, const View& view, UObject* viewActor, bool occlude);
-        bool actorBounds(UObject* actor, Vector& center, float& radius) const;
+        // Known: the bounds a query is drawn with. Small: a mesh too small to be worth a query,
+        // drawn on the CPU culling alone as sprites are. Unknown: not drawn at this scale yet.
+        enum class ActorBounds { Unknown, Small, Known };
+        ActorBounds actorBounds(UObject* actor, Vector& center, float& radius) const;
         void cullOccluded(std::vector<UObject*>& candidates, const View& view);
         void applyView(const View& view);
         void drawActor(UObject* actor, const View& view);

@@ -9,29 +9,29 @@
 #include <cmath>
 
 namespace dx {
-    bool SceneRenderer::actorBounds(UObject* actor, Vector& center, float& radius) const
+    SceneRenderer::ActorBounds SceneRenderer::actorBounds(UObject* actor, Vector& center, float& radius) const
     {
         UObject* meshObject = actor::Mesh(actor);
         if (!meshObject) {
-            return false;
+            return ActorBounds::Unknown;
         }
         UMesh* mesh = cast<UMesh>(meshObject);
         auto found = meshDrawCaches.find({ actor, mesh, actor });
         if (found == meshDrawCaches.end() || !found->second.valid) {
-            return false;
+            return ActorBounds::Unknown;
         }
         const MeshDrawCache& cache = found->second;
         if (cache.world.size() < 64) {
-            return false;
+            return ActorBounds::Small;
         }
         float scale = std::abs(actor::DrawScale(actor));
         float cachedScale = cache.transform.x.size();
         if (cachedScale <= 0 || std::abs(scale - cachedScale) > cachedScale * 0.01f) {
-            return false;
+            return ActorBounds::Unknown;
         }
         center = actor::Location(actor) + actor::PrePivot(actor);
         radius = cache.sphereRadius + (cache.sphereCenter - cache.transform.origin).size();
-        return true;
+        return ActorBounds::Known;
     }
 
     void SceneRenderer::cullOccluded(std::vector<UObject*>& candidates, const View& view)
@@ -44,9 +44,10 @@ namespace dx {
             bool keep = true;
             Vector center;
             float radius = 0;
-            if (actor::DrawType(actor) == DT_Mesh && !actorBounds(actor, center, radius)) {
+            ActorBounds bounds = actor::DrawType(actor) == DT_Mesh ? actorBounds(actor, center, radius) : ActorBounds::Small;
+            if (bounds == ActorBounds::Unknown) {
                 occlusionUnconfirmed.insert(actor);
-            } else if (actor::DrawType(actor) == DT_Mesh) {
+            } else if (bounds == ActorBounds::Known) {
                 float extent = radius + 48.0f;
                 Vector delta = view.location - center;
                 float near = extent + 32.0f;
